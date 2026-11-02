@@ -374,7 +374,7 @@ def test_same_page_with_code_is_found():
 
 def test_page_read_without_code_stays_not_found():
     """페이지를 제대로 읽었는데 품번이 없으면 다른 상품일 수 있다 — 확인 필요로 올리지 않는다."""
-    pages = {SSF: PageView(True, SSF, "다른 후디 " + "설명 " * 200, body_chars=1200)}
+    pages = {SSF: PageView(True, SSF, "다른 후디 189,000원 " + "설명 " * 200, body_chars=1200)}
     _, search, render_page, _ = _fakes(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF}", pages)
     out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
                         render_page=render_page, time_left=lambda: 40))
@@ -397,3 +397,29 @@ def test_unread_redirect_address_is_not_offered():
     out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
                         render_page=render_page, time_left=lambda: 40))
     assert out.status == "not_found"
+
+
+
+def test_page_without_any_price_is_unread():
+    """실제 로그(2026-11-02 06:02): SSF가 본문은 있는데 상품 정보·가격이 없는 화면을 줌 → 확인 필요."""
+    text = "SSF SHOP 로그인 장바구니 고객센터 " + "메뉴 " * 100
+    pages = {SSF: PageView(True, SSF, text, body_chars=len(text))}
+    _, search, render_page, _ = _fakes(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF}", pages)
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "needs_confirm"
+    assert out.checked[0]["reason"].startswith("상품 정보가 안 보임")
+
+
+def test_parse_search_output_strips_markdown_junk_from_urls():
+    text = """OFFICIAL_DOMAIN: 없음
+URL: https://www.ssfshop.com/BEAKER/GM0026101660266/good?dspCtgNo=GNB41`
+URL: `https://www.musinsa.com/products/1`
+URL: **https://www.29cm.co.kr/products/2**
+"""
+    _, cands = parse_search_output(text, [])
+    assert [c.url for c in cands] == [
+        "https://www.musinsa.com/products/1",
+        "https://www.ssfshop.com/BEAKER/GM0026101660266/good?dspCtgNo=GNB41",
+        "https://www.29cm.co.kr/products/2",
+    ]

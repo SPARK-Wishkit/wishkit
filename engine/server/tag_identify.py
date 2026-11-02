@@ -270,6 +270,18 @@ class Candidate:
     source: str  # 'official' | 'mall'
 
 
+# 모델이 URL 뒤에 마크다운 기호(`, *, 따옴표)를 붙이는 경우가 있다(2026-11-02 SSF 주소 끝 백틱).
+_URL_TRAILING_JUNK = ".,)>]`'\"*"
+_URL_INNER_JUNK_RE = re.compile(r"[`'\"*<>\s].*$")
+
+
+def _clean_url(url: str) -> str:
+    """검색 응답 텍스트에서 꺼낸 URL의 앞뒤 군더더기를 뗀다(주소에 쓰일 수 없는 글자 이후는 버림)."""
+    url = url.strip().lstrip("`'\"*<(")
+    url = _URL_INNER_JUNK_RE.sub("", url)
+    return url.rstrip(_URL_TRAILING_JUNK)
+
+
 def parse_search_output(text: str, sources: list[dict]) -> tuple[str | None, list[Candidate]]:
     """검색 응답 텍스트 + 그라운딩 출처에서 (공식 도메인, 후보 목록)을 만든다.
     공식몰 후보가 먼저, 그다음 쇼핑몰. 블로그·모르는 사이트는 뺀다."""
@@ -280,7 +292,7 @@ def parse_search_output(text: str, sources: list[dict]) -> tuple[str | None, lis
 
     raw: list[tuple[str, str]] = []
     for url in _URL_LINE_RE.findall(text or ""):
-        url = url.strip().rstrip(".,)>]")
+        url = _clean_url(url)
         if url.startswith(("http://", "https://")) and not is_root_url(url):
             raw.append((url, host_of(url)))
     for s in sources:
@@ -379,6 +391,12 @@ class PageView:
     body_chars: int | None = None  # 본문 글자 수(메타 제외). None이면 모름 — 빈 화면 판단에 쓴다
 
     @property
+    def shows_price(self) -> bool:
+        """화면에 "12,345원" 같은 가격이 하나라도 보이는지. 다른 상품의 정상 페이지라면 그 상품 가격은
+        보인다 — 가격이 하나도 없으면 상품 페이지가 제대로 뜨지 않은 것으로 본다."""
+        return bool(_VISIBLE_PRICE_RE.search(self.raw_text or ""))
+
+    @property
     def looks_blank(self) -> bool:
         """접속은 됐지만 본문이 거의 빈 화면(봇 차단·로딩 실패로 보임). 이런 페이지의 "품번 없음"은
         다른 상품이라는 근거가 못 된다 — 못 읽은 것으로 본다."""
@@ -386,6 +404,7 @@ class PageView:
 
 
 MIN_BODY_CHARS = 200  # 상품 상세 페이지 본문이 이보다 짧으면 빈 화면으로 본다
+_VISIBLE_PRICE_RE = re.compile(r"\d{1,3}(?:,\d{3})+\s*원|₩\s*\d{1,3}(?:,\d{3})+|KRW\s*\d{1,3}(?:,\d{3})+")
 
 
 ReadTagFn = Callable[[bytes, str], Awaitable[ProviderResult]]
@@ -558,6 +577,11 @@ class _Checker:
             if verified_by is None and page.looks_blank:
                 # 빈 화면에서 품번을 못 찾은 건 "다른 상품"이 아니라 "못 읽음"이다.
                 self._unread(page.final_url, final_host, source, f"본문이 거의 비어 있음({page.body_chars}자)")
+                continue
+            if verified_by is None and page.body_chars is not None and not page.shows_price:
+                # 글자는 있어도 가격이 하나도 안 보이면 상품 페이지가 제대로 뜨지 않은 것(오류·대기 화면 등).
+                # 다른 상품의 정상 페이지라면 그 상품 가격이 보였을 것이다(2026-11-02 SSF 사례).
+                self._unread(page.final_url, final_host, source, f"상품 정보가 안 보임(가격 없음, {page.body_chars}자)")
                 continue
             reason = verified_by
             if verified_by and verified_by != "name" and not code_evidence(self.tag, page.raw_text, page.final_url):

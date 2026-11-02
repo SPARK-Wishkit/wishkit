@@ -7,13 +7,18 @@
 - 이제 그런 경우 링크를 버리지 않고 앱에서 **"검색으로 찾은 상품이에요. 태그와 같은지 확인해 주세요"**라고 보여줘요. 링크를 열어 볼 수 있고, **맞아요**를 눌러야만 담을 수 있어요. **다른 상품이에요**를 누르면 태그 정보만 남기고 직접 입력해요.
 - 페이지를 제대로 읽었는데 품번이 없던 링크(다른 상품일 수 있음)는 예전처럼 "못 찾음"으로 둬요.
 - 태그 옆의 `DEP` 같은 매장 관리 표시를 품번에 붙여 읽지 않도록 AI에게 알려줬어요.
+- (추가) 글자는 있지만 **가격이 하나도 안 보이는 페이지**도 "제대로 못 읽음"으로 봐요. 다른 상품의 정상 페이지라면 그 상품 가격은 보이기 때문이에요(SSF샵 사례).
+- (추가) 검색 결과 주소 끝에 붙은 엉뚱한 기호(`` ` `` 등)를 떼어내요.
+- (추가) 판매 페이지에서 가격을 못 읽었으면 **"태그 가격 ○○원으로 채우기"** 버튼이 나와요. 태그 가격은 정가일 수 있어서 자동으로 넣지는 않아요.
+- (추가) 상품 링크 읽기(`/extract`)도 로그에 한 줄 요약을 남겨요: `[extract] host=… price=… ambiguous=… reason=… body_chars=…`.
 
 🔧 **기술 설명**
 - 엔진 `tag_identify`: 새 상태 `needs_confirm`. 후보가 렌더링 실패·차단·시간 부족이거나, 접속은 됐지만 본문이 `MIN_BODY_CHARS`(200자) 미만이고 품번 근거가 없으면 "못 읽음"으로 따로 모은다(`_Checker.unread`). 확인된 후보가 없을 때만 첫 번째(공식몰·몰 우선순위 순) 못 읽은 후보를 `match.verified_by = "search"`로 돌려준다. 구글 리다이렉트 주소는 실제 주소를 몰라서 제외. 로그 reason에 `본문이 거의 비어 있음(N자)`.
 - `PageView.body_chars`/`looks_blank` 추가, `main._render_for_identify`가 본문 글자 수(메타 제외) 전달. 태그 프롬프트에 DEP·사이즈 표시를 품번에 붙이지 말라는 규칙.
 - 백엔드: `parsing-proxy`·GraphQL `IdentifiedTag`는 status를 문자열로 그대로 넘기므로 스키마 변경 없음(설명 주석만 갱신).
 - 앱: `TagIdentifyStatus.needsConfirm`·`hasMatch`. `share_intake_screen`이 링크를 미리 읽어 보여주고 `tagConfirmPending` 동안 저장을 막는다. 버튼: 링크 열어서 확인하기 / 맞아요 / 다른 상품이에요(→ 태그 정보만으로 입력).
-- 테스트: 엔진 `test_tag_identify.py` 5개 추가·1개 기대값 변경(시간 부족 후보 → needs_confirm), 앱 `product_tag_store_test.dart` 2개 추가.
+- 추가: `PageView.shows_price`(₩·원 표기 가격 정규식) — 품번 근거가 없고 가격도 안 보이면 "상품 정보가 안 보임(가격 없음, N자)"으로 못 읽음 처리. `_clean_url`로 URL의 마크다운 군더더기 제거. `main._extract`에 `[extract]` 요약 로그. 앱 가격 입력칸 아래 태그 가격 채우기 버튼(`ValueListenableBuilder`로 칸이 비었을 때만).
+- 테스트: 엔진 `test_tag_identify.py` 7개 추가·2개 기대값 변경(시간 부족 후보 → needs_confirm, 품번 없는 정상 페이지엔 가격 포함), 앱 `product_tag_store_test.dart` 2개 추가.
 - ⚠️ 엔진 `engine.sh deploy` 필요. 앱은 다시 빌드. 백엔드(Amplify)는 주석만 바뀌어 배포 영향 없음.
 
 ---

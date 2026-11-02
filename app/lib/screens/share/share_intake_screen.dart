@@ -632,6 +632,27 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                       fillColor: DiaryColors.white,
                     ),
                   ),
+                  // 판매 페이지에서 가격을 못 읽었을 때, 태그에서 읽은 가격으로 한 번에 채울 수 있게.
+                  // 태그 가격은 정가라 판매가와 다를 수 있어서 자동으로 넣지 않고 사용자가 고른다.
+                  if (tagResult?.tagPrice != null)
+                    ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: priceCtrl,
+                      builder: (context, value, _) {
+                        if (value.text.trim().isNotEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: DiaryButton(
+                            label:
+                                '태그 가격 ${formatWon(tagResult!.tagPrice!)}으로 채우기',
+                            icon: Icons.sell_outlined,
+                            onPressed: () =>
+                                priceCtrl.text = '${tagResult!.tagPrice!}',
+                          ),
+                        );
+                      },
+                    ),
                   if (parsed!.originalPrice != null) ...[
                     const SizedBox(height: 6),
                     Text(

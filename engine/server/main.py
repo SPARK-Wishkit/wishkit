@@ -18,6 +18,7 @@ import asyncio
 import base64
 import binascii
 import logging
+import urllib.parse
 from contextlib import asynccontextmanager
 from functools import partial
 from typing import Literal
@@ -128,6 +129,14 @@ async def _extract(url: str) -> dict:
             "gemini_vision_elapsed_ms": vision_elapsed_ms,
         },
     }
+    # 한 줄 요약 로그(/identify-tag의 [identify]와 같은 목적): 어느 사이트였고, 본문이 얼마나 있었고,
+    # 가격을 읽었는지, 못 읽었으면 AI가 적은 이유.
+    logger.info(
+        "[extract] host=%s price=%r ambiguous=%s reason=%r body_chars=%d vision=%s (%dms, 렌더 %dms)",
+        urllib.parse.urlparse(r.final_url or url).hostname, extracted.get("unconditional_price"),
+        bool(extracted.get("ambiguous")), extracted.get("ambiguity_reason"), len(r.raw_text.strip()),
+        screenshot_fallback_used, response["metrics"]["total_elapsed_ms"], render_elapsed_ms,
+    )
     return response
 
 
