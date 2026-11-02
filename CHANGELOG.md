@@ -1,5 +1,19 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-02 - 엔진 추출 결과 캐시 제거
+
+🌟 **쉬운 설명**
+- 같은 상품 링크를 1시간 동안 기억해 두던 캐시를 뺐어요. 이제 링크를 넣을 때마다 항상 새로 읽어요.
+- 이유: 지금은 엔진을 시연·테스트 때만 켜서 캐시 이득이 거의 없고, 캐시 키가 `ref`로 시작하는 파라미터를 모두 지워서 서로 다른 상품이 같은 결과를 받을 위험이 있었어요. 1시간 동안 옛 가격이 보이는 문제도 없어져요.
+
+🔧 **기술 설명**
+- `engine/server/cache.py`, `test_cache.py` 삭제. `main.py`에서 캐시 조회/저장, `CACHE_TTL_S`, `app.state.cache`, 응답의 `metrics.cache_hit` 제거. `test_main.py`의 캐시 테스트 2개와 `_counting_render` 제거. `engine/README.md` 파일 목록 정리.
+- 앱·`parsing-proxy`는 `cache_hit`을 쓰지 않으므로 영향 없음. `engine/testdata/results/`의 옛 결과 파일 속 `cache_hit`은 기록이라 그대로 둠.
+- 다시 필요해지면 #12(`7e4214d`)에서 꺼내되, `ref` 접두어 매칭을 정확한 이름 목록으로 고칠 것.
+- ⚠️ 엔진 반영은 `bash engine/deploy/engine.sh deploy`.
+
+---
+
 ## 2026-10-28 - 태그 찾기: 무신사 검색 단계 빼고 구글 검색으로 공식몰 연결 · 폴더 정리 · WebView 자료 정리
 
 🌟 **쉬운 설명**

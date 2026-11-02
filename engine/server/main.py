@@ -27,7 +27,6 @@ from playwright.async_api import async_playwright
 from pydantic import BaseModel, HttpUrl
 
 import config
-from cache import CachedExtraction, InProcessCache, normalize_cache_key
 from compare import grounding_check
 from metrics import PeakRSSSampler, now_ms
 from providers import ProviderResult, call_gemini, call_gemini_vision
@@ -43,9 +42,6 @@ from tag_identify import (
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("extract-server")
-
-CACHE_TTL_S = 3600
-
 
 class ExtractRequest(BaseModel):
     url: HttpUrl
@@ -64,7 +60,6 @@ async def lifespan(app: FastAPI):
         app.state.browser = browser
         app.state.gemini_semaphore = asyncio.Semaphore(config.GEMINI_MAX_CONCURRENCY)
         app.state.render_semaphore = asyncio.Semaphore(config.RENDER_MAX_CONCURRENCY)
-        app.state.cache = InProcessCache()  # 태스크 프로세스 안에서만 유효(여러 태스크 간 공유 안 됨)
         logger.info(
             "서버 시작 — 브라우저 준비 완료 (GEMINI_MAX_CONCURRENCY=%s, RENDER_MAX_CONCURRENCY=%s, EXTRACT_TIMEOUT_S=%s)",
             config.GEMINI_MAX_CONCURRENCY, config.RENDER_MAX_CONCURRENCY, config.EXTRACT_TIMEOUT_S,
@@ -94,10 +89,6 @@ async def _extract(url: str) -> dict:
     t_start = now_ms()
     # 앱 공유용 짧은 링크(musinsa.onelink.me 등)는 실제 상품 주소로 먼저 바꾼다(share_links.py).
     url = await asyncio.to_thread(resolve_share_link, url)
-    cache_key = normalize_cache_key(url)
-    cached = await app.state.cache.get(cache_key)
-    if cached is not None:
-        return {**cached.data, "metrics": {**cached.data.get("metrics", {}), "cache_hit": True}}
 
     async with app.state.render_semaphore:
         r = await render(app.state.browser, url, nav_timeout_ms=config.RENDER_NAV_TIMEOUT_MS)
@@ -135,16 +126,8 @@ async def _extract(url: str) -> dict:
             "render_elapsed_ms": render_elapsed_ms,
             "gemini_text_elapsed_ms": text_elapsed_ms,
             "gemini_vision_elapsed_ms": vision_elapsed_ms,
-            "cache_hit": False,
         },
     }
-    # ambiguous(기권)는 캐시에 안 넣는다 — 렌더링이 그 순간만 꼬여서 생긴 일시적 실패일 수
-    # 있어서(2026-10-29 KREAM·SSF샵 조사: 같은 URL이 재시도로 정상 응답을 받기도 함),
-    # 1시간 동안 실패 응답을 그대로 돌려주는 것보다는 다음 요청이 다시 시도해 보는 게 낫다.
-    if not extracted.get("ambiguous"):
-        await app.state.cache.set(
-            cache_key, CachedExtraction(data=response, cached_at_ms=now_ms()), ttl_seconds=CACHE_TTL_S
-        )
     return response
 
 

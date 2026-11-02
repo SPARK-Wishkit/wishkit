@@ -56,7 +56,6 @@ server/
   prompts.py    — 시스템 프롬프트/few-shot/JSON 스키마. engine-ai-prototype과 완전히 동일
                   (문구를 바꾸지 않았음)
   compare.py    — 그라운딩 체크(응답에 포함) + 골든셋 비교(회귀 테스트용)
-  cache.py      — RenderCache Protocol + 캐시 키 정규화 (실제 구현은 아직 없음, NoOpCache만)
   metrics.py    — 요청별 elapsed_ms/peak_rss_mb 측정
   config.py     — 전부 환경변수로 오버라이드 가능한 설정값
 tools/
