@@ -36,6 +36,7 @@ from share_links import resolve_share_link
 from tag_identify import (
     IdentifyError,
     PageView,
+    call_gemini_read_pages,
     call_gemini_search,
     call_gemini_tag,
     identify,
@@ -231,6 +232,7 @@ async def identify_tag(req: IdentifyTagRequest):
                 image, req.mime_type,
                 read_tag=lambda img, mime: timed("read_tag", gemini_once(call_gemini_tag, img, mime)),
                 search=lambda tag: timed("search", gemini_once(call_gemini_search, tag)),
+                read_pages=lambda tag, urls: timed("read_pages", gemini_once(call_gemini_read_pages, tag, urls)),
                 render_page=lambda url: timed("render", _render_for_identify(url, time_left() - 1.0)),
                 time_left=time_left,
             ),
@@ -247,10 +249,12 @@ async def identify_tag(req: IdentifyTagRequest):
     total_ms = now_ms() - started
     # 한 줄 요약 로그(사진은 남기지 않음): 무엇을 읽고, 어디를 열어 봤고, 왜 떨어졌는지.
     logger.info(
-        "[identify] %s (%dms, 단계 %s) brand=%r code=%r other=%r official=%r note=%r checked=%s",
+        "[identify] %s (%dms, 단계 %s) brand=%r code=%r other=%r official=%r note=%r checked=%s match=%s",
         outcome.status, total_ms, stages, outcome.tag.get("brand"), outcome.tag.get("product_code"),
         outcome.tag.get("other_codes"), outcome.official_domain, outcome.note,
         [(c["url"], c["source"], c["verified"], c["reason"]) for c in outcome.checked],
+        {k: (outcome.match or {}).get(k) for k in ("url", "verified_by", "name", "price", "regular_price")}
+        if outcome.match else None,
     )
     return {**outcome.to_dict(), "metrics": {"total_elapsed_ms": total_ms, "stages_ms": stages}}
 

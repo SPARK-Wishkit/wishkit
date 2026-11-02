@@ -12,7 +12,9 @@
 - (추가) 판매 페이지에서 가격을 못 읽었으면 **"태그 가격 ○○원으로 채우기"** 버튼이 나와요. 태그 가격은 정가일 수 있어서 자동으로 넣지는 않아요.
 - (추가) 상품 링크 읽기(`/extract`)도 로그에 한 줄 요약을 남겨요: `[extract] host=… price=… ambiguous=… reason=… body_chars=…`.
 - (변경) **태그 찾기에서 서버가 후보 페이지를 열어 보지 않아요.** 검색 결과에 보이는 상품 제목이나 주소에 태그 품번이 있으면 그 링크를 바로 돌려줘요(구글 검색은 페이지를 잘 찾는데, 일부 몰이 우리 서버에는 빈 화면을 줘서 확인이 실패했기 때문이에요). 제목에서 품번을 못 찾으면 "확인 필요"로 보여줘요. 페이지를 안 여니 더 빨라요.
-- (추가) 검색 결과 **제목에 품번이 없어도** 찾아요. 검색할 때 "이 품번 상품의 이름"(예: BEAKER EPINGLER Laced Hoodie - Oatmeal)과 각 결과의 설명 문구를 함께 받아서, 품번이 설명에 있거나 제목이 그 상품 이름과 맞으면 찾음으로 처리해요. 이름으로 찾은 경우 앱이 "같은 상품인지 확인해 주세요"를 같이 보여줘요.
+- (변경) 찾은 페이지를 **구글이 가진 사본으로 읽어서** 확인해요(Gemini URL context). 우리 서버에는 빈 화면을 주는 몰(SSF샵 등)도 구글 사본은 멀쩡해서, 페이지에 적힌 품번으로 확인하고 **상품명·가격·사진**까지 가져와요. 가격은 검색 기준이라 지금과 다를 수 있다고 표시해요.
+- (변경) 링크로 찾은 결과는 **항상 "이 상품이 맞나요?"**를 물어요. **다른 상품이에요**를 누르면 태그의 **브랜드·품번·정가**를 입력칸(상품명·가격·메모)에 채워요.
+- (취소) 검색 제목과 상품 이름을 비교하는 방식은 뺐어요. 색상만 다른 상품도 통과시키는 문제가 있었어요.
 
 🔧 **기술 설명**
 - 엔진 `tag_identify`: 새 상태 `needs_confirm`. 후보가 렌더링 실패·차단·시간 부족이거나, 접속은 됐지만 본문이 `MIN_BODY_CHARS`(200자) 미만이고 품번 근거가 없으면 "못 읽음"으로 따로 모은다(`_Checker.unread`). 확인된 후보가 없을 때만 첫 번째(공식몰·몰 우선순위 순) 못 읽은 후보를 `match.verified_by = "search"`로 돌려준다. 구글 리다이렉트 주소는 실제 주소를 몰라서 제외. 로그 reason에 `본문이 거의 비어 있음(N자)`.
@@ -20,8 +22,11 @@
 - 백엔드: `parsing-proxy`·GraphQL `IdentifiedTag`는 status를 문자열로 그대로 넘기므로 스키마 변경 없음(설명 주석만 갱신).
 - 앱: `TagIdentifyStatus.needsConfirm`·`hasMatch`. `share_intake_screen`이 링크를 미리 읽어 보여주고 `tagConfirmPending` 동안 저장을 막는다. 버튼: 링크 열어서 확인하기 / 맞아요 / 다른 상품이에요(→ 태그 정보만으로 입력).
 - 추가: `PageView.shows_price`(₩·원 표기 가격 정규식) — 품번 근거가 없고 가격도 안 보이면 "상품 정보가 안 보임(가격 없음, N자)"으로 못 읽음 처리. `_clean_url`로 URL의 마크다운 군더더기 제거. `main._extract`에 `[extract]` 요약 로그. 앱 가격 입력칸 아래 태그 가격 채우기 버튼(`ValueListenableBuilder`로 칸이 비었을 때만).
-- 변경: 기본 확인 방식을 `_decide_from_search`로 — 검색 응답에 `URL: … | 제목: …` 형식으로 제목을 받아, 주소 또는 (그라운딩 출처에 있는 사이트의) 제목에 품번이 있으면 found. 제목은 모델이 옮겨 적은 값이라 실제 검색 출처에 없는 사이트면 믿지 않는다. 근거 없으면 첫 후보 needs_confirm. 렌더링 확인은 `IDENTIFY_RENDER_VERIFY=1`로 그대로 쓸 수 있다(기존 렌더링 테스트는 이 값으로 고정). `match.title` 추가(앱에는 아직 안 넘김). 추가로 검색 응답에 `PRODUCT_NAME:`과 `| 설명:`을 받아 설명 속 품번(근거 이름 그대로), 제목-상품명 일치(`name`, 이름 단어 70% 이상, 출처 사이트만)도 근거로 쓴다. 제목 안의 `|`는 `| 설명:` 표시 전까지 제목으로 본다.
-- 테스트: 엔진 `test_tag_identify.py` 14개 추가(검색만으로 판단 7개 포함)·2개 기대값 변경(시간 부족 후보 → needs_confirm, 품번 없는 정상 페이지엔 가격 포함), 앱 `product_tag_store_test.dart` 2개 추가.
+- 변경: 기본 확인 방식을 `_decide_from_search`로 — 검색 응답에 `URL: … | 제목: …` 형식으로 제목을 받아, 주소 또는 (그라운딩 출처에 있는 사이트의) 제목에 품번이 있으면 found. 제목은 모델이 옮겨 적은 값이라 실제 검색 출처에 없는 사이트면 믿지 않는다. 근거 없으면 첫 후보 needs_confirm. 렌더링 확인은 `IDENTIFY_RENDER_VERIFY=1`로 그대로 쓸 수 있다(기존 렌더링 테스트는 이 값으로 고정). `match.title` 추가(앱에는 아직 안 넘김). 검색 응답의 `| 설명:` 속 품번도 근거로 쓰고, 제목 안의 `|`는 `| 설명:` 표시 전까지 제목으로 본다.
+- 페이지 읽기: `call_gemini_read_pages`(URL context 도구)로 후보 최대 3개를 한 번에 읽어 JSON(page_code·name·price·regular_price·image)을 받는다. `url_context_metadata`에 가져오기 성공 기록이 있고 페이지의 품번 표기·상품명에 태그 품번이 있을 때만 found(`… (구글 사본)`). 기록 없는 정보는 믿지 않는다. 읽기 실패·시간 부족(`MIN_SECONDS_FOR_PAGE_READ` 6초)이면 검색 결과만으로 판단. `match`에 name·price·regular_price·image 추가, `[identify]` 로그에 match 요약.
+- 백엔드: GraphQL `IdentifiedTag`에 `matchName`·`matchPrice`·`matchRegularPrice`·`matchImage` 추가, `parsing-proxy`가 매핑(양의 정수 가격·http 사진만). ⚠️ 스키마 변경이라 Amplify(main) 배포가 끝난 뒤 새 앱을 실행해야 한다(먼저 실행하면 GraphQL이 모르는 필드라고 거부).
+- 앱: `hasMatchDetails`면 링크를 다시 읽지 않고 받은 정보로 채움, 아니면 기존처럼 `/extract` 후 빈 칸만 채움. found·needsConfirm 모두 확인 전 저장 막음. 거절하면 `tagOnlyName`(브랜드 + 상품명 또는 품번)·태그 정가·메모 "품번 …".
+- 테스트: 엔진 `test_tag_identify.py` 22개 추가(검색만으로 판단·구글 사본 읽기 포함)·2개 기대값 변경(시간 부족 후보 → needs_confirm, 품번 없는 정상 페이지엔 가격 포함), 앱 `product_tag_store_test.dart` 5개 추가.
 - ⚠️ 엔진 `engine.sh deploy` 필요. 앱은 다시 빌드. 백엔드(Amplify)는 주석만 바뀌어 배포 영향 없음.
 
 ---

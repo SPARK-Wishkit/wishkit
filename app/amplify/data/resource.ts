@@ -356,6 +356,11 @@ const schema = a.schema({
     matchSource: a.string(),
     verifiedBy: a.string(),
     note: a.string(),
+    // 찾은 페이지에서 읽은 정보(엔진이 구글의 페이지 사본으로 읽음 — 최신이 아닐 수 있음). 없으면 null.
+    matchName: a.string(),
+    matchPrice: a.integer(),
+    matchRegularPrice: a.integer(),
+    matchImage: a.string(),
   }),
 
   /**

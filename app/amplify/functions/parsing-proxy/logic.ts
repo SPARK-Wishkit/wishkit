@@ -82,6 +82,11 @@ export interface EngineIdentifyResponse {
     host: string;
     source: string;
     verified_by: string;
+    /** 찾은 페이지에서 읽은 상품명·가격·사진(구글 페이지 사본, 없으면 null/생략). */
+    name?: string | null;
+    price?: number | null;
+    regular_price?: number | null;
+    image?: string | null;
   } | null;
   note: string | null;
 }
@@ -100,6 +105,10 @@ export interface IdentifiedTag {
   matchSource: string | null;
   verifiedBy: string | null;
   note: string | null;
+  matchName: string | null;
+  matchPrice: number | null;
+  matchRegularPrice: number | null;
+  matchImage: string | null;
 }
 
 /** 엔진 서버가 받는 사진 형식. */
@@ -117,8 +126,14 @@ export function isValidImageInput(imageBase64: string, mimeType: string): boolea
   );
 }
 
+/** GraphQL Int로 보낼 수 있는 양의 정수 가격만(아니면 null). */
+function wonOrNull(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 && v < 2_000_000_000 ? Math.round(v) : null;
+}
+
 export function toIdentifiedTag(res: EngineIdentifyResponse): IdentifiedTag {
   const price = res.tag?.tag_price;
+  const image = res.match?.image;
   return {
     status: res.status,
     brand: res.tag?.brand ?? null,
@@ -133,5 +148,9 @@ export function toIdentifiedTag(res: EngineIdentifyResponse): IdentifiedTag {
     matchSource: res.match?.source ?? null,
     verifiedBy: res.match?.verified_by ?? null,
     note: res.note,
+    matchName: res.match?.name || null,
+    matchPrice: wonOrNull(res.match?.price),
+    matchRegularPrice: wonOrNull(res.match?.regular_price),
+    matchImage: typeof image === 'string' && /^https?:\/\//.test(image) ? image : null,
   };
 }

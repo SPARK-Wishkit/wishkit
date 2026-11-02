@@ -745,6 +745,10 @@ class TagIdentifyResult {
     this.matchSource,
     this.verifiedBy,
     this.note,
+    this.matchName,
+    this.matchPrice,
+    this.matchRegularPrice,
+    this.matchImage,
   });
 
   final TagIdentifyStatus status;
@@ -765,6 +769,31 @@ class TagIdentifyResult {
   /// 'product_code' | 'barcode' | 'product_code_base' | 'name' | 'search'(needsConfirm)
   final String? verifiedBy;
   final String? note;
+
+  /// 찾은 페이지에서 읽은 상품명·판매가·정가·대표 사진. 서버가 구글의 페이지 사본으로 읽은 값이라
+  /// 최신이 아닐 수 있다. 없으면 null.
+  final String? matchName;
+  final int? matchPrice;
+  final int? matchRegularPrice;
+  final String? matchImage;
+
+  /// 페이지 정보(상품명·가격)를 이미 받아서, 링크를 다시 읽지 않아도 되는지.
+  bool get hasMatchDetails =>
+      hasMatch && (matchName ?? '').isNotEmpty && (matchPrice ?? 0) > 0;
+
+  /// 태그 정보만으로 만든 상품명. 상품명이 없으면 품번을 넣는다. 예: "BEAKER QQ6X39EP20"
+  String get tagOnlyName {
+    final b = (brand ?? '').trim();
+    final n = (productName ?? '').trim();
+    final code = (productCode ?? '').trim();
+    final parts = [
+      if (b.isNotEmpty) b,
+      if (n.isNotEmpty) n,
+      if (n.isEmpty && code.isNotEmpty) code,
+    ];
+    final base = parts.join(' ');
+    return n.isNotEmpty && code.isNotEmpty ? '$base ($code)' : base;
+  }
 
   bool get foundOnOfficialSite => matchSource == 'official';
 
@@ -802,6 +831,11 @@ class TagIdentifyResult {
       _ => TagIdentifyStatus.notFound,
     };
     final price = (json['tagPrice'] as num?)?.toInt();
+    int? won(String k) {
+      final v = (json[k] as num?)?.toInt();
+      return v != null && v > 0 ? v : null;
+    }
+
     return TagIdentifyResult(
       status: status,
       brand: s('brand'),
@@ -815,6 +849,12 @@ class TagIdentifyResult {
       matchSource: s('matchSource'),
       verifiedBy: s('verifiedBy'),
       note: s('note'),
+      matchName: s('matchName'),
+      matchPrice: won('matchPrice'),
+      matchRegularPrice: won('matchRegularPrice'),
+      matchImage: (s('matchImage') ?? '').startsWith('http')
+          ? s('matchImage')
+          : null,
     );
   }
 }
