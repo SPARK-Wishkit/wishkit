@@ -157,12 +157,15 @@ def build_search_prompt(tag: dict) -> str:
 가리지 말고 모두 적으세요. 공식몰을 찾았다고 멈추지 마세요.
 사이트 메인 페이지, 카테고리·검색 결과 목록 페이지, 블로그, 리뷰, 커뮤니티 글은 제외하세요.
 실제로 찾지 못한 URL을 지어내지 마세요.
-각 URL 옆에는 검색 결과에 보이는 그 페이지의 **제목을 보이는 그대로** 적으세요. 제목에 없는 품번이나
-글자를 덧붙이지 마세요 — 제목에 품번이 있는지로 같은 상품인지 판단합니다. 제목을 모르면 "없음".
+각 URL 옆에는 검색 결과에 보이는 그 페이지의 **제목**과 **설명 문구**를 보이는 그대로 적으세요.
+제목·설명에 없는 품번이나 글자를 덧붙이지 마세요 — 거기에 품번이 있는지로 같은 상품인지 판단합니다.
+모르면 "없음". 그리고 검색 결과로 확인한 **이 품번 상품의 정확한 이름**(브랜드 포함)을 PRODUCT_NAME에
+적으세요. 검색 결과로 확인하지 못했으면 "없음".
 아래 형식으로만 답하세요(URL은 최대 6개, 공식몰 상세 페이지가 있으면 먼저):
 OFFICIAL_DOMAIN: <브랜드 공식몰 도메인, 모르면 없음>
-URL: <상품 상세 페이지 URL> | 제목: <검색 결과에 보이는 제목>
-URL: <상품 상세 페이지 URL> | 제목: <검색 결과에 보이는 제목>
+PRODUCT_NAME: <검색 결과로 확인한 이 품번 상품의 이름, 모르면 없음>
+URL: <상품 상세 페이지 URL> | 제목: <검색 결과 제목> | 설명: <검색 결과 설명 문구>
+URL: <상품 상세 페이지 URL> | 제목: <검색 결과 제목> | 설명: <검색 결과 설명 문구>
 """
 
 
@@ -228,7 +231,32 @@ NON_SHOP_DOMAINS = (
 # 넘어가므로 그대로 쓰되, 분류는 title(보통 도메인)로 한다.
 GROUNDING_REDIRECT_HOSTS = ("vertexaisearch.cloud.google.com",)
 
-_URL_LINE_RE = re.compile(r"^\s*URL\s*:\s*(\S+)(?:\s*\|\s*제목\s*:\s*(.*?))?\s*$", re.IGNORECASE | re.MULTILINE)
+_URL_LINE_RE = re.compile(r"^\s*URL\s*:\s*(\S+)(.*)$", re.IGNORECASE | re.MULTILINE)
+_LINE_FIELD_RE = re.compile(r"\|\s*(제목|설명)\s*:\s*")
+
+
+def _line_fields(rest: str) -> dict[str, str]:
+    """'| 제목: … | 설명: …'를 나눈다. 제목 안에 '|'가 들어 있어도(예: "[BEAKER] EPINGLER | Laced Hoodie")
+    다음 '| 설명:' 표시 전까지를 통째로 제목으로 본다."""
+    marks = list(_LINE_FIELD_RE.finditer(rest or ""))
+    out: dict[str, str] = {}
+    for i, m in enumerate(marks):
+        end = marks[i + 1].start() if i + 1 < len(marks) else len(rest)
+        out[m.group(1)] = _field(rest[m.end():end])
+    return out
+_NAME_LINE_RE = re.compile(r"^\s*PRODUCT_NAME\s*:\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
+_EMPTY_FIELD = ("없음", "(없음)", "-", "모름")
+
+
+def _field(value: str) -> str:
+    value = (value or "").strip()
+    return "" if value in _EMPTY_FIELD else value
+
+
+def search_product_name(text: str) -> str:
+    """검색 응답의 PRODUCT_NAME(검색으로 확인한 이 품번 상품의 이름). 없으면 빈 값."""
+    m = _NAME_LINE_RE.search(text or "")
+    return _field(m.group(1)) if m else ""
 _DOMAIN_LINE_RE = re.compile(r"^\s*OFFICIAL_DOMAIN\s*:\s*(\S+)", re.IGNORECASE | re.MULTILINE)
 
 
@@ -274,6 +302,7 @@ class Candidate:
     hint_host: str  # 분류에 쓸 호스트(리다이렉트 주소면 title에서 얻은 도메인)
     source: str  # 'official' | 'mall'
     title: str = ""  # 검색 결과에 보이는 제목(검색 응답 텍스트에서). 그라운딩 출처면 빈 값
+    snippet: str = ""  # 검색 결과 설명 문구
 
 
 # 모델이 URL 뒤에 마크다운 기호(`, *, 따옴표)를 붙이는 경우가 있다(2026-11-02 SSF 주소 끝 백틱).
@@ -296,14 +325,12 @@ def parse_search_output(text: str, sources: list[dict]) -> tuple[str | None, lis
     if official and any(_domain_matches(official, d) for d in MALL_DOMAINS):
         official = None  # 쇼핑몰을 공식몰이라고 답한 경우 — 공식몰 없음으로 취급
 
-    raw: list[tuple[str, str, str]] = []
-    for url, title in _URL_LINE_RE.findall(text or ""):
+    raw: list[tuple[str, str, str, str]] = []
+    for url, rest in _URL_LINE_RE.findall(text or ""):
         url = _clean_url(url)
-        title = (title or "").strip()
-        if title in ("없음", "(없음)", "-"):
-            title = ""
+        fields = _line_fields(rest)
         if url.startswith(("http://", "https://")) and not is_root_url(url):
-            raw.append((url, host_of(url), title))
+            raw.append((url, host_of(url), fields.get("제목", ""), fields.get("설명", "")))
     for s in sources:
         uri = s.get("uri") or ""
         host = host_of(uri)
@@ -312,12 +339,12 @@ def parse_search_output(text: str, sources: list[dict]) -> tuple[str | None, lis
         elif is_root_url(uri):
             continue  # 리다이렉트 주소는 렌더링 후 확인 단계에서 거른다
         if uri.startswith(("http://", "https://")):
-            raw.append((uri, host, ""))
+            raw.append((uri, host, "", ""))
 
     seen_sites: set[str] = set()
     official_cands: list[Candidate] = []
     mall_cands: list[Candidate] = []
-    for url, host, title in raw:
+    for url, host, title, snippet in raw:
         source = classify_host(host, official)
         if source not in ("official", "mall"):
             continue
@@ -327,7 +354,7 @@ def parse_search_output(text: str, sources: list[dict]) -> tuple[str | None, lis
         if site in seen_sites:
             continue
         seen_sites.add(site)
-        (official_cands if source == "official" else mall_cands).append(Candidate(url, host, source, title))
+        (official_cands if source == "official" else mall_cands).append(Candidate(url, host, source, title, snippet))
     mall_cands.sort(key=lambda c: _mall_rank(c.hint_host))  # 안정 정렬: 목록 밖 몰은 검색 순서 유지
     return official, official_cands + mall_cands
 
@@ -538,7 +565,8 @@ async def identify(
         verify_by_render = config.IDENTIFY_RENDER_VERIFY
     if not verify_by_render:
         # 3. 검색 결과만으로 판단 — 서버에서 페이지를 열지 않는다.
-        return _decide_from_search(tag, official, candidates, search_res.data.get("sources", []))
+        return _decide_from_search(tag, official, candidates, search_res.data.get("sources", []),
+                                   product_name=search_product_name(search_res.data.get("text", "")))
 
     # 3. (IDENTIFY_RENDER_VERIFY=1) 후보 페이지를 열어 확인 — 공식몰에서 품번이 확인되면 바로 끝
     checker = _Checker(tag, render_page, time_left, min_seconds_per_render)
@@ -644,15 +672,27 @@ def _is_grounded(host: str, grounded: set[str]) -> bool:
     return any(_domain_matches(host, g) or _domain_matches(g, host) for g in grounded)
 
 
-def _decide_from_search(tag: dict, official: str | None, candidates: list[Candidate],
-                        sources: list[dict]) -> IdentifyOutcome:
-    """검색 결과의 제목·주소에 태그 품번(또는 바코드·기본 번호)이 있으면 그 링크를 돌려준다.
+def _title_matches_name(title: str, name: str) -> bool:
+    """검색 결과 제목이 검색으로 확인한 상품 이름과 같은 상품을 가리키는지(이름 단어의 70% 이상이 제목에)."""
+    tokens = _name_tokens(name)
+    if len(tokens) < 2 or not title:
+        return False
+    text = title.lower()
+    return sum(1 for t in tokens if t in text) / len(tokens) >= NAME_TOKEN_HIT_RATIO
 
-    - 주소(URL)에 품번이 있으면 그대로 믿는다(주소는 모델이 지어내기 어렵다 — 리다이렉트 주소는 제외).
-    - 제목은 모델이 옮겨 적은 것이라, 그 사이트가 그라운딩 출처(실제 검색 결과)에 있을 때만 믿는다.
-      출처 정보가 아예 비어 있으면(SDK에 따라 빔) 확인할 수 없으니 제목 근거를 쓰지 않는다.
-    - 근거가 있는 후보가 없으면 첫 후보를 needs_confirm으로(앱이 사용자에게 묻는다).
-    순위는 렌더링 확인과 같다: 코드 근거 > 이름 근거, 공식몰 > 쇼핑몰, 강한 근거 > 약한 근거."""
+
+def _decide_from_search(tag: dict, official: str | None, candidates: list[Candidate],
+                        sources: list[dict], product_name: str = "") -> IdentifyOutcome:
+    """서버에서 페이지를 열지 않고 검색 결과만으로 고른다.
+
+    근거(강한 순):
+    - 주소(URL)에 품번 → 그대로 믿는다(리다이렉트 주소는 제외).
+    - 제목·설명 문구에 품번 → 그 사이트가 그라운딩 출처(실제 검색 결과)에 있을 때만.
+    - 이름 일치('name') → 제목에 품번이 없어도, 제목이 "검색으로 확인한 이 품번 상품의 이름"(PRODUCT_NAME)과
+      맞으면(2026-11-02 SSF 사례: 페이지 제목엔 상품명만 있고 품번은 없음). 앱은 'name'이면
+      "이름으로 찾았어요, 같은 상품인지 확인해 주세요"를 보여준다. 역시 출처에 있는 사이트만.
+    근거가 있는 후보가 없으면 첫 후보를 needs_confirm으로.
+    순위: 코드 근거 > 이름 근거, 공식몰 > 쇼핑몰, 강한 근거 > 약한 근거."""
     grounded = _grounded_hosts(sources)
     checked: list[dict] = []
     best: tuple[tuple[int, int, int], dict] | None = None
@@ -660,20 +700,36 @@ def _decide_from_search(tag: dict, official: str | None, candidates: list[Candid
 
     for cand in candidates:
         is_redirect = any(_domain_matches(host_of(cand.url), d) for d in GROUNDING_REDIRECT_HOSTS)
-        url_ev = None if is_redirect else page_matches(tag, "", cand.url)
-        title_ok = bool(cand.title) and _is_grounded(cand.hint_host, grounded)
-        title_ev = page_matches(tag, cand.title, "") if title_ok else None
-        evidence = url_ev or title_ev
+        trusted = _is_grounded(cand.hint_host, grounded)
+        text = f"{cand.title} {cand.snippet}".strip()
+        evidence, where = None, ""
+        if not is_redirect:
+            url_ev = code_evidence(tag, "", cand.url)
+            if url_ev:
+                evidence, where = url_ev, "주소"
+        if evidence is None and trusted and text:
+            text_ev = code_evidence(tag, text, "")
+            if text_ev:
+                evidence, where = text_ev, "검색 제목·설명"
+        if evidence is None and trusted and product_name and _title_matches_name(cand.title, product_name):
+            evidence, where = "name", "검색 상품명 일치"
+        if evidence is None and trusted and not has_code(tag) and text:
+            name_ev = page_matches(tag, text, "")  # 태그에 코드가 아예 없을 때만 태그 이름으로
+            if name_ev:
+                evidence, where = name_ev, "태그 상품명 일치"
+
         if evidence is None or is_redirect:
-            reason = "주소 확인 불가(검색 리다이렉트)" if is_redirect else (
-                "검색 제목·주소에 품번 없음" if (cand.title and title_ok) or not cand.title
-                else "검색 출처에 없는 사이트라 제목을 믿지 않음")
+            if is_redirect:
+                reason = "주소 확인 불가(검색 리다이렉트)"
+            elif not trusted and text:
+                reason = "검색 출처에 없는 사이트라 제목을 믿지 않음"
+            else:
+                reason = "검색 제목·설명·주소에 품번 없음"
             checked.append(_checked(cand.url, cand.source, None if is_redirect else False, reason))
             if unconfirmed is None and not is_redirect:
                 unconfirmed = {"url": cand.url, "host": cand.hint_host, "source": cand.source,
                                "verified_by": "search", "tag_price_seen": None, "title": cand.title or None}
             continue
-        where = "주소" if url_ev else "검색 제목"
         checked.append(_checked(cand.url, cand.source, True, f"{evidence} ({where})"))
         rank = (int(evidence == "name"), _SOURCE_RANK[cand.source], _CODE_STRENGTH[evidence])
         if best is None or rank < best[0]:

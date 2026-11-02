@@ -461,7 +461,7 @@ def test_search_title_with_code_is_found_without_rendering():
     assert out.status == "found"
     assert out.match["url"] == SSF and out.match["verified_by"] == "product_code_base"
     assert out.match["title"] == SSF_TITLE
-    assert out.checked[0]["reason"] == "product_code_base (검색 제목)"
+    assert out.checked[0]["reason"] == "product_code_base (검색 제목·설명)"
 
 
 def test_code_in_url_is_found_even_without_title():
@@ -500,3 +500,50 @@ def test_only_redirect_candidates_is_not_found():
 def test_parse_search_output_reads_titles():
     _, cands = parse_search_output(f"URL: {SSF} | 제목: {SSF_TITLE}\nURL: https://www.musinsa.com/products/1 | 제목: 없음", [])
     assert {c.url: c.title for c in cands} == {"https://www.musinsa.com/products/1": "", SSF: SSF_TITLE}
+
+
+
+# ── 2026-11-02: SSF 제목에 상품명만 있고 품번은 없을 때 ─────────────────
+
+SSF_NAME_ONLY = "[BEAKER] EPINGLER | Laced Hoodie - Oatmeal | SSF SHOP"
+
+
+def test_title_matching_searched_product_name_is_found_as_name():
+    """검색으로 확인한 상품 이름(PRODUCT_NAME)과 제목이 맞으면 품번이 없어도 찾음('name' → 앱이 확인 요청)."""
+    text = (f"OFFICIAL_DOMAIN: 없음\nPRODUCT_NAME: BEAKER EPINGLER Laced Hoodie - Oatmeal\n"
+            f"URL: {SSF} | 제목: {SSF_NAME_ONLY} | 설명: 따뜻한 울 혼방 소재에 레이스 패널을 더한 후디")
+    out, calls = _search_only(text)
+    assert calls["render"] == []
+    assert out.status == "found" and out.match["url"] == SSF
+    assert out.match["verified_by"] == "name"
+    assert out.checked[0]["reason"] == "name (검색 상품명 일치)"
+
+
+def test_code_in_snippet_is_found():
+    text = (f"OFFICIAL_DOMAIN: 없음\nURL: {SSF} | 제목: {SSF_NAME_ONLY} | "
+            f"설명: 품번 QQ6X39EP20 · 울 혼방 후디")
+    out, _ = _search_only(text)
+    assert out.status == "found" and out.match["verified_by"] == "product_code_base"
+
+
+def test_title_of_other_product_is_not_name_match():
+    text = (f"OFFICIAL_DOMAIN: 없음\nPRODUCT_NAME: BEAKER EPINGLER Laced Hoodie - Oatmeal\n"
+            f"URL: {SSF} | 제목: [BEAKER] 크루넥 니트 - 네이비 | 설명: 없음")
+    out, _ = _search_only(text)
+    assert out.status == "needs_confirm"
+
+
+def test_code_match_beats_name_match():
+    other = "https://www.musinsa.com/products/1"
+    text = (f"OFFICIAL_DOMAIN: 없음\nPRODUCT_NAME: BEAKER EPINGLER Laced Hoodie - Oatmeal\n"
+            f"URL: {SSF} | 제목: {SSF_NAME_ONLY} | 설명: 없음\n"
+            f"URL: {other} | 제목: 에핑글러 레이스 후디 QQ6X39EP20 | 설명: 없음")
+    sources = SSF_SOURCES + [{"uri": REDIRECT, "title": "musinsa.com"}]
+    out, _ = _search_only(text, sources=sources)
+    assert out.status == "found" and out.match["url"] == other
+    assert out.match["verified_by"] == "product_code_base"
+
+
+def test_parse_keeps_pipes_inside_title():
+    _, cands = parse_search_output(f"URL: {SSF} | 제목: {SSF_NAME_ONLY} | 설명: 울 후디", [])
+    assert cands[0].title == SSF_NAME_ONLY and cands[0].snippet == "울 후디"
