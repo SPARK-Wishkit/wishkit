@@ -367,11 +367,18 @@ class HomeShell extends StatelessWidget {
       ),
       floatingActionButton: showWishlistFab
           ? FloatingActionButton.extended(
-              backgroundColor: DiaryColors.folderYellow,
+              backgroundColor: DiaryColors.surfaceSoft,
               foregroundColor: DiaryColors.ink,
+              elevation: 4,
+              highlightElevation: 6,
+              shape: const StadiumBorder(),
+              extendedPadding: const EdgeInsets.symmetric(horizontal: 26),
               onPressed: () => context.push('/share'),
-              label: const Text('공유 담기'),
-              icon: const Icon(Icons.add_link),
+              label: Text(
+                '공유 담기',
+                style: DiaryTheme.ui(16, weight: FontWeight.w700),
+              ),
+              icon: const Icon(Icons.link, size: 22),
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.miniEndFloat,

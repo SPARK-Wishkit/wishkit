@@ -359,9 +359,9 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
     final lists = store.tabs.where((t) => t.id != 'all').toList();
 
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       appBar: AppBar(
-        title: Text('공유 담기', style: DiaryTheme.display(28)),
+        title: const Text('공유 담기'),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => context.go('/'),
@@ -369,8 +369,9 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: DiaryGridPaper(
+            padding: EdgeInsets.zero,
             child: ListView(
               children: [
                 Text(
@@ -386,7 +387,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                     filled: true,
                     fillColor: DiaryColors.white,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(DiaryTheme.radius),
                     ),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.refresh),
@@ -398,7 +399,6 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                 DiaryButton(
                   label: loading ? '상품 페이지를 읽는 중...' : '상품 읽기',
                   filled: true,
-                  color: DiaryColors.folderBlue,
                   onPressed: loading || identifying ? () {} : _parse,
                 ),
                 const SizedBox(height: 8),
@@ -416,18 +416,15 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: DiaryColors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: DiaryColors.ink.withValues(alpha: 0.2),
-                      ),
+                      color: DiaryColors.band,
+                      borderRadius: BorderRadius.circular(DiaryTheme.radius),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (tagPhoto != null) ...[
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(DiaryTheme.radius),
                             child: Image.memory(
                               tagPhoto!,
                               width: 56,
@@ -479,7 +476,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                       children: [
                         if (parsed!.image.isNotEmpty)
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(DiaryTheme.radius),
                             child: Image.network(
                               parsed!.image,
                               width: 72,
@@ -572,9 +569,19 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                     children: [
                       for (final tab in lists)
                         ChoiceChip(
-                          label: Text(tab.name),
+                          label: Text(
+                            tab.name,
+                            style: DiaryTheme.ui(
+                              14,
+                              weight: FontWeight.w600,
+                              color: selectedListId == tab.id
+                                  ? DiaryColors.white
+                                  : DiaryColors.ink,
+                            ),
+                          ),
+                          showCheckmark: false,
                           selected: selectedListId == tab.id,
-                          selectedColor: store.tabColor(tab),
+                          selectedColor: DiaryColors.ink,
                           onSelected: (_) =>
                               setState(() => selectedListId = tab.id),
                         ),
@@ -600,7 +607,6 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   DiaryButton(
                     label: saving ? '저장하는 중...' : '이 리스트에 저장',
                     filled: true,
-                    color: DiaryColors.folderMint,
                     onPressed: saving ? null : _save,
                   ),
                 ],

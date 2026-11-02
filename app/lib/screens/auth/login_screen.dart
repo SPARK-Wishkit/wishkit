@@ -80,16 +80,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return AuthPage(
       children: [
-        Text('wishkit', style: DiaryTheme.display(42)),
+        Text('wishkit', style: DiaryTheme.logo(42)),
         const SizedBox(height: 4),
-        Container(
-          height: 6,
-          width: 90,
-          decoration: BoxDecoration(
-            color: DiaryColors.folderBlue,
-            borderRadius: BorderRadius.circular(99),
-          ),
-        ),
+        Container(height: 2, width: 40, color: DiaryColors.ink),
         const SizedBox(height: 10),
         Text(
           isRegister
@@ -102,8 +95,8 @@ class _LoginScreenState extends State<LoginScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: DiaryColors.folderYellow.withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(12),
+              color: DiaryColors.band,
+              borderRadius: BorderRadius.circular(DiaryTheme.radius),
             ),
             child: Text(auth.startupError!, style: DiaryTheme.body(12)),
           ),
@@ -160,7 +153,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ? (isRegister ? '가입 중...' : '로그인 중...')
               : (isRegister ? '회원가입' : '로그인'),
           filled: true,
-          color: DiaryColors.folderBlue,
           onPressed: loading || blocked ? null : _submit,
         ),
         if (!isRegister)

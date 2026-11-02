@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/diary_theme.dart';
 
+/// Plain white sheet. Kept under its old name so call sites don't change.
 class DiaryGridPaper extends StatelessWidget {
   const DiaryGridPaper({
     super.key,
@@ -24,14 +25,15 @@ class DiaryGridPaper extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(borderRadius),
-        border: border,
+        // [border] (old thick gray frame) is intentionally no longer drawn.
       ),
       child: Padding(padding: padding, child: child),
     );
   }
 }
 
-/// Grayscale filter for the black & white look.
+/// Flat white page body (formerly a bordered notebook sheet).
+/// [folderColor] / [border] are kept for older call sites but no longer drawn.
 class SpiralNotebook extends StatelessWidget {
   const SpiralNotebook({
     super.key,
@@ -46,17 +48,99 @@ class SpiralNotebook extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: folderColor,
+    return ColoredBox(color: DiaryColors.paper, child: child);
+  }
+}
+
+/// 8px gray band between page sections.
+class SectionBand extends StatelessWidget {
+  const SectionBand({super.key, this.height = 8});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) =>
+      SizedBox(height: height, child: const ColoredBox(color: DiaryColors.band));
+}
+
+/// Settings-style row: icon · label · (trailing) · chevron, hairline below.
+class MenuRow extends StatelessWidget {
+  const MenuRow({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.trailing,
+    this.compact = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final Widget? trailing;
+
+  /// Shorter row (44px, 14pt) for secondary menus.
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-        child: DiaryGridPaper(
-          borderRadius: 12,
-          padding: EdgeInsets.zero,
-          border: border,
-          child: child,
+        height: compact ? 44 : 54,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: DiaryColors.line)),
+        ),
+        child: Row(
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: compact ? 18 : 20, color: DiaryColors.ink),
+              SizedBox(width: compact ? 10 : 12),
+            ],
+            Expanded(
+              child: Text(
+                label,
+                style: DiaryTheme.ui(compact ? 14 : 15, weight: FontWeight.w500),
+              ),
+            ),
+            if (trailing != null) ...[trailing!, const SizedBox(width: 4)],
+            Icon(
+              Icons.chevron_right,
+              size: compact ? 18 : 20,
+              color: DiaryColors.inkSoft,
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+/// Square checkbox (black fill when checked).
+class SelectBox extends StatelessWidget {
+  const SelectBox({super.key, required this.checked, this.size = 22});
+
+  final bool checked;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: checked ? DiaryColors.ink : DiaryColors.paper,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: checked ? DiaryColors.ink : DiaryColors.inkSoft,
+          width: 1.4,
+        ),
+      ),
+      child: checked
+          ? Icon(Icons.check, size: size - 6, color: DiaryColors.paper)
+          : null,
     );
   }
 }
@@ -80,13 +164,15 @@ class MineBadge extends StatelessWidget {
   }
 }
 
+/// Flat list row (Musinsa-style): no card, hairline divider underneath.
+/// A non-white [backgroundColor] (e.g. "my" feed entries) tints the row.
 class WhiteProductCard extends StatelessWidget {
   const WhiteProductCard({
     super.key,
     required this.child,
     this.indexColor,
     this.onTap,
-    this.margin = const EdgeInsets.only(bottom: 10),
+    this.margin = EdgeInsets.zero,
     this.backgroundColor = DiaryColors.white,
   });
 
@@ -100,33 +186,28 @@ class WhiteProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: margin,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Row(
-          children: [
-            if (indexColor != null)
-              Container(
-                width: 10,
-                height: 42,
-                margin: const EdgeInsets.only(right: 6),
-                decoration: BoxDecoration(
-                  color: indexColor,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: backgroundColor,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: DiaryColors.ink.withValues(alpha: 0.08)),
-                ),
-                child: child,
-              ),
+      child: Material(
+        color: backgroundColor,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: DiaryColors.line)),
             ),
-          ],
+            child: Row(
+              children: [
+                if (indexColor != null)
+                  Container(
+                    width: 3,
+                    height: 36,
+                    margin: const EdgeInsets.only(right: 10),
+                    color: indexColor,
+                  ),
+                Expanded(child: child),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -158,8 +239,12 @@ class PersonRow extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          CircleAvatar(radius: 24, backgroundImage: NetworkImage(avatarUrl)),
-          const SizedBox(width: 10),
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: DiaryColors.surfaceSoft,
+            backgroundImage: NetworkImage(avatarUrl),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,20 +253,23 @@ class PersonRow extends StatelessWidget {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: DiaryTheme.body(14, weight: FontWeight.w700),
+                  style: DiaryTheme.body(15, weight: FontWeight.w700),
                 ),
                 Text(
                   handle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
+                  style: DiaryTheme.body(13, color: DiaryColors.inkSoft),
                 ),
                 if (subtitle != null)
-                  Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: DiaryTheme.body(11, color: DiaryColors.accent),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
+                    ),
                   ),
               ],
             ),
@@ -193,6 +281,8 @@ class PersonRow extends StatelessWidget {
   }
 }
 
+/// Musinsa-style button: black fill (primary) or white with hairline outline.
+/// [color] is kept for older call sites but no longer used.
 class DiaryButton extends StatelessWidget {
   const DiaryButton({
     super.key,
@@ -213,36 +303,46 @@ class DiaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: _disabled ? 0.45 : 1,
-      child: Material(
-        color: filled ? color : DiaryColors.white,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: DiaryColors.ink.withValues(alpha: 0.7), width: 1.2),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 18, color: DiaryColors.ink),
-                  const SizedBox(width: 6),
-                ],
-                Flexible(
-                  child: OneLineText(
-                    label,
-                    textAlign: TextAlign.center,
-                    style: DiaryTheme.body(13, weight: FontWeight.w600),
-                  ),
-                ),
+    final Color bg;
+    final Color fg;
+    final Color borderColor;
+    if (filled) {
+      bg = _disabled ? DiaryColors.tabIdle : DiaryColors.ink;
+      fg = _disabled ? DiaryColors.inkSoft : DiaryColors.white;
+      borderColor = bg;
+    } else {
+      bg = DiaryColors.white;
+      fg = _disabled ? DiaryColors.inkSoft : DiaryColors.ink;
+      borderColor = DiaryColors.lineStrong;
+    }
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(DiaryTheme.radius),
+      side: BorderSide(color: borderColor),
+    );
+    return Material(
+      color: bg,
+      shape: shape,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: shape,
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 18, color: fg),
+                const SizedBox(width: 6),
               ],
-            ),
+              Flexible(
+                child: OneLineText(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: DiaryTheme.body(15, weight: FontWeight.w700, color: fg),
+                ),
+              ),
+            ],
           ),
         ),
       ),

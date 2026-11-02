@@ -38,11 +38,10 @@ class SharedWishlistScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final border = accentColor ?? DiaryColors.fileSand;
     final adFeed = AdFeed(products.length, every: AdsConfig.feedEvery);
 
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       appBar: AppBar(
         backgroundColor: DiaryColors.white,
         elevation: 0,
@@ -52,7 +51,7 @@ class SharedWishlistScreen extends StatelessWidget {
         ),
         title: Text(
           title,
-          style: DiaryTheme.ui(16, weight: FontWeight.w700),
+          style: DiaryTheme.ui(17, weight: FontWeight.w700),
         ),
         actions: [
           if (onShare != null)
@@ -78,14 +77,10 @@ class SharedWishlistScreen extends StatelessWidget {
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                padding: EdgeInsets.zero,
                 child: Container(
-                  decoration: BoxDecoration(
-                    color: border,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(18),
-                    ),
-                    border: Border.all(color: border, width: 3),
+                  decoration: const BoxDecoration(
+                    color: DiaryColors.paper,
                   ),
                   child: ClipRRect(
                     borderRadius: const BorderRadius.vertical(
@@ -105,10 +100,10 @@ class SharedWishlistScreen extends StatelessWidget {
                               ),
                             )
                           : ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
                               itemCount: adFeed.length,
                               separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: 12),
                               itemBuilder: (context, i) {
                                 if (adFeed.isAd(i)) {
                                   return NativeAdCard(

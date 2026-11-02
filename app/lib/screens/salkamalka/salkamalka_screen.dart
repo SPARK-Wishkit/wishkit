@@ -18,174 +18,166 @@ class SalkamalkaScreen extends StatelessWidget {
     final selected = store.basket.where((b) => b.isSelected).length;
 
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    height: kMinInteractiveDimension,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('살까말까', style: DiaryTheme.display(34)),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: SizedBox(
+                height: kMinInteractiveDimension,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('살까말까', style: DiaryTheme.display(24)),
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: DiaryColors.line)),
+              ),
+              child: Text.rich(
+                TextSpan(
+                  style: DiaryTheme.ui(14, weight: FontWeight.w600),
+                  children: [
+                    const TextSpan(text: '선택한 상품 '),
+                    TextSpan(
+                      text: '$selected',
+                      style: DiaryTheme.ui(14, weight: FontWeight.w800),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                ],
+                    TextSpan(
+                      text: ' / ${store.basket.length}',
+                      style: DiaryTheme.ui(14, color: DiaryColors.inkSoft),
+                    ),
+                  ],
+                ),
               ),
             ),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: DiaryGridPaper(
-                  border: Border.all(color: DiaryColors.fileCream, width: 3),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        '📌 선택된 아이템 총 $selected개',
-                        style: DiaryTheme.body(13, weight: FontWeight.w600),
+              child: store.basket.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: OneLineText(
+                          '고민중인 상품을 담아 친구와 공유해보세요',
+                          textAlign: TextAlign.center,
+                          style: DiaryTheme.body(
+                            14,
+                            color: DiaryColors.inkSoft,
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: store.basket.isEmpty
-                            ? Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  child: OneLineText(
-                                    '고민중인 상품을 담아 친구와 공유해보세요',
-                                    textAlign: TextAlign.center,
-                                    style: DiaryTheme.body(
-                                      14,
-                                      color: DiaryColors.inkMuted,
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: store.basket.length,
+                      itemBuilder: (context, i) {
+                        final item = store.basket[i];
+                        return WhiteProductCard(
+                          onTap: () =>
+                              store.toggleBasketSelected(item.product.id),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(4, 2, 12, 0),
+                                child: SelectBox(checked: item.isSelected),
+                              ),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                  DiaryTheme.radius,
+                                ),
+                                child: Image.network(
+                                  item.product.image,
+                                  width: 76,
+                                  height: 76,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 76,
+                                    height: 76,
+                                    color: DiaryColors.surfaceSoft,
+                                    child: const Icon(
+                                      Icons.checkroom_outlined,
+                                      color: DiaryColors.grid,
                                     ),
                                   ),
                                 ),
-                              )
-                            : ListView.builder(
-                                itemCount: store.basket.length,
-                                itemBuilder: (context, i) {
-                                  final item = store.basket[i];
-                                  final pinColors = [
-                                    DiaryColors.pin,
-                                    DiaryColors.folderYellow,
-                                    DiaryColors.accent,
-                                  ];
-                                  return Stack(
-                                    children: [
-                                      WhiteProductCard(
-                                        child: Row(
-                                          children: [
-                                            Checkbox(
-                                              value: item.isSelected,
-                                              onChanged: (_) =>
-                                                  store.toggleBasketSelected(
-                                                    item.product.id,
-                                                  ),
-                                            ),
-                                            ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              child: Image.network(
-                                                item.product.image,
-                                                width: 58,
-                                                height: 58,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    item.product.platform,
-                                                    style: DiaryTheme.body(
-                                                      11,
-                                                      color:
-                                                          DiaryColors.inkMuted,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    item.product.name,
-                                                    maxLines: 2,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: DiaryTheme.body(
-                                                      14,
-                                                      weight: FontWeight.w700,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    formatWon(
-                                                      item.product.price,
-                                                    ),
-                                                    style: DiaryTheme.body(
-                                                      13,
-                                                      weight: FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            IconButton(
-                                              onPressed: () =>
-                                                  store.removeFromBasket(
-                                                    item.product.id,
-                                                  ),
-                                              icon: const Icon(
-                                                Icons.close,
-                                                size: 18,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Positioned(
-                                        left: 8,
-                                        top: 2,
-                                        child: Icon(
-                                          Icons.push_pin,
-                                          size: 18,
-                                          color:
-                                              pinColors[i % pinColors.length],
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
                               ),
-                      ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DiaryButton(
-                              label: '상품 추가하기',
-                              icon: Icons.add,
-                              onPressed: () =>
-                                  _openPickFromWishlistSheet(context, store),
-                            ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.product.platform,
+                                      style: DiaryTheme.product(
+                                        12,
+                                        weight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      item.product.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: DiaryTheme.product(
+                                        13,
+                                        color: DiaryColors.inkMuted,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      formatWon(item.product.price),
+                                      style: DiaryTheme.product(
+                                        15,
+                                        weight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () =>
+                                    store.removeFromBasket(item.product.id),
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(
+                                  Icons.close,
+                                  size: 18,
+                                  color: DiaryColors.inkSoft,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _ShareBasketButton(
-                              store: store,
-                              selected: selected,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                        );
+                      },
+                    ),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              decoration: const BoxDecoration(
+                color: DiaryColors.paper,
+                border: Border(top: BorderSide(color: DiaryColors.line)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: DiaryButton(
+                      label: '상품 추가하기',
+                      icon: Icons.add,
+                      onPressed: () =>
+                          _openPickFromWishlistSheet(context, store),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _ShareBasketButton(
+                      store: store,
+                      selected: selected,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -234,7 +226,6 @@ class _ShareBasketButtonState extends State<_ShareBasketButton> {
           ? '공유하기'
           : '공유하기 (${widget.selected})',
       filled: true,
-      color: DiaryColors.folderPeach,
       icon: Icons.ios_share,
       onPressed: widget.selected == 0 || _sharing ? null : _share,
     );

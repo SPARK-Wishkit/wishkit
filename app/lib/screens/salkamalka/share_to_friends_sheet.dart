@@ -62,9 +62,9 @@ Future<({Set<String> friendIds, String memo})?> showShareToFriendsSheet({
                       decoration: InputDecoration(
                         hintText: '예: 이걸 사 말아',
                         filled: true,
-                        fillColor: DiaryColors.white,
+                        fillColor: DiaryColors.band,
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(DiaryTheme.radius),
                           borderSide: BorderSide.none,
                         ),
                       ),
@@ -106,7 +106,7 @@ Future<({Set<String> friendIds, String memo})?> showShareToFriendsSheet({
                       style: FilledButton.styleFrom(
                         backgroundColor: DiaryColors.ink,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        minimumSize: const Size.fromHeight(52),
                       ),
                       child: Text('$confirmLabel (${selected.length})'),
                     ),
