@@ -98,7 +98,6 @@ class _WishlistScreenState extends State<WishlistScreen> {
                       borderRadius: 0,
                       child: Column(
                         children: [
-                          _SaleSummaryBanner(products: products),
                           if (tab.id != 'all')
                             _PrivacyBanner(
                               isPublic: tab.isPublic,
@@ -857,84 +856,6 @@ class _PrivacyBanner extends StatelessWidget {
                   weight: FontWeight.w700,
                   color: DiaryColors.ink,
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// "담은 상품 N개가 할인 중이에요 · 정가보다 X원 저렴해요" — hidden when nothing is on sale.
-class _SaleSummaryBanner extends StatelessWidget {
-  const _SaleSummaryBanner({required this.products});
-
-  final List<Product> products;
-
-  @override
-  Widget build(BuildContext context) {
-    var count = 0;
-    var saved = 0;
-    for (final p in products) {
-      final orig = p.originalPrice;
-      if (orig != null && orig > p.price) {
-        count++;
-        saved += orig - p.price;
-      }
-    }
-    if (count == 0) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        decoration: BoxDecoration(
-          color: DiaryColors.surfaceSoft,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: const BoxDecoration(
-                color: DiaryColors.paper,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.star, size: 20, color: DiaryColors.ink),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '담은 상품 $count개가 할인 중이에요',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: DiaryTheme.ui(15, weight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 2),
-                  Text.rich(
-                    TextSpan(
-                      style: DiaryTheme.ui(13, color: DiaryColors.inkMuted),
-                      children: [
-                        const TextSpan(text: '정가보다 '),
-                        TextSpan(
-                          text: formatWon(saved),
-                          style: DiaryTheme.ui(
-                            13,
-                            weight: FontWeight.w700,
-                            color: DiaryColors.sale,
-                          ),
-                        ),
-                        const TextSpan(text: ' 저렴해요'),
-                      ],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
               ),
             ),
           ],
