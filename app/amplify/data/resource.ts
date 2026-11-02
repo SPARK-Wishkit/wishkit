@@ -337,9 +337,11 @@ const schema = a.schema({
 
   /**
    * 태그 사진으로 찾은 결과. 필드 설명은 engine/server/tag_identify.py 참고.
-   * status: 'found'(matchUrl 있음) | 'not_found'(태그 정보만 있음) | 'not_a_tag'
+   * status: 'found'(matchUrl 있음) | 'needs_confirm'(matchUrl 있음, 서버가 페이지를 못 읽어 품번 미확인 —
+   *         앱이 사용자에게 같은 상품인지 꼭 묻고 담는다) | 'not_found'(태그 정보만 있음) | 'not_a_tag'
    * matchSource: 'official'(브랜드 공식몰) | 'mall'(공식몰에 없어 국내 쇼핑몰에서 찾음)
-   * verifiedBy: 'product_code' | 'barcode' | 'name'(품번 없이 이름으로만 확인 — 앱이 한 번 더 확인)
+   * verifiedBy: 'product_code' | 'barcode' | 'product_code_base'(색상 뗀 기본 번호) | 'name'(품번 없이 이름으로만
+   *             확인 — 앱이 한 번 더 확인) | 'search'(needs_confirm — 검색 결과일 뿐 확인 안 됨)
    */
   IdentifiedTag: a.customType({
     status: a.string().required(),
@@ -354,6 +356,11 @@ const schema = a.schema({
     matchSource: a.string(),
     verifiedBy: a.string(),
     note: a.string(),
+    // 찾은 페이지에서 읽은 정보(엔진이 구글의 페이지 사본으로 읽음 — 최신이 아닐 수 있음). 없으면 null.
+    matchName: a.string(),
+    matchPrice: a.integer(),
+    matchRegularPrice: a.integer(),
+    matchImage: a.string(),
   }),
 
   /**

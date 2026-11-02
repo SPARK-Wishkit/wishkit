@@ -18,6 +18,7 @@ import asyncio
 import base64
 import binascii
 import logging
+import urllib.parse
 from contextlib import asynccontextmanager
 from functools import partial
 from typing import Literal
@@ -35,6 +36,7 @@ from share_links import resolve_share_link
 from tag_identify import (
     IdentifyError,
     PageView,
+    call_gemini_read_pages,
     call_gemini_search,
     call_gemini_tag,
     identify,
@@ -128,6 +130,14 @@ async def _extract(url: str) -> dict:
             "gemini_vision_elapsed_ms": vision_elapsed_ms,
         },
     }
+    # 한 줄 요약 로그(/identify-tag의 [identify]와 같은 목적): 어느 사이트였고, 본문이 얼마나 있었고,
+    # 가격을 읽었는지, 못 읽었으면 AI가 적은 이유.
+    logger.info(
+        "[extract] host=%s price=%r ambiguous=%s reason=%r body_chars=%d vision=%s (%dms, 렌더 %dms)",
+        urllib.parse.urlparse(r.final_url or url).hostname, extracted.get("unconditional_price"),
+        bool(extracted.get("ambiguous")), extracted.get("ambiguity_reason"), len(r.raw_text.strip()),
+        screenshot_fallback_used, response["metrics"]["total_elapsed_ms"], render_elapsed_ms,
+    )
     return response
 
 
@@ -175,7 +185,7 @@ async def _render_for_identify(url: str, budget_s: float) -> PageView:
     # 품번 확인용 글자에는 메타 태그 글자도 넣는다(/extract 의 grounding 체크는 본문만 그대로 쓴다).
     text = f"{r.meta_text} {r.raw_text}".strip()
     return PageView(ok=r.ok, final_url=r.final_url or url, raw_text=text, error=r.error,
-                    code_hints=r.code_hints)
+                    code_hints=r.code_hints, body_chars=len(r.raw_text.strip()) if r.ok else None)
 
 
 def _decode_image(image_base64: str) -> bytes:
@@ -222,6 +232,7 @@ async def identify_tag(req: IdentifyTagRequest):
                 image, req.mime_type,
                 read_tag=lambda img, mime: timed("read_tag", gemini_once(call_gemini_tag, img, mime)),
                 search=lambda tag: timed("search", gemini_once(call_gemini_search, tag)),
+                read_pages=lambda tag, urls: timed("read_pages", gemini_once(call_gemini_read_pages, tag, urls)),
                 render_page=lambda url: timed("render", _render_for_identify(url, time_left() - 1.0)),
                 time_left=time_left,
             ),
@@ -238,10 +249,12 @@ async def identify_tag(req: IdentifyTagRequest):
     total_ms = now_ms() - started
     # 한 줄 요약 로그(사진은 남기지 않음): 무엇을 읽고, 어디를 열어 봤고, 왜 떨어졌는지.
     logger.info(
-        "[identify] %s (%dms, 단계 %s) brand=%r code=%r other=%r official=%r note=%r checked=%s",
+        "[identify] %s (%dms, 단계 %s) brand=%r code=%r other=%r official=%r note=%r checked=%s match=%s",
         outcome.status, total_ms, stages, outcome.tag.get("brand"), outcome.tag.get("product_code"),
         outcome.tag.get("other_codes"), outcome.official_domain, outcome.note,
         [(c["url"], c["source"], c["verified"], c["reason"]) for c in outcome.checked],
+        {k: (outcome.match or {}).get(k) for k in ("url", "verified_by", "name", "price", "regular_price")}
+        if outcome.match else None,
     )
     return {**outcome.to_dict(), "metrics": {"total_elapsed_ms": total_ms, "stages_ms": stages}}
 

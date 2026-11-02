@@ -69,6 +69,77 @@ void main() {
     expect(r.tagPrice, 139000);
   });
 
+  test('확인 필요(needs_confirm) — 링크는 있지만 사용자 확인이 필요하다', () {
+    final r = TagIdentifyResult.fromJson({
+      'status': 'needs_confirm',
+      'brand': 'BEAKER',
+      'productCode': 'QQ6X39EP20',
+      'matchUrl': 'https://www.ssfshop.com/BEAKER/GM0026101660266/good',
+      'matchHost': 'ssfshop.com',
+      'matchSource': 'mall',
+      'verifiedBy': 'search',
+      'note': '검색으로 찾았지만 페이지를 열어 품번을 확인하지는 못했어요',
+    });
+    expect(r.status, TagIdentifyStatus.needsConfirm);
+    expect(r.hasMatch, isTrue);
+    expect(r.matchHost, 'ssfshop.com');
+    expect(r.verifiedBy, 'search');
+  });
+
+  test('needs_confirm인데 URL이 없으면 못 찾은 것으로 본다', () {
+    final r = TagIdentifyResult.fromJson({'status': 'needs_confirm'});
+    expect(r.status, TagIdentifyStatus.notFound);
+    expect(r.hasMatch, isFalse);
+  });
+
+  test('찾은 페이지에서 읽은 상품명·가격·사진을 받는다', () {
+    final r = TagIdentifyResult.fromJson({
+      'status': 'found',
+      'brand': 'BEAKER',
+      'productCode': 'QQ6X39EP20',
+      'matchUrl': 'https://www.ssfshop.com/BEAKER/GM0026101660266/good',
+      'matchHost': 'ssfshop.com',
+      'matchSource': 'mall',
+      'verifiedBy': 'product_code_base',
+      'matchName': '[BEAKER] EPINGLER Laced Hoodie - Oatmeal',
+      'matchPrice': 269100,
+      'matchRegularPrice': 299000,
+      'matchImage': 'https://img.ssfshop.com/goods/QQ6X39EP20_01.jpg',
+    });
+    expect(r.hasMatchDetails, isTrue);
+    expect(r.matchPrice, 269100);
+    expect(r.matchRegularPrice, 299000);
+  });
+
+  test('이상한 사진 주소·0원은 버린다', () {
+    final r = TagIdentifyResult.fromJson({
+      'status': 'found',
+      'matchUrl': 'https://x.com/p/1',
+      'matchName': '후디',
+      'matchPrice': 0,
+      'matchImage': 'javascript:alert(1)',
+    });
+    expect(r.matchPrice, isNull);
+    expect(r.matchImage, isNull);
+    expect(r.hasMatchDetails, isFalse);
+  });
+
+  test('태그 정보만으로 만든 이름 — 상품명이 없으면 품번을 넣는다', () {
+    const noName = TagIdentifyResult(
+      status: TagIdentifyStatus.notFound,
+      brand: 'BEAKER',
+      productCode: 'QQ6X39EP20',
+    );
+    expect(noName.tagOnlyName, 'BEAKER QQ6X39EP20');
+    const withName = TagIdentifyResult(
+      status: TagIdentifyStatus.notFound,
+      brand: 'NIKE',
+      productName: '에어 포스 1',
+      productCode: 'DV1234-100',
+    );
+    expect(withName.tagOnlyName, 'NIKE 에어 포스 1 (DV1234-100)');
+  });
+
   test('found인데 URL이 없으면 못 찾은 것으로 본다', () {
     final r = TagIdentifyResult.fromJson({'status': 'found', 'matchUrl': ''});
     expect(r.status, TagIdentifyStatus.notFound);

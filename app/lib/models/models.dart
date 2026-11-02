@@ -725,9 +725,11 @@ class ParsedProductInfo {
 /// 태그 사진으로 상품을 찾은 결과 (서버 identifyProductTag).
 ///
 /// - [found]: [matchUrl]에 그 상품 페이지가 있다. 가격은 앱이 이 URL을 다시 읽어서 얻는다.
+/// - [needsConfirm]: 검색이 [matchUrl]을 찾았지만 서버가 페이지를 못 읽어(차단·빈 화면·시간 부족)
+///   품번을 확인하지 못했다. 사용자가 "같은 상품이 맞아요"를 눌러야만 저장할 수 있다.
 /// - [notFound]: 태그 정보([brand]·[productName] 등)만 있다. 사용자가 직접 입력한다.
 /// - [notATag]: 사진에서 상품 태그를 찾지 못했다.
-enum TagIdentifyStatus { found, notFound, notATag }
+enum TagIdentifyStatus { found, needsConfirm, notFound, notATag }
 
 class TagIdentifyResult {
   const TagIdentifyResult({
@@ -743,6 +745,10 @@ class TagIdentifyResult {
     this.matchSource,
     this.verifiedBy,
     this.note,
+    this.matchName,
+    this.matchPrice,
+    this.matchRegularPrice,
+    this.matchImage,
   });
 
   final TagIdentifyStatus status;
@@ -760,15 +766,44 @@ class TagIdentifyResult {
   /// 'official'(브랜드 공식몰) | 'mall'(공식몰에 없어 쇼핑몰에서 찾음)
   final String? matchSource;
 
-  /// 'product_code' | 'barcode' | 'name'
+  /// 'product_code' | 'barcode' | 'product_code_base' | 'name' | 'search'(needsConfirm)
   final String? verifiedBy;
   final String? note;
+
+  /// 찾은 페이지에서 읽은 상품명·판매가·정가·대표 사진. 서버가 구글의 페이지 사본으로 읽은 값이라
+  /// 최신이 아닐 수 있다. 없으면 null.
+  final String? matchName;
+  final int? matchPrice;
+  final int? matchRegularPrice;
+  final String? matchImage;
+
+  /// 페이지 정보(상품명·가격)를 이미 받아서, 링크를 다시 읽지 않아도 되는지.
+  bool get hasMatchDetails =>
+      hasMatch && (matchName ?? '').isNotEmpty && (matchPrice ?? 0) > 0;
+
+  /// 태그 정보만으로 만든 상품명. 상품명이 없으면 품번을 넣는다. 예: "BEAKER QQ6X39EP20"
+  String get tagOnlyName {
+    final b = (brand ?? '').trim();
+    final n = (productName ?? '').trim();
+    final code = (productCode ?? '').trim();
+    final parts = [
+      if (b.isNotEmpty) b,
+      if (n.isNotEmpty) n,
+      if (n.isEmpty && code.isNotEmpty) code,
+    ];
+    final base = parts.join(' ');
+    return n.isNotEmpty && code.isNotEmpty ? '$base ($code)' : base;
+  }
 
   bool get foundOnOfficialSite => matchSource == 'official';
 
   /// 품번·바코드 없이 이름만으로 찾은 경우 — 사용자가 같은 상품인지 확인해야 한다.
-  /// 품번·바코드 없이 이름만으로 찾은 경우 — 사용자가 같은 상품인지 확인해야 한다.
   bool get needsUserCheck => verifiedBy == 'name';
+
+  /// 링크(매칭 URL)가 있는 결과 — 앱이 그 페이지를 읽어 상품 정보를 채운다.
+  bool get hasMatch =>
+      status == TagIdentifyStatus.found ||
+      status == TagIdentifyStatus.needsConfirm;
 
   /// 태그 정보로 만든 상품명 후보. 예: "NIKE 에어 포스 1 '07 (WHITE)"
   String get suggestedName {
@@ -790,10 +825,17 @@ class TagIdentifyResult {
 
     final status = switch (json['status']) {
       'found' when s('matchUrl') != null => TagIdentifyStatus.found,
+      'needs_confirm' when s('matchUrl') != null =>
+        TagIdentifyStatus.needsConfirm,
       'not_a_tag' => TagIdentifyStatus.notATag,
       _ => TagIdentifyStatus.notFound,
     };
     final price = (json['tagPrice'] as num?)?.toInt();
+    int? won(String k) {
+      final v = (json[k] as num?)?.toInt();
+      return v != null && v > 0 ? v : null;
+    }
+
     return TagIdentifyResult(
       status: status,
       brand: s('brand'),
@@ -807,6 +849,12 @@ class TagIdentifyResult {
       matchSource: s('matchSource'),
       verifiedBy: s('verifiedBy'),
       note: s('note'),
+      matchName: s('matchName'),
+      matchPrice: won('matchPrice'),
+      matchRegularPrice: won('matchRegularPrice'),
+      matchImage: (s('matchImage') ?? '').startsWith('http')
+          ? s('matchImage')
+          : null,
     );
   }
 }

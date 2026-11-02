@@ -54,5 +54,10 @@ IDENTIFY_TIMEOUT_S = float(os.environ.get("IDENTIFY_TIMEOUT_S", "25"))
 # 검색 후보 중 실제로 렌더링해서 품번을 확인해 볼 최대 개수.
 IDENTIFY_MAX_CANDIDATES = _int("IDENTIFY_MAX_CANDIDATES", 3)
 
+# 후보 확인 방식(2026-11-02). 기본(0)은 서버에서 페이지를 열지 않고, 검색 결과의 제목·주소에 태그
+# 품번이 있는지로 판단한다 — 구글은 상품 페이지를 잘 찾는데 일부 몰(SSF샵 등)이 우리 서버에는 빈 화면을
+# 줘서 확인이 실패했기 때문. 1이면 예전처럼 후보 페이지를 서버에서 렌더링해 확인한다.
+IDENTIFY_RENDER_VERIFY = os.environ.get("IDENTIFY_RENDER_VERIFY", "0") == "1"
+
 # 업로드 사진 최대 크기(바이트, 디코딩 후). 앱은 1280px·JPEG 75%로 줄여서 보낸다.
 IDENTIFY_MAX_IMAGE_BYTES = _int("IDENTIFY_MAX_IMAGE_BYTES", 4 * 1024 * 1024)

@@ -17,6 +17,14 @@ from tag_identify import (
     parse_search_output,
 )
 
+@pytest.fixture(autouse=True)
+def _render_verify_on(monkeypatch):
+    """이 파일의 기존 테스트는 서버 렌더링 확인 방식(IDENTIFY_RENDER_VERIFY=1)을 검증한다.
+    검색 결과만으로 판단하는 기본 방식은 맨 아래 테스트들이 verify_by_render=False로 따로 본다."""
+    import config
+    monkeypatch.setattr(config, "IDENTIFY_RENDER_VERIFY", True)
+
+
 NIKE_TAG = {
     "is_product_tag": True,
     "brand": "NIKE",
@@ -177,7 +185,9 @@ def test_identify_skips_renders_when_out_of_time():
     )
     out = _run(identify(b"img", "image/jpeg", read_tag=read_tag, search=search,
                         render_page=render_page, time_left=lambda: 3))
-    assert out.status == "not_found"
+    # 열어 보지 못한 후보는 버리지 않고 "확인 필요"로 돌려준다(앱이 사용자에게 묻는다).
+    assert out.status == "needs_confirm"
+    assert out.match["url"] == url and out.match["verified_by"] == "search"
     assert calls["render"] == []
 
 
@@ -341,3 +351,266 @@ def test_identify_confirms_page_by_structured_sku_and_marks_reason():
                         render_page=render_page, time_left=lambda: 40))
     assert out.status == "found" and out.match["verified_by"] == "product_code"
     assert out.checked[0]["reason"] == "product_code (화면 밖 정보)"
+
+
+# ── 2026-11-02: 못 읽은 후보는 needs_confirm ─────────────────
+
+SSF = "https://www.ssfshop.com/BEAKER/GM0026101660266/good?dspCtgNo="
+BEAKER_TAG = {**NIKE_TAG, "brand": "BEAKER", "product_code": "QQ6X39EP20 - DEP",
+              "other_codes": ["QQ6X39EP20 F"], "product_name": None}
+
+
+def test_blank_page_is_unread_not_wrong_product():
+    """실제 로그(2026-11-02): SSF샵이 서버에 빈 화면을 줘서 품번을 못 찾음 → 확인 필요."""
+    pages = {SSF: PageView(True, SSF, "SSF SHOP", body_chars=0)}
+    read_tag, search, render_page, _ = _fakes(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF}", pages)
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "needs_confirm"
+    assert out.match == {"url": SSF, "host": "ssfshop.com", "source": "mall",
+                         "verified_by": "search", "tag_price_seen": None}
+    assert out.checked[0]["verified"] is None and "비어 있음" in out.checked[0]["reason"]
+
+
+def test_same_page_with_code_is_found():
+    pages = {SSF: PageView(True, SSF, "[BEAKER] EPINGLER Laced Hoodie QQ6X39EP20 299,000원", body_chars=900)}
+    _, search, render_page, _ = _fakes(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF}", pages)
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "found" and out.match["verified_by"] == "product_code_base"
+
+
+def test_page_read_without_code_stays_not_found():
+    """페이지를 제대로 읽었는데 품번이 없으면 다른 상품일 수 있다 — 확인 필요로 올리지 않는다."""
+    pages = {SSF: PageView(True, SSF, "다른 후디 189,000원 " + "설명 " * 200, body_chars=1200)}
+    _, search, render_page, _ = _fakes(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF}", pages)
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "not_found" and out.match is None
+
+
+def test_verified_page_beats_unread_candidate():
+    blocked, ok = "https://www.musinsa.com/products/1", "https://www.ssfshop.com/x/GM1"
+    pages = {blocked: PageView(False, blocked, "", error="렌더링 실패/차단"),
+             ok: PageView(True, ok, "QQ6X39EP20", body_chars=500)}
+    _, search, render_page, _ = _fakes(f"OFFICIAL_DOMAIN: 없음\nURL: {blocked}\nURL: {ok}", pages)
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "found" and out.match["url"] == ok
+
+
+def test_unread_redirect_address_is_not_offered():
+    """구글 리다이렉트 주소만 남으면 실제 상품 주소를 몰라서 확인 필요로도 줄 수 없다."""
+    _, search, render_page, _ = _fakes("OFFICIAL_DOMAIN: 없음", {}, sources=[{"uri": REDIRECT, "title": "musinsa.com"}])
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "not_found"
+
+
+
+def test_page_without_any_price_is_unread():
+    """실제 로그(2026-11-02 06:02): SSF가 본문은 있는데 상품 정보·가격이 없는 화면을 줌 → 확인 필요."""
+    text = "SSF SHOP 로그인 장바구니 고객센터 " + "메뉴 " * 100
+    pages = {SSF: PageView(True, SSF, text, body_chars=len(text))}
+    _, search, render_page, _ = _fakes(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF}", pages)
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "needs_confirm"
+    assert out.checked[0]["reason"].startswith("상품 정보가 안 보임")
+
+
+def test_parse_search_output_strips_markdown_junk_from_urls():
+    text = """OFFICIAL_DOMAIN: 없음
+URL: https://www.ssfshop.com/BEAKER/GM0026101660266/good?dspCtgNo=GNB41`
+URL: `https://www.musinsa.com/products/1`
+URL: **https://www.29cm.co.kr/products/2**
+"""
+    _, cands = parse_search_output(text, [])
+    assert [c.url for c in cands] == [
+        "https://www.musinsa.com/products/1",
+        "https://www.ssfshop.com/BEAKER/GM0026101660266/good?dspCtgNo=GNB41",
+        "https://www.29cm.co.kr/products/2",
+    ]
+
+
+
+# ── 2026-11-02: 기본 방식 — 서버에서 열지 않고 검색 제목·주소로 판단 ──────────
+
+SSF_TITLE = "[BEAKER] EPINGLER | Laced Hoodie - Oatmeal QQ6X39EP20"
+SSF_SOURCES = [{"uri": REDIRECT, "title": "ssfshop.com"}]
+
+
+def _search_only(text, tag=BEAKER_TAG, sources=SSF_SOURCES):
+    calls = {"render": []}
+
+    async def search(t):
+        return _ok({"text": text, "sources": sources})
+
+    async def render_page(url):
+        calls["render"].append(url)
+        raise AssertionError("기본 방식에서는 서버가 페이지를 열면 안 된다")
+
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(tag), search=search,
+                        render_page=render_page, time_left=lambda: 40, verify_by_render=False))
+    return out, calls
+
+
+def test_search_title_with_code_is_found_without_rendering():
+    out, calls = _search_only(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF} | 제목: {SSF_TITLE}")
+    assert calls["render"] == []
+    assert out.status == "found"
+    assert out.match["url"] == SSF and out.match["verified_by"] == "product_code_base"
+    assert out.match["title"] == SSF_TITLE
+    assert out.checked[0]["reason"] == "product_code_base (검색 제목·설명)"
+
+
+def test_code_in_url_is_found_even_without_title():
+    url = "https://www.nike.com/kr/t/air-force-1/DV1234-100"
+    out, _ = _search_only(f"OFFICIAL_DOMAIN: nike.com\nURL: {url}", tag=NIKE_TAG, sources=[])
+    assert out.status == "found" and out.match["verified_by"] == "product_code"
+
+
+def test_title_from_site_not_in_search_sources_is_not_trusted():
+    """모델이 지어냈을 수 있는 제목 — 그 사이트가 실제 검색 출처에 없으면 확인 필요로만."""
+    out, _ = _search_only(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF} | 제목: {SSF_TITLE}", sources=[])
+    assert out.status == "needs_confirm" and out.match["verified_by"] == "search"
+
+
+def test_title_without_code_gives_needs_confirm():
+    out, _ = _search_only(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF} | 제목: [BEAKER] 레이스 후디 오트밀")
+    assert out.status == "needs_confirm" and out.match["url"] == SSF
+
+
+def test_official_title_match_beats_mall_title_match():
+    official = "https://kimmatin.com/product/high-neck-shearling-jacket-in-black/886/"
+    mall = "https://www.wconcept.co.kr/Product/306766465"
+    tag = {**NIKE_TAG, "brand": "KIMMATIN", "product_code": "KM269OFU001M", "other_codes": []}
+    text = (f"OFFICIAL_DOMAIN: kimmatin.com\nURL: {mall} | 제목: 킴마틴 시어링 자켓 KM269OFU001M\n"
+            f"URL: {official} | 제목: HIGH NECK SHEARLING JACKET KM269OFU001M")
+    sources = [{"uri": REDIRECT, "title": "kimmatin.com"}, {"uri": REDIRECT, "title": "wconcept.co.kr"}]
+    out, _ = _search_only(text, tag=tag, sources=sources)
+    assert out.status == "found" and out.match["source"] == "official"
+
+
+def test_only_redirect_candidates_is_not_found():
+    out, _ = _search_only("OFFICIAL_DOMAIN: 없음", sources=SSF_SOURCES)
+    assert out.status == "not_found"
+
+
+def test_parse_search_output_reads_titles():
+    _, cands = parse_search_output(f"URL: {SSF} | 제목: {SSF_TITLE}\nURL: https://www.musinsa.com/products/1 | 제목: 없음", [])
+    assert {c.url: c.title for c in cands} == {"https://www.musinsa.com/products/1": "", SSF: SSF_TITLE}
+
+
+
+# ── 2026-11-02: SSF 제목에 상품명만 있고 품번은 없을 때 ─────────────────
+
+SSF_NAME_ONLY = "[BEAKER] EPINGLER | Laced Hoodie - Oatmeal | SSF SHOP"
+
+
+def test_title_without_code_is_needs_confirm_not_name_match():
+    """이름 비교로 '찾음'을 만들지 않는다(색상만 다른 상품이 통과하는 문제) — 사용자 확인으로 넘긴다."""
+    text = (f"OFFICIAL_DOMAIN: 없음\n"
+            f"URL: {SSF} | 제목: {SSF_NAME_ONLY} | 설명: 따뜻한 울 혼방 소재에 레이스 패널을 더한 후디")
+    out, calls = _search_only(text)
+    assert calls["render"] == []
+    assert out.status == "needs_confirm" and out.match["url"] == SSF
+
+
+def test_code_in_snippet_is_found():
+    text = (f"OFFICIAL_DOMAIN: 없음\nURL: {SSF} | 제목: {SSF_NAME_ONLY} | "
+            f"설명: 품번 QQ6X39EP20 · 울 혼방 후디")
+    out, _ = _search_only(text)
+    assert out.status == "found" and out.match["verified_by"] == "product_code_base"
+
+
+def test_title_of_other_product_is_not_name_match():
+    text = f"OFFICIAL_DOMAIN: 없음\nURL: {SSF} | 제목: [BEAKER] 크루넥 니트 - 네이비 | 설명: 없음"
+    out, _ = _search_only(text)
+    assert out.status == "needs_confirm"
+
+
+def test_code_match_beats_name_match():
+    other = "https://www.musinsa.com/products/1"
+    text = (f"OFFICIAL_DOMAIN: 없음\n"
+            f"URL: {SSF} | 제목: {SSF_NAME_ONLY} | 설명: 없음\n"
+            f"URL: {other} | 제목: 에핑글러 레이스 후디 QQ6X39EP20 | 설명: 없음")
+    sources = SSF_SOURCES + [{"uri": REDIRECT, "title": "musinsa.com"}]
+    out, _ = _search_only(text, sources=sources)
+    assert out.status == "found" and out.match["url"] == other
+    assert out.match["verified_by"] == "product_code_base"
+
+
+def test_parse_keeps_pipes_inside_title():
+    _, cands = parse_search_output(f"URL: {SSF} | 제목: {SSF_NAME_ONLY} | 설명: 울 후디", [])
+    assert cands[0].title == SSF_NAME_ONLY and cands[0].snippet == "울 후디"
+
+
+
+# ── 2026-11-02: 구글 사본 읽기(URL context) ─────────────────────────────
+
+import json  # noqa: E402
+
+from tag_identify import parse_read_output  # noqa: E402
+
+
+def _with_pages(search_text, pages, retrieved, tag=BEAKER_TAG, sources=SSF_SOURCES, read_ok=True):
+    calls = {"read": []}
+
+    async def search(t):
+        return _ok({"text": search_text, "sources": sources})
+
+    async def read_pages(t, urls):
+        calls["read"].append(urls)
+        if not read_ok:
+            return ProviderResult("gemini_read_pages", "m", False, None, 0, error="실패")
+        return _ok({"text": "```json\n" + json.dumps(pages, ensure_ascii=False) + "\n```", "retrieved": retrieved})
+
+    async def render_page(url):
+        raise AssertionError("서버에서 페이지를 열면 안 된다")
+
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(tag), search=search, render_page=render_page,
+                        time_left=lambda: 40, verify_by_render=False, read_pages=read_pages))
+    return out, calls
+
+
+SSF_PAGE = {"url": SSF, "read": True, "page_code": "QQ6X39EP20", "name": "[BEAKER] EPINGLER Laced Hoodie - Oatmeal",
+            "price": 269100, "regular_price": 299000, "image": "https://img.ssfshop.com/goods/QQ6X39EP20_01.jpg"}
+
+
+def test_page_read_by_google_with_code_is_found_with_name_and_price():
+    """SSF 제목엔 품번이 없어도, 구글이 가진 페이지 사본에 품번이 있으면 찾음 + 상품명·가격·사진."""
+    out, calls = _with_pages(f"URL: {SSF} | 제목: {SSF_NAME_ONLY}", [SSF_PAGE], {SSF: True})
+    assert calls["read"] == [[SSF]]
+    assert out.status == "found"
+    m = out.match
+    assert m["url"] == SSF and m["verified_by"] == "product_code_base"
+    assert m["name"] == SSF_PAGE["name"] and m["price"] == 269100 and m["regular_price"] == 299000
+    assert m["image"].endswith("_01.jpg")
+    assert out.checked[0]["reason"] == "product_code_base (구글 사본)"
+
+
+def test_page_info_without_retrieval_record_is_not_trusted():
+    """url_context_metadata에 가져온 기록이 없으면 모델이 지어낸 정보일 수 있다 — 찾음으로 쓰지 않는다."""
+    out, _ = _with_pages(f"URL: {SSF} | 제목: {SSF_NAME_ONLY}", [SSF_PAGE], {})
+    assert out.status == "needs_confirm"
+
+
+def test_read_page_without_code_is_needs_confirm_with_page_info():
+    page = {**SSF_PAGE, "page_code": None, "name": "[BEAKER] EPINGLER Laced Hoodie - Black"}
+    out, _ = _with_pages(f"URL: {SSF} | 제목: {SSF_NAME_ONLY}", [page], {SSF: True})
+    assert out.status == "needs_confirm"
+    assert out.match["name"].endswith("Black") and out.match["price"] == 269100
+    assert out.checked[0]["reason"] == "구글 사본에 품번 없음"
+
+
+def test_read_failure_falls_back_to_search_result():
+    out, _ = _with_pages(f"URL: {SSF} | 제목: {SSF_TITLE}", [], {}, read_ok=False)
+    assert out.status == "found" and out.match["verified_by"] == "product_code_base"
+
+
+def test_parse_read_output_handles_messy_json():
+    text = 'Here you go:\n```json\n[{"url": "https://www.ssfshop.com/x/GM1/", "read": true, "page_code": "없음", ' \
+           '"name": "후디", "price": "269,100원", "regular_price": 0, "image": "not a url"}]\n```'
+    info = parse_read_output(text)["ssfshop.com/x/GM1"]
+    assert info == {"read": True, "page_code": "", "name": "후디", "price": 269100, "regular_price": None, "image": None}

@@ -42,6 +42,8 @@ def test_identify_tag_end_to_end_with_fake_gemini(monkeypatch):
     from providers import ProviderResult
     from tag_identify import PageView
 
+    monkeypatch.setattr(config, "IDENTIFY_RENDER_VERIFY", True)  # 렌더링 확인 경로를 검증하는 테스트
+
     url = "https://www.musinsa.com/products/4341120"
     tag = {"is_product_tag": True, "brand": "NIKE", "product_code": "801474YB2FT1000", "barcode": None,
            "product_name": "클래식 반소매 티셔츠", "color": "블랙", "size": "M", "tag_price": 105990,
