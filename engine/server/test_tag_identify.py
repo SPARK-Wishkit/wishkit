@@ -177,7 +177,9 @@ def test_identify_skips_renders_when_out_of_time():
     )
     out = _run(identify(b"img", "image/jpeg", read_tag=read_tag, search=search,
                         render_page=render_page, time_left=lambda: 3))
-    assert out.status == "not_found"
+    # 열어 보지 못한 후보는 버리지 않고 "확인 필요"로 돌려준다(앱이 사용자에게 묻는다).
+    assert out.status == "needs_confirm"
+    assert out.match["url"] == url and out.match["verified_by"] == "search"
     assert calls["render"] == []
 
 
@@ -341,3 +343,57 @@ def test_identify_confirms_page_by_structured_sku_and_marks_reason():
                         render_page=render_page, time_left=lambda: 40))
     assert out.status == "found" and out.match["verified_by"] == "product_code"
     assert out.checked[0]["reason"] == "product_code (화면 밖 정보)"
+
+
+# ── 2026-11-02: 못 읽은 후보는 needs_confirm ─────────────────
+
+SSF = "https://www.ssfshop.com/BEAKER/GM0026101660266/good?dspCtgNo="
+BEAKER_TAG = {**NIKE_TAG, "brand": "BEAKER", "product_code": "QQ6X39EP20 - DEP",
+              "other_codes": ["QQ6X39EP20 F"], "product_name": None}
+
+
+def test_blank_page_is_unread_not_wrong_product():
+    """실제 로그(2026-11-02): SSF샵이 서버에 빈 화면을 줘서 품번을 못 찾음 → 확인 필요."""
+    pages = {SSF: PageView(True, SSF, "SSF SHOP", body_chars=0)}
+    read_tag, search, render_page, _ = _fakes(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF}", pages)
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "needs_confirm"
+    assert out.match == {"url": SSF, "host": "ssfshop.com", "source": "mall",
+                         "verified_by": "search", "tag_price_seen": None}
+    assert out.checked[0]["verified"] is None and "비어 있음" in out.checked[0]["reason"]
+
+
+def test_same_page_with_code_is_found():
+    pages = {SSF: PageView(True, SSF, "[BEAKER] EPINGLER Laced Hoodie QQ6X39EP20 299,000원", body_chars=900)}
+    _, search, render_page, _ = _fakes(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF}", pages)
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "found" and out.match["verified_by"] == "product_code_base"
+
+
+def test_page_read_without_code_stays_not_found():
+    """페이지를 제대로 읽었는데 품번이 없으면 다른 상품일 수 있다 — 확인 필요로 올리지 않는다."""
+    pages = {SSF: PageView(True, SSF, "다른 후디 " + "설명 " * 200, body_chars=1200)}
+    _, search, render_page, _ = _fakes(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF}", pages)
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "not_found" and out.match is None
+
+
+def test_verified_page_beats_unread_candidate():
+    blocked, ok = "https://www.musinsa.com/products/1", "https://www.ssfshop.com/x/GM1"
+    pages = {blocked: PageView(False, blocked, "", error="렌더링 실패/차단"),
+             ok: PageView(True, ok, "QQ6X39EP20", body_chars=500)}
+    _, search, render_page, _ = _fakes(f"OFFICIAL_DOMAIN: 없음\nURL: {blocked}\nURL: {ok}", pages)
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "found" and out.match["url"] == ok
+
+
+def test_unread_redirect_address_is_not_offered():
+    """구글 리다이렉트 주소만 남으면 실제 상품 주소를 몰라서 확인 필요로도 줄 수 없다."""
+    _, search, render_page, _ = _fakes("OFFICIAL_DOMAIN: 없음", {}, sources=[{"uri": REDIRECT, "title": "musinsa.com"}])
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(BEAKER_TAG), search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "not_found"

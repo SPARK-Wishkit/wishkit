@@ -69,6 +69,29 @@ void main() {
     expect(r.tagPrice, 139000);
   });
 
+  test('확인 필요(needs_confirm) — 링크는 있지만 사용자 확인이 필요하다', () {
+    final r = TagIdentifyResult.fromJson({
+      'status': 'needs_confirm',
+      'brand': 'BEAKER',
+      'productCode': 'QQ6X39EP20',
+      'matchUrl': 'https://www.ssfshop.com/BEAKER/GM0026101660266/good',
+      'matchHost': 'ssfshop.com',
+      'matchSource': 'mall',
+      'verifiedBy': 'search',
+      'note': '검색으로 찾았지만 페이지를 열어 품번을 확인하지는 못했어요',
+    });
+    expect(r.status, TagIdentifyStatus.needsConfirm);
+    expect(r.hasMatch, isTrue);
+    expect(r.matchHost, 'ssfshop.com');
+    expect(r.verifiedBy, 'search');
+  });
+
+  test('needs_confirm인데 URL이 없으면 못 찾은 것으로 본다', () {
+    final r = TagIdentifyResult.fromJson({'status': 'needs_confirm'});
+    expect(r.status, TagIdentifyStatus.notFound);
+    expect(r.hasMatch, isFalse);
+  });
+
   test('found인데 URL이 없으면 못 찾은 것으로 본다', () {
     final r = TagIdentifyResult.fromJson({'status': 'found', 'matchUrl': ''});
     expect(r.status, TagIdentifyStatus.notFound);

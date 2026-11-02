@@ -21,6 +21,11 @@
 "틀린 값보다 빈 값이 안전하다" 원칙: 품번이 확인된 페이지가 없으면 not_found를 돌려주고,
 앱은 태그에서 읽은 이름만 채워 사용자가 직접 확인·입력하게 한다.
 
+예외 — needs_confirm(2026-11-02): 확인된 페이지는 없지만, 검색이 찾은 후보를 우리 서버가 **읽지
+못해서**(차단·빈 화면·시간 부족) 판단을 못 한 경우다. 이때는 그 링크를 버리지 않고 돌려주되, 앱이
+"이 상품이 맞나요?"라고 사용자에게 꼭 묻고 나서만 담는다. 페이지를 읽었는데 품번이 없던 후보(다른
+상품일 수 있음)는 여기에 넣지 않는다.
+
 이 모듈의 `identify()`는 Gemini·브라우저를 인자로 받는 순수 오케스트레이터라서
 test_tag_identify.py에서 가짜로 바꿔 끼워 테스트한다. 실제 연결은 main.py가 한다.
 """
@@ -56,6 +61,8 @@ TAG_SYSTEM_PROMPT = """\
 - product_code: 브랜드가 정한 품번/스타일 넘버/Style No./Art. No./모델명처럼 상품을 구분하는 코드.
   색상 코드가 붙어 있으면(예: "DV1234-100", "485454-26") 인쇄된 그대로 반환하세요.
   매장이 따로 붙인 가격 스티커의 관리번호·재고번호·사이즈 코드는 품번이 아닙니다.
+  품번 옆에 붙은 부서·매장 관리 표시(DEP, DEPT, 매장 코드 등)나 사이즈(F, FREE, 95 등)는 품번에
+  이어 붙이지 말고, 필요하면 other_codes에 따로 넣으세요.
 - other_codes: 사진에 보이는 그 밖의 영문·숫자 코드(매장 스티커 번호, 다른 표기의 품번 등)를 인쇄된
   그대로 모두. product_code와 barcode에 넣은 값은 빼고, 없으면 빈 배열.
 - barcode: 바코드 아래 숫자(EAN/UPC, 보통 8·12·13자리). 숫자만. 없으면 null.
@@ -369,6 +376,16 @@ class PageView:
     raw_text: str
     error: str | None = None
     code_hints: list[str] = field(default_factory=list)  # render._code_hints() — 화면 밖 품번 단서
+    body_chars: int | None = None  # 본문 글자 수(메타 제외). None이면 모름 — 빈 화면 판단에 쓴다
+
+    @property
+    def looks_blank(self) -> bool:
+        """접속은 됐지만 본문이 거의 빈 화면(봇 차단·로딩 실패로 보임). 이런 페이지의 "품번 없음"은
+        다른 상품이라는 근거가 못 된다 — 못 읽은 것으로 본다."""
+        return self.body_chars is not None and self.body_chars < MIN_BODY_CHARS
+
+
+MIN_BODY_CHARS = 200  # 상품 상세 페이지 본문이 이보다 짧으면 빈 화면으로 본다
 
 
 ReadTagFn = Callable[[bytes, str], Awaitable[ProviderResult]]
@@ -388,7 +405,7 @@ _SOURCE_RANK = {"official": 0, "mall": 1}
 
 @dataclass
 class IdentifyOutcome:
-    status: str  # 'found' | 'not_found' | 'not_a_tag'
+    status: str  # 'found' | 'needs_confirm' | 'not_found' | 'not_a_tag'
     tag: dict
     official_domain: str | None = None
     match: dict | None = None
@@ -495,7 +512,9 @@ async def identify(
 
 
 class _Checker:
-    """후보 페이지를 열어 품번(또는 이름)이 실제로 있는지 확인하고, 가장 좋은 일치를 기억한다."""
+    """후보 페이지를 열어 품번(또는 이름)이 실제로 있는지 확인하고, 가장 좋은 일치를 기억한다.
+    읽지 못한 후보(차단·빈 화면·시간 부족)는 따로 모아 두었다가, 확인된 곳이 하나도 없을 때
+    needs_confirm으로 돌려준다."""
 
     def __init__(self, tag: dict, render_page: RenderFn, time_left: Callable[[], float], min_s: float):
         self.tag = tag
@@ -506,15 +525,26 @@ class _Checker:
         # (순위, match) — 순위가 작을수록 좋다:
         # (이름으로만 확인, 공식몰 아님, 코드 근거 세기, 태그 가격이 페이지에 없음)
         self.best: tuple[tuple[int, int, int, int], dict] | None = None
+        # 읽지 못해 판단을 못 한 후보(검색 순서 = 공식몰·우선순위 순). needs_confirm 후보.
+        self.unread: list[dict] = []
+
+    def _unread(self, url: str, host: str, source: str, reason: str) -> None:
+        self.checked.append(_checked(url, source, None, reason))
+        # 구글 리다이렉트 주소는 앱에 그대로 줄 수 없다(실제 상품 주소를 모름).
+        if any(_domain_matches(host_of(url), d) for d in GROUNDING_REDIRECT_HOSTS):
+            return
+        self.unread.append({"url": url, "host": host, "source": source,
+                            "verified_by": "search", "tag_price_seen": None})
 
     async def check_all(self, candidates: list[Candidate], *, official: str | None) -> None:
         for cand in candidates:
             if self._time_left() < self._min_s:
-                self.checked.append(_checked(cand.url, cand.source, None, "시간 부족"))
+                self._unread(cand.url, cand.hint_host, cand.source, "시간 부족")
                 continue
             page = await self._render(cand.url)
             if not page.ok:
-                self.checked.append(_checked(cand.url, cand.source, None, page.error or "렌더링 실패/차단"))
+                self._unread(page.final_url or cand.url, host_of(page.final_url) or cand.hint_host,
+                             cand.source, page.error or "렌더링 실패/차단")
                 continue
             if is_root_url(page.final_url):
                 self.checked.append(_checked(page.final_url, cand.source, None, "상품 페이지가 아닌 메인 페이지"))
@@ -525,6 +555,10 @@ class _Checker:
                 self.checked.append(_checked(page.final_url, source, None, "쇼핑몰이 아닌 페이지"))
                 continue
             verified_by = page_matches(self.tag, page.raw_text, page.final_url, page.code_hints)
+            if verified_by is None and page.looks_blank:
+                # 빈 화면에서 품번을 못 찾은 건 "다른 상품"이 아니라 "못 읽음"이다.
+                self._unread(page.final_url, final_host, source, f"본문이 거의 비어 있음({page.body_chars}자)")
+                continue
             reason = verified_by
             if verified_by and verified_by != "name" and not code_evidence(self.tag, page.raw_text, page.final_url):
                 reason = f"{verified_by} (화면 밖 정보)"  # 로그에서 숨은 단서로 확인된 건수를 세기 위해
@@ -541,8 +575,12 @@ class _Checker:
                 return  # 공식몰에서 코드로 확인됨 — 더 볼 필요 없음
 
     def outcome(self, *, official: str | None) -> IdentifyOutcome:
-        if self.best is None:
-            return IdentifyOutcome("not_found", self.tag, official_domain=official, checked=self.checked,
-                                   note=_not_found_note(self.tag, self.checked))
-        return IdentifyOutcome("found", self.tag, official_domain=official, match=self.best[1],
-                               checked=self.checked)
+        if self.best is not None:
+            return IdentifyOutcome("found", self.tag, official_domain=official, match=self.best[1],
+                                   checked=self.checked)
+        if self.unread:
+            return IdentifyOutcome("needs_confirm", self.tag, official_domain=official, match=self.unread[0],
+                                   checked=self.checked,
+                                   note="검색으로 찾았지만 페이지를 열어 품번을 확인하지는 못했어요")
+        return IdentifyOutcome("not_found", self.tag, official_domain=official, checked=self.checked,
+                               note=_not_found_note(self.tag, self.checked))

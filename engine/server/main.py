@@ -175,7 +175,7 @@ async def _render_for_identify(url: str, budget_s: float) -> PageView:
     # 품번 확인용 글자에는 메타 태그 글자도 넣는다(/extract 의 grounding 체크는 본문만 그대로 쓴다).
     text = f"{r.meta_text} {r.raw_text}".strip()
     return PageView(ok=r.ok, final_url=r.final_url or url, raw_text=text, error=r.error,
-                    code_hints=r.code_hints)
+                    code_hints=r.code_hints, body_chars=len(r.raw_text.strip()) if r.ok else None)
 
 
 def _decode_image(image_base64: str) -> bytes:

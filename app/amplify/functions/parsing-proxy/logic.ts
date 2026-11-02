@@ -64,6 +64,7 @@ export function toExtractedProduct(res: EngineExtractResponse): ExtractedProduct
 
 /** 엔진 서버(POST /identify-tag) 응답 모양 — engine/server/tag_identify.py `IdentifyOutcome`. */
 export interface EngineIdentifyResponse {
+  /** 'found' | 'needs_confirm' | 'not_found' | 'not_a_tag' — 앱에 그대로 넘긴다. */
   status: string;
   tag: {
     brand: string | null;
