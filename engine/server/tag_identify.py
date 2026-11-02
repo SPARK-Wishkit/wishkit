@@ -12,8 +12,10 @@
   3. 확인       — 후보 페이지를 실제로 렌더링해서 **품번이 페이지에 실제로 있는지** 확인한다.
                   AI가 말한 URL을 그대로 믿지 않는다(검색 결과·URL 환각 방지). 색상 코드를 뗀 기본
                   번호로도 확인하고, 태그 가격이 페이지에 보이면 같은 근거끼리 비교할 때 우선한다.
+                  화면에 품번이 없으면 대표 이미지 주소·구조화 데이터(sku 등)에서도 찾는다(render._code_hints).
+                  후보는 공식몰 → 무신사 → SSF샵 → 에이블리 → 그 밖의 몰 순서로, 사이트마다 하나씩만 연다.
   4. 결과       — 확인된 URL 하나(공식몰 우선)를 돌려준다. 가격 읽기는 하지 않는다 — 앱이 그 URL을
-                  기존 "URL로 담기"와 같은 경로(휴대폰 WebView)로 읽는다. 그래야 가격 정책이
+                  기존 "URL로 담기"와 같은 경로(서버 /extract)로 읽는다. 그래야 가격 정책이
                   두 갈래로 갈라지지 않는다.
 
 "틀린 값보다 빈 값이 안전하다" 원칙: 품번이 확인된 페이지가 없으면 not_found를 돌려주고,
@@ -38,6 +40,7 @@ from tag_codes import (
     clean_barcode,
     code_evidence,
     has_code,
+    hint_evidence,
     normalize_code,
 )
 
@@ -198,6 +201,10 @@ MALL_DOMAINS = (
     "lfmall.co.kr", "elandmall.co.kr", "4910.kr", "queenit.kr", "posty.kr", "coupang.com",
 )
 
+# 쇼핑몰 후보를 여는 순서(공식몰은 항상 먼저). 여기 없는 몰은 이 뒤에 검색 결과 순서대로.
+# 품번이 잘 보이고 서버에서 잘 열리는 몰을 앞에 둔다 — 로그([identify] 후보별 탈락 이유)를 보고 조정.
+MALL_PRIORITY = ("musinsa.com", "ssfshop.com", "a-bly.com")
+
 # 상품 상세 페이지가 아닌 곳(블로그·SNS·커뮤니티). 후보에서 뺀다.
 NON_SHOP_DOMAINS = (
     "blog.naver.com", "m.blog.naver.com", "cafe.naver.com", "tistory.com", "instagram.com",
@@ -279,19 +286,37 @@ def parse_search_output(text: str, sources: list[dict]) -> tuple[str | None, lis
         if uri.startswith(("http://", "https://")):
             raw.append((uri, host))
 
-    seen: set[str] = set()
+    seen_sites: set[str] = set()
     official_cands: list[Candidate] = []
     mall_cands: list[Candidate] = []
     for url, host in raw:
-        if url in seen:
-            continue
-        seen.add(url)
         source = classify_host(host, official)
-        if source == "official":
-            official_cands.append(Candidate(url, host, source))
-        elif source == "mall":
-            mall_cands.append(Candidate(url, host, source))
+        if source not in ("official", "mall"):
+            continue
+        # 사이트마다 하나만 — 같은 몰 페이지 여러 개를 여느라 다른 몰을 볼 시간을 다 쓰지 않게.
+        # 검색 응답에 적힌 URL이 그라운딩 출처(리다이렉트 주소)보다 앞에 있어서 직접 주소가 남는다.
+        site = _site_key(host, official)
+        if site in seen_sites:
+            continue
+        seen_sites.add(site)
+        (official_cands if source == "official" else mall_cands).append(Candidate(url, host, source))
+    mall_cands.sort(key=lambda c: _mall_rank(c.hint_host))  # 안정 정렬: 목록 밖 몰은 검색 순서 유지
     return official, official_cands + mall_cands
+
+
+def _site_key(host: str, official: str | None) -> str:
+    """같은 사이트로 볼 기준(www·m. 등 하위 주소는 같은 사이트)."""
+    for domain in (*MALL_DOMAINS, *((official,) if official else ())):
+        if _domain_matches(host, domain):
+            return domain
+    return host
+
+
+def _mall_rank(host: str) -> int:
+    for i, domain in enumerate(MALL_PRIORITY):
+        if _domain_matches(host, domain):
+            return i
+    return len(MALL_PRIORITY)
 
 
 # ── 3. 확인 ────────────────────────────────────────────────
@@ -303,13 +328,14 @@ def _name_tokens(name: str) -> list[str]:
     return [t for t in re.split(r"[^0-9a-z가-힣]+", name.lower()) if len(t) >= 2]
 
 
-def page_matches(tag: dict, raw_text: str, final_url: str) -> str | None:
+def page_matches(tag: dict, raw_text: str, final_url: str, code_hints: list[str] | None = None) -> str | None:
     """이 페이지가 태그의 그 상품인지. 'product_code' | 'barcode' | 'product_code_base' | 'name' | None.
 
-    코드 근거는 tag_codes.code_evidence() 참고. 품번이나 바코드가 있는데 페이지에서 안 보이면 이름이
+    코드 근거는 tag_codes.code_evidence() 참고. 화면에 없으면 code_hints(대표 이미지 주소·구조화
+    데이터)에서도 찾는다(tag_codes.hint_evidence()). 품번이나 바코드가 있는데 페이지에서 안 보이면 이름이
     비슷해도 인정하지 않는다(같은 라인의 다른 색상·다른 모델일 수 있음). 품번·바코드가 둘 다 없을 때만
     이름으로 확인하고, 그 경우 앱이 사용자에게 한 번 더 묻는다."""
-    evidence = code_evidence(tag, raw_text, final_url)
+    evidence = code_evidence(tag, raw_text, final_url) or hint_evidence(tag, code_hints)
     if evidence or normalize_code(tag.get("product_code")) or normalize_code(tag.get("barcode")):
         return evidence
 
@@ -342,6 +368,7 @@ class PageView:
     final_url: str
     raw_text: str
     error: str | None = None
+    code_hints: list[str] = field(default_factory=list)  # render._code_hints() — 화면 밖 품번 단서
 
 
 ReadTagFn = Callable[[bytes, str], Awaitable[ProviderResult]]
@@ -497,8 +524,11 @@ class _Checker:
             if source == "other":
                 self.checked.append(_checked(page.final_url, source, None, "쇼핑몰이 아닌 페이지"))
                 continue
-            verified_by = page_matches(self.tag, page.raw_text, page.final_url)
-            self.checked.append(_checked(page.final_url, source, verified_by is not None, verified_by))
+            verified_by = page_matches(self.tag, page.raw_text, page.final_url, page.code_hints)
+            reason = verified_by
+            if verified_by and verified_by != "name" and not code_evidence(self.tag, page.raw_text, page.final_url):
+                reason = f"{verified_by} (화면 밖 정보)"  # 로그에서 숨은 단서로 확인된 건수를 세기 위해
+            self.checked.append(_checked(page.final_url, source, verified_by is not None, reason))
             if verified_by is None:
                 continue
             price_ok = price_seen(self.tag, page.raw_text)

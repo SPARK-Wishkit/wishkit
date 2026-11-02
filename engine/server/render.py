@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import urllib.parse
 from dataclasses import dataclass, field
@@ -72,6 +73,8 @@ class RenderResult:
     image_candidates: list[str] = field(default_factory=list)
     screenshot: bytes = b""
     meta_text: str = ""  # <title>·설명 메타 태그 글자. 품번이 본문엔 없고 메타에만 있는 몰이 있다(무신사)
+    # 화면에 안 보이는 품번 단서(대표 이미지 주소·구조화 데이터의 sku/mpn/gtin 등). _code_hints() 참고
+    code_hints: list[str] = field(default_factory=list)
     error: str | None = None
 
     @property
@@ -134,6 +137,78 @@ def _meta_text(html: str) -> str:
     return " ".join(dict.fromkeys(p for p in parts if p))  # 같은 문장 중복 제거(순서 유지)
 
 
+# 화면에 품번이 안 보여도 페이지 안쪽 데이터에는 들어 있는 경우가 많다. 다만 페이지 안의 모든 데이터를
+# 보면 추천 상품·최근 본 상품의 품번까지 섞여 엉뚱한 페이지를 맞다고 할 수 있으므로, "이 페이지의 대표
+# 상품"을 가리키는 곳만 본다: 대표 이미지(og:image 등)·대표 주소(canonical·og:url)·상품 메타 태그,
+# 그리고 구조화 데이터(JSON-LD) 중 Product 항목의 코드·이미지 필드.
+_HINT_META_KEYS = {"og:image", "og:image:url", "og:image:secure_url", "twitter:image", "og:url"}
+_LD_PRODUCT_TYPES = {"product", "productgroup", "productmodel"}
+_LD_CODE_KEYS = ("sku", "mpn", "gtin", "gtin8", "gtin12", "gtin13", "gtin14", "productid", "model", "image", "url")
+_LD_OFFER_CODE_KEYS = ("sku", "mpn", "gtin", "gtin8", "gtin12", "gtin13", "gtin14")
+_PRICE_KEY_RE = re.compile(r"price|amount|currency|availability|condition")
+MAX_CODE_HINTS = 60  # 단서가 이상하게 많은 페이지(변형 수백 개 등)에서 확인이 느려지지 않게
+
+
+def _ld_strings(value) -> list[str]:
+    """JSON-LD 필드 값에서 글자만 꺼낸다(문자열·숫자·목록·{"url"/"@id"/"name"} 객체)."""
+    if isinstance(value, (str, int)) and not isinstance(value, bool):
+        return [str(value)]
+    if isinstance(value, list):
+        return [s for v in value for s in _ld_strings(v)]
+    if isinstance(value, dict):
+        return [s for k in ("url", "@id", "contentUrl", "value") if k in value for s in _ld_strings(value[k])]
+    return []
+
+
+def _ld_products(node) -> list[dict]:
+    """JSON-LD에서 Product 계열 객체를 모두 찾는다(@graph·목록·hasVariant·offers 안쪽 포함)."""
+    found: list[dict] = []
+    if isinstance(node, list):
+        for v in node:
+            found += _ld_products(v)
+    elif isinstance(node, dict):
+        types = node.get("@type")
+        types = types if isinstance(types, list) else [types]
+        if any(str(t).lower() in _LD_PRODUCT_TYPES for t in types if t):
+            found.append(node)
+        for key in ("@graph", "hasVariant", "offers", "mainEntity", "itemOffered"):
+            if key in node:
+                found += _ld_products(node[key])
+    return found
+
+
+def _code_hints(html: str) -> list[str]:
+    """화면에 안 보이는 품번 단서를 모은다. 실패해도 빈 목록(확인 흐름을 막지 않음)."""
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        hints: list[str] = []
+        for m in soup.find_all("meta"):
+            key = (m.get("property") or m.get("name") or "").strip().lower()
+            content = (m.get("content") or "").strip()
+            # product:price:amount 같은 가격·통화 값은 뺀다(숫자 품번과 우연히 같을 수 있음)
+            if content and (key in _HINT_META_KEYS or (key.startswith("product:") and not _PRICE_KEY_RE.search(key))):
+                hints.append(content)
+        for link in soup.find_all("link", rel="canonical"):
+            if link.get("href"):
+                hints.append(link["href"].strip())
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.string or "")
+            except (ValueError, TypeError):
+                continue
+            for product in _ld_products(data):
+                for key, value in product.items():
+                    if key.lower() in _LD_CODE_KEYS:
+                        hints += _ld_strings(value)
+                offers = product.get("offers")
+                for offer in offers if isinstance(offers, list) else [offers]:
+                    if isinstance(offer, dict):
+                        hints += [s for k in _LD_OFFER_CODE_KEYS for s in _ld_strings(offer.get(k))]
+        return list(dict.fromkeys(h for h in hints if h))[:MAX_CODE_HINTS]
+    except Exception:  # noqa: BLE001
+        return []
+
+
 async def _goto_and_wait(page, url: str, nav_timeout_ms: int) -> None:
     await page.goto(url, timeout=nav_timeout_ms, wait_until="domcontentloaded")
     for i in range(POLL_MAX_ITERATIONS):
@@ -179,6 +254,7 @@ async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> 
             image_candidates=images,
             screenshot=screenshot,
             meta_text=_meta_text(html),
+            code_hints=_code_hints(html),
         )
     except Exception as exc:  # noqa: BLE001
         return RenderResult(error=f"{type(exc).__name__}: {exc}")
