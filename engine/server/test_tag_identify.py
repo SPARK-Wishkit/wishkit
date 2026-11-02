@@ -17,6 +17,14 @@ from tag_identify import (
     parse_search_output,
 )
 
+@pytest.fixture(autouse=True)
+def _render_verify_on(monkeypatch):
+    """이 파일의 기존 테스트는 서버 렌더링 확인 방식(IDENTIFY_RENDER_VERIFY=1)을 검증한다.
+    검색 결과만으로 판단하는 기본 방식은 맨 아래 테스트들이 verify_by_render=False로 따로 본다."""
+    import config
+    monkeypatch.setattr(config, "IDENTIFY_RENDER_VERIFY", True)
+
+
 NIKE_TAG = {
     "is_product_tag": True,
     "brand": "NIKE",
@@ -423,3 +431,72 @@ URL: **https://www.29cm.co.kr/products/2**
         "https://www.ssfshop.com/BEAKER/GM0026101660266/good?dspCtgNo=GNB41",
         "https://www.29cm.co.kr/products/2",
     ]
+
+
+
+# ── 2026-11-02: 기본 방식 — 서버에서 열지 않고 검색 제목·주소로 판단 ──────────
+
+SSF_TITLE = "[BEAKER] EPINGLER | Laced Hoodie - Oatmeal QQ6X39EP20"
+SSF_SOURCES = [{"uri": REDIRECT, "title": "ssfshop.com"}]
+
+
+def _search_only(text, tag=BEAKER_TAG, sources=SSF_SOURCES):
+    calls = {"render": []}
+
+    async def search(t):
+        return _ok({"text": text, "sources": sources})
+
+    async def render_page(url):
+        calls["render"].append(url)
+        raise AssertionError("기본 방식에서는 서버가 페이지를 열면 안 된다")
+
+    out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(tag), search=search,
+                        render_page=render_page, time_left=lambda: 40, verify_by_render=False))
+    return out, calls
+
+
+def test_search_title_with_code_is_found_without_rendering():
+    out, calls = _search_only(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF} | 제목: {SSF_TITLE}")
+    assert calls["render"] == []
+    assert out.status == "found"
+    assert out.match["url"] == SSF and out.match["verified_by"] == "product_code_base"
+    assert out.match["title"] == SSF_TITLE
+    assert out.checked[0]["reason"] == "product_code_base (검색 제목)"
+
+
+def test_code_in_url_is_found_even_without_title():
+    url = "https://www.nike.com/kr/t/air-force-1/DV1234-100"
+    out, _ = _search_only(f"OFFICIAL_DOMAIN: nike.com\nURL: {url}", tag=NIKE_TAG, sources=[])
+    assert out.status == "found" and out.match["verified_by"] == "product_code"
+
+
+def test_title_from_site_not_in_search_sources_is_not_trusted():
+    """모델이 지어냈을 수 있는 제목 — 그 사이트가 실제 검색 출처에 없으면 확인 필요로만."""
+    out, _ = _search_only(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF} | 제목: {SSF_TITLE}", sources=[])
+    assert out.status == "needs_confirm" and out.match["verified_by"] == "search"
+
+
+def test_title_without_code_gives_needs_confirm():
+    out, _ = _search_only(f"OFFICIAL_DOMAIN: 없음\nURL: {SSF} | 제목: [BEAKER] 레이스 후디 오트밀")
+    assert out.status == "needs_confirm" and out.match["url"] == SSF
+
+
+def test_official_title_match_beats_mall_title_match():
+    official = "https://kimmatin.com/product/high-neck-shearling-jacket-in-black/886/"
+    mall = "https://www.wconcept.co.kr/Product/306766465"
+    tag = {**NIKE_TAG, "brand": "KIMMATIN", "product_code": "KM269OFU001M", "other_codes": []}
+    text = (f"OFFICIAL_DOMAIN: kimmatin.com\nURL: {mall} | 제목: 킴마틴 시어링 자켓 KM269OFU001M\n"
+            f"URL: {official} | 제목: HIGH NECK SHEARLING JACKET KM269OFU001M")
+    sources = [{"uri": REDIRECT, "title": "kimmatin.com"}, {"uri": REDIRECT, "title": "wconcept.co.kr"}]
+    out, _ = _search_only(text, tag=tag, sources=sources)
+    assert out.status == "found" and out.match["source"] == "official"
+
+
+def test_only_redirect_candidates_is_not_found():
+    out, _ = _search_only("OFFICIAL_DOMAIN: 없음", sources=SSF_SOURCES)
+    assert out.status == "not_found"
+
+
+def test_parse_search_output_reads_titles():
+    _, cands = parse_search_output(f"URL: {SSF} | 제목: {SSF_TITLE}\nURL: https://www.musinsa.com/products/1 | 제목: 없음", [])
+    assert {c.url: c.title for c in cands} == {"https://www.musinsa.com/products/1": "", SSF: SSF_TITLE}

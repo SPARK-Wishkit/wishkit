@@ -9,7 +9,10 @@
                   공식몰 우선은 확인 단계의 순위로 처리한다. 사이트 메인 페이지는 후보에서 뺀다.
                   (2026-10-28: 공식몰을 먼저 찾게 하면 모델이 공식몰 메인 주소 하나만 돌려주고 끝내는
                   문제가 있어서 바꿨다. 구글 검색 그라운딩은 유료 키 필요)
-  3. 확인       — 후보 페이지를 실제로 렌더링해서 **품번이 페이지에 실제로 있는지** 확인한다.
+  3. 확인       — 기본(2026-11-02~): 서버에서 페이지를 열지 않고, 검색 결과에 보이는 제목이나 주소에
+                  태그 품번이 있으면 그 링크를 돌려준다(_decide_from_search). 제목은 그 사이트가 실제
+                  검색 결과(그라운딩 출처)에 있을 때만 믿는다. config.IDENTIFY_RENDER_VERIFY=1이면 아래 방식.
+                  렌더링 확인 — 후보 페이지를 실제로 렌더링해서 **품번이 페이지에 실제로 있는지** 확인한다.
                   AI가 말한 URL을 그대로 믿지 않는다(검색 결과·URL 환각 방지). 색상 코드를 뗀 기본
                   번호로도 확인하고, 태그 가격이 페이지에 보이면 같은 근거끼리 비교할 때 우선한다.
                   화면에 품번이 없으면 대표 이미지 주소·구조화 데이터(sku 등)에서도 찾는다(render._code_hints).
@@ -154,10 +157,12 @@ def build_search_prompt(tag: dict) -> str:
 가리지 말고 모두 적으세요. 공식몰을 찾았다고 멈추지 마세요.
 사이트 메인 페이지, 카테고리·검색 결과 목록 페이지, 블로그, 리뷰, 커뮤니티 글은 제외하세요.
 실제로 찾지 못한 URL을 지어내지 마세요.
+각 URL 옆에는 검색 결과에 보이는 그 페이지의 **제목을 보이는 그대로** 적으세요. 제목에 없는 품번이나
+글자를 덧붙이지 마세요 — 제목에 품번이 있는지로 같은 상품인지 판단합니다. 제목을 모르면 "없음".
 아래 형식으로만 답하세요(URL은 최대 6개, 공식몰 상세 페이지가 있으면 먼저):
 OFFICIAL_DOMAIN: <브랜드 공식몰 도메인, 모르면 없음>
-URL: <상품 상세 페이지 URL>
-URL: <상품 상세 페이지 URL>
+URL: <상품 상세 페이지 URL> | 제목: <검색 결과에 보이는 제목>
+URL: <상품 상세 페이지 URL> | 제목: <검색 결과에 보이는 제목>
 """
 
 
@@ -223,7 +228,7 @@ NON_SHOP_DOMAINS = (
 # 넘어가므로 그대로 쓰되, 분류는 title(보통 도메인)로 한다.
 GROUNDING_REDIRECT_HOSTS = ("vertexaisearch.cloud.google.com",)
 
-_URL_LINE_RE = re.compile(r"^\s*URL\s*:\s*(\S+)", re.IGNORECASE | re.MULTILINE)
+_URL_LINE_RE = re.compile(r"^\s*URL\s*:\s*(\S+)(?:\s*\|\s*제목\s*:\s*(.*?))?\s*$", re.IGNORECASE | re.MULTILINE)
 _DOMAIN_LINE_RE = re.compile(r"^\s*OFFICIAL_DOMAIN\s*:\s*(\S+)", re.IGNORECASE | re.MULTILINE)
 
 
@@ -268,6 +273,7 @@ class Candidate:
     url: str
     hint_host: str  # 분류에 쓸 호스트(리다이렉트 주소면 title에서 얻은 도메인)
     source: str  # 'official' | 'mall'
+    title: str = ""  # 검색 결과에 보이는 제목(검색 응답 텍스트에서). 그라운딩 출처면 빈 값
 
 
 # 모델이 URL 뒤에 마크다운 기호(`, *, 따옴표)를 붙이는 경우가 있다(2026-11-02 SSF 주소 끝 백틱).
@@ -290,11 +296,14 @@ def parse_search_output(text: str, sources: list[dict]) -> tuple[str | None, lis
     if official and any(_domain_matches(official, d) for d in MALL_DOMAINS):
         official = None  # 쇼핑몰을 공식몰이라고 답한 경우 — 공식몰 없음으로 취급
 
-    raw: list[tuple[str, str]] = []
-    for url in _URL_LINE_RE.findall(text or ""):
+    raw: list[tuple[str, str, str]] = []
+    for url, title in _URL_LINE_RE.findall(text or ""):
         url = _clean_url(url)
+        title = (title or "").strip()
+        if title in ("없음", "(없음)", "-"):
+            title = ""
         if url.startswith(("http://", "https://")) and not is_root_url(url):
-            raw.append((url, host_of(url)))
+            raw.append((url, host_of(url), title))
     for s in sources:
         uri = s.get("uri") or ""
         host = host_of(uri)
@@ -303,12 +312,12 @@ def parse_search_output(text: str, sources: list[dict]) -> tuple[str | None, lis
         elif is_root_url(uri):
             continue  # 리다이렉트 주소는 렌더링 후 확인 단계에서 거른다
         if uri.startswith(("http://", "https://")):
-            raw.append((uri, host))
+            raw.append((uri, host, ""))
 
     seen_sites: set[str] = set()
     official_cands: list[Candidate] = []
     mall_cands: list[Candidate] = []
-    for url, host in raw:
+    for url, host, title in raw:
         source = classify_host(host, official)
         if source not in ("official", "mall"):
             continue
@@ -318,7 +327,7 @@ def parse_search_output(text: str, sources: list[dict]) -> tuple[str | None, lis
         if site in seen_sites:
             continue
         seen_sites.add(site)
-        (official_cands if source == "official" else mall_cands).append(Candidate(url, host, source))
+        (official_cands if source == "official" else mall_cands).append(Candidate(url, host, source, title))
     mall_cands.sort(key=lambda c: _mall_rank(c.hint_host))  # 안정 정렬: 목록 밖 몰은 검색 순서 유지
     return official, official_cands + mall_cands
 
@@ -505,6 +514,7 @@ async def identify(
     time_left: Callable[[], float],
     max_candidates: int = config.IDENTIFY_MAX_CANDIDATES,
     min_seconds_per_render: float = 6.0,
+    verify_by_render: bool | None = None,
 ) -> IdentifyOutcome:
     tag_res = await read_tag(image, mime_type)
     if not tag_res.ok or not tag_res.data:
@@ -524,7 +534,13 @@ async def identify(
         search_res.data.get("text", ""), search_res.data.get("sources", [])
     )
 
-    # 3. 후보 확인 — 공식몰에서 품번이 확인되면 바로 끝
+    if verify_by_render is None:
+        verify_by_render = config.IDENTIFY_RENDER_VERIFY
+    if not verify_by_render:
+        # 3. 검색 결과만으로 판단 — 서버에서 페이지를 열지 않는다.
+        return _decide_from_search(tag, official, candidates, search_res.data.get("sources", []))
+
+    # 3. (IDENTIFY_RENDER_VERIFY=1) 후보 페이지를 열어 확인 — 공식몰에서 품번이 확인되면 바로 끝
     checker = _Checker(tag, render_page, time_left, min_seconds_per_render)
     await checker.check_all(candidates[:max_candidates], official=official)
     return checker.outcome(official=official)
@@ -608,3 +624,66 @@ class _Checker:
                                    note="검색으로 찾았지만 페이지를 열어 품번을 확인하지는 못했어요")
         return IdentifyOutcome("not_found", self.tag, official_domain=official, checked=self.checked,
                                note=_not_found_note(self.tag, self.checked))
+
+
+# ── 3'. 검색 결과만으로 판단 (기본) ─────────────────────────
+
+def _grounded_hosts(sources: list[dict]) -> set[str]:
+    """그라운딩 출처(실제 검색 결과)에 나온 사이트들. 리다이렉트 주소면 title(보통 도메인)을 쓴다."""
+    hosts: set[str] = set()
+    for s in sources:
+        host = host_of(s.get("uri") or "")
+        if any(_domain_matches(host, d) for d in GROUNDING_REDIRECT_HOSTS):
+            host = _clean_domain(s.get("title")) or ""
+        if host:
+            hosts.add(host)
+    return hosts
+
+
+def _is_grounded(host: str, grounded: set[str]) -> bool:
+    return any(_domain_matches(host, g) or _domain_matches(g, host) for g in grounded)
+
+
+def _decide_from_search(tag: dict, official: str | None, candidates: list[Candidate],
+                        sources: list[dict]) -> IdentifyOutcome:
+    """검색 결과의 제목·주소에 태그 품번(또는 바코드·기본 번호)이 있으면 그 링크를 돌려준다.
+
+    - 주소(URL)에 품번이 있으면 그대로 믿는다(주소는 모델이 지어내기 어렵다 — 리다이렉트 주소는 제외).
+    - 제목은 모델이 옮겨 적은 것이라, 그 사이트가 그라운딩 출처(실제 검색 결과)에 있을 때만 믿는다.
+      출처 정보가 아예 비어 있으면(SDK에 따라 빔) 확인할 수 없으니 제목 근거를 쓰지 않는다.
+    - 근거가 있는 후보가 없으면 첫 후보를 needs_confirm으로(앱이 사용자에게 묻는다).
+    순위는 렌더링 확인과 같다: 코드 근거 > 이름 근거, 공식몰 > 쇼핑몰, 강한 근거 > 약한 근거."""
+    grounded = _grounded_hosts(sources)
+    checked: list[dict] = []
+    best: tuple[tuple[int, int, int], dict] | None = None
+    unconfirmed: dict | None = None
+
+    for cand in candidates:
+        is_redirect = any(_domain_matches(host_of(cand.url), d) for d in GROUNDING_REDIRECT_HOSTS)
+        url_ev = None if is_redirect else page_matches(tag, "", cand.url)
+        title_ok = bool(cand.title) and _is_grounded(cand.hint_host, grounded)
+        title_ev = page_matches(tag, cand.title, "") if title_ok else None
+        evidence = url_ev or title_ev
+        if evidence is None or is_redirect:
+            reason = "주소 확인 불가(검색 리다이렉트)" if is_redirect else (
+                "검색 제목·주소에 품번 없음" if (cand.title and title_ok) or not cand.title
+                else "검색 출처에 없는 사이트라 제목을 믿지 않음")
+            checked.append(_checked(cand.url, cand.source, None if is_redirect else False, reason))
+            if unconfirmed is None and not is_redirect:
+                unconfirmed = {"url": cand.url, "host": cand.hint_host, "source": cand.source,
+                               "verified_by": "search", "tag_price_seen": None, "title": cand.title or None}
+            continue
+        where = "주소" if url_ev else "검색 제목"
+        checked.append(_checked(cand.url, cand.source, True, f"{evidence} ({where})"))
+        rank = (int(evidence == "name"), _SOURCE_RANK[cand.source], _CODE_STRENGTH[evidence])
+        if best is None or rank < best[0]:
+            best = (rank, {"url": cand.url, "host": cand.hint_host, "source": cand.source,
+                           "verified_by": evidence, "tag_price_seen": None, "title": cand.title or None})
+
+    if best is not None:
+        return IdentifyOutcome("found", tag, official_domain=official, match=best[1], checked=checked)
+    if unconfirmed is not None:
+        return IdentifyOutcome("needs_confirm", tag, official_domain=official, match=unconfirmed, checked=checked,
+                               note="검색으로 찾았지만 제목에서 품번을 확인하지는 못했어요")
+    return IdentifyOutcome("not_found", tag, official_domain=official, checked=checked,
+                           note="검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요")
