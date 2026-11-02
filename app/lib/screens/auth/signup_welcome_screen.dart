@@ -38,7 +38,7 @@ class _SignupWelcomeScreenState extends State<SignupWelcomeScreen> {
       padding: const EdgeInsets.fromLTRB(22, 36, 22, 32),
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text('wishkit', style: DiaryTheme.display(40)),
+        Text('wishkit', style: DiaryTheme.logo(40)),
         const SizedBox(height: 20),
         Text(
           '회원가입을 축하합니다',

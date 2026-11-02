@@ -173,7 +173,6 @@ class _BasketPickerSheetState extends State<BasketPickerSheet> {
                     return Opacity(
                       opacity: disabled ? 0.45 : 1,
                       child: WhiteProductCard(
-                        indexColor: category.color,
                         onTap: disabled ? null : () => _openCategory(category),
                         child: Row(
                           children: [
@@ -229,7 +228,7 @@ class _BasketPickerSheetState extends State<BasketPickerSheet> {
             ),
             InkWell(
               onTap: pickableCount == 0 ? null : _toggleAll,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(DiaryTheme.radius),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 child: Row(
@@ -287,7 +286,6 @@ class _BasketPickerSheetState extends State<BasketPickerSheet> {
         DiaryButton(
           label: '$selectedCount개 담기',
           filled: true,
-          color: DiaryColors.folderPeach,
           icon: Icons.add_shopping_cart,
           onPressed: selectedCount == 0 ? null : _confirm,
         ),
@@ -359,7 +357,7 @@ class _ProductRow extends StatelessWidget {
             ),
             const SizedBox(width: 4),
             ClipRRect(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(DiaryTheme.radius),
               child: Image.network(
                 product.image,
                 width: 58,
@@ -396,7 +394,7 @@ class _ProductRow extends StatelessWidget {
                     const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: DiaryColors.ink.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(DiaryTheme.radius),
                 ),
                 child: Text('담김',
                     style: DiaryTheme.body(10,

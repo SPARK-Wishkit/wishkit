@@ -20,124 +20,137 @@ class MyPageScreen extends StatelessWidget {
     final folders = store.tabs.where((t) => t.id != 'all').toList();
 
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       body: SafeArea(
-        child: SpiralNotebook(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 20),
-            children: [
-              Row(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            Padding(
+              // Same as 내 친구 / 살까말까 page titles.
+              padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
+              child: Row(
                 children: [
-                  Text('마이페이지', style: DiaryTheme.display(32)),
+                  Text('마이페이지', style: DiaryTheme.display(24)),
                   const Spacer(),
                   IconButton(
+                    tooltip: '계정 설정',
                     onPressed: () => _openAccountSettings(context, store),
-                    icon: const Icon(Icons.settings_outlined),
+                    icon: const Icon(
+                      Icons.settings_outlined,
+                      color: DiaryColors.ink,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              CustomPaint(
-                painter: _TagPainter(color: DiaryColors.fileStone),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(28, 18, 14, 14),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundImage: NetworkImage(user.avatarUrl),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              user.name,
-                              style: DiaryTheme.body(
-                                16,
-                                weight: FontWeight.w700,
-                              ),
-                            ),
-                            Text(
-                              user.handle,
-                              style: DiaryTheme.body(
-                                12,
-                                color: DiaryColors.inkMuted,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Wrap(
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                GestureDetector(
-                                  onTap: () => context.push('/followers'),
-                                  child: Text(
-                                    '${user.followers} 팔로워',
-                                    style: DiaryTheme.body(11),
-                                  ),
-                                ),
-                                Text('  |  ', style: DiaryTheme.body(11)),
-                                GestureDetector(
-                                  onTap: () => context.push('/following'),
-                                  child: Text(
-                                    '${user.following} 팔로잉',
-                                    style: DiaryTheme.body(11),
-                                  ),
-                                ),
-                                Text('  |  ', style: DiaryTheme.body(11)),
-                                Text(
-                                  '${store.products.length} 아이템',
-                                  style: DiaryTheme.body(11),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+            ),
+            // ── Profile (bigger, dark text) ───────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 34,
+                    backgroundColor: DiaryColors.surfaceSoft,
+                    backgroundImage: NetworkImage(user.avatarUrl),
                   ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DiaryTheme.display(23),
+                        ),
+                        Text(
+                          user.handle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DiaryTheme.ui(
+                            14,
+                            weight: FontWeight.w500,
+                            color: DiaryColors.inkMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  OutlinedButton(
+                    onPressed: () => _openEditProfile(context, store),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 34),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      side: const BorderSide(color: DiaryColors.ink),
+                    ),
+                    child: const Text('프로필 수정'),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+              child: Row(
+                children: [
+                  _Stat(
+                    value: user.followers,
+                    label: '팔로워',
+                    onTap: () => context.push('/followers'),
+                  ),
+                  _Stat(
+                    value: user.following,
+                    label: '팔로잉',
+                    onTap: () => context.push('/following'),
+                  ),
+                  _Stat(value: store.products.length, label: '아이템'),
+                ],
+              ),
+            ),
+            const SectionBand(),
+            // Wishlists
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+              child: Text(
+                '내 wishlist',
+                style: DiaryTheme.ui(17, weight: FontWeight.w800),
+              ),
+            ),
+            if (folders.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Text(
+                  '아직 폴더가 없어요. + 를 눌러 첫 폴더를 만들어보세요',
+                  style: DiaryTheme.body(13, color: DiaryColors.inkSoft),
                 ),
               ),
-              const SizedBox(height: 18),
-              Text('내 wishlist', style: DiaryTheme.display(26)),
-              const SizedBox(height: 10),
-              if (folders.isEmpty) ...[
-                Text(
-                  '아직 폴더가 없어요. + 를 눌러 첫 폴더를 만들어보세요',
-                  textAlign: TextAlign.center,
-                  style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
-                ),
-                const SizedBox(height: 10),
-              ],
-              LayoutBuilder(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              // Two equal columns (option A).
+              child: LayoutBuilder(
                 builder: (context, constraints) {
-                  const spacing = 16.0;
-                  final chipWidth = (constraints.maxWidth - spacing) / 2;
+                  final chipWidth = (constraints.maxWidth - 12) / 2;
                   return Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: spacing,
-                    runSpacing: 10,
-                    children: [
-                      for (final tab in folders)
-                        _FolderChip(
-                          label: tab.name,
-                          color: store.tabColor(tab),
-                          width: chipWidth,
-                          onTap: () {
-                            store.selectTab(tab.id);
-                            // Switch to wishlist tab in bottom nav.
-                            StatefulNavigationShell.maybeOf(
-                              context,
-                            )?.goBranch(0);
-                            context.go('/');
-                          },
-                        ),
-                      _FolderChip(
-                        label: '+',
-                        color: DiaryColors.folderLilac,
-                        width: chipWidth,
-                        onTap: () async {
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  for (final tab in folders)
+                    _FolderChip(
+                      width: chipWidth,
+                      label: tab.name,
+                      count: store.countFor(tab),
+                      onTap: () {
+                        store.selectTab(tab.id);
+                        // Switch to wishlist tab in bottom nav.
+                        StatefulNavigationShell.maybeOf(context)?.goBranch(0);
+                        context.go('/');
+                      },
+                    ),
+                  _FolderChip(
+                    width: chipWidth,
+                    label: '폴더 추가',
+                    icon: Icons.add,
+                    onTap: () async {
                           final ctrl = TextEditingController();
                           var submitting = false;
                           await showDialog<void>(
@@ -179,41 +192,45 @@ class MyPageScreen extends StatelessWidget {
                             ),
                           );
                         },
-                      ),
-                    ],
+                  ),
+                ],
                   );
                 },
               ),
-              const SizedBox(height: 18),
-              DiaryButton(
-                label: '내가 보낸 살까말까',
-                icon: Icons.outbox_outlined,
-                onPressed: () => context.push('/sent-baskets'),
+            ),
+            const SectionBand(height: 6),
+            MenuRow(
+              compact: true,
+              label: '내가 보낸 살까말까',
+              icon: Icons.outbox_outlined,
+              onTap: () => context.push('/sent-baskets'),
+            ),
+            MenuRow(
+              compact: true,
+              label: '알림 설정',
+              icon: Icons.notifications_none,
+              trailing: Text(
+                store.notificationsEnabled ? '켜짐' : '꺼짐',
+                style: DiaryTheme.ui(13, color: DiaryColors.inkSoft),
               ),
-              const SizedBox(height: 8),
-              DiaryButton(
-                label: '알림 설정',
-                icon: store.notificationsEnabled
-                    ? Icons.notifications
-                    : Icons.notifications_off,
-                onPressed: () =>
-                    store.setNotificationsEnabled(!store.notificationsEnabled),
-              ),
-              const SizedBox(height: 8),
-              DiaryButton(
-                label: '앱 정보',
-                icon: Icons.info_outline,
-                onPressed: () {
-                  showAboutDialog(
-                    context: context,
-                    applicationName: '통합 위시리스트',
-                    applicationVersion: '0.1.0',
-                    applicationLegalese: 'MZ diary scrapbook wishlist',
-                  );
-                },
-              ),
-            ],
-          ),
+              onTap: () =>
+                  store.setNotificationsEnabled(!store.notificationsEnabled),
+            ),
+            MenuRow(
+              compact: true,
+              label: '앱 정보',
+              icon: Icons.info_outline,
+              onTap: () {
+                showAboutDialog(
+                  context: context,
+                  applicationName: '통합 위시리스트',
+                  applicationVersion: '0.1.0',
+                  applicationLegalese: 'MZ diary scrapbook wishlist',
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+          ],
         ),
       ),
     );
@@ -662,71 +679,108 @@ class MyPageScreen extends StatelessWidget {
   }
 }
 
-class _FolderChip extends StatelessWidget {
-  const _FolderChip({
-    required this.label,
-    required this.color,
-    required this.width,
-    required this.onTap,
-  });
+/// Big dark number over a label (no box).
+class _Stat extends StatelessWidget {
+  const _Stat({required this.value, required this.label, this.onTap});
 
+  final int value;
   final String label;
-  final Color color;
-  final double width;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: width,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: DiaryColors.ink.withValues(alpha: 0.15)),
-        ),
-        child: OneLineText(
-          label,
-          textAlign: TextAlign.center,
-          style: DiaryTheme.body(13, weight: FontWeight.w600),
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          children: [
+            Text('$value', style: DiaryTheme.display(24)),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: DiaryTheme.ui(
+                13,
+                weight: FontWeight.w600,
+                color: DiaryColors.inkMuted,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _TagPainter extends CustomPainter {
-  _TagPainter({required this.color});
-  final Color color;
+/// Wishlist folder chip: white with a thin gray outline.
+/// The "폴더 추가" chip (has [icon]) has no outline.
+class _FolderChip extends StatelessWidget {
+  const _FolderChip({
+    required this.label,
+    required this.onTap,
+    required this.width,
+    this.count,
+    this.icon,
+  });
+
+  final double width;
+  final String label;
+  final VoidCallback onTap;
+  final int? count;
+  final IconData? icon;
+
+  bool get _isAdd => icon != null;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(18, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width, size.height)
-      ..lineTo(18, size.height)
-      ..lineTo(0, size.height / 2)
-      ..close();
-    final paint = Paint()..color = color;
-    canvas.drawPath(path, paint);
-    canvas.drawCircle(
-      Offset(18, size.height / 2),
-      5,
-      Paint()..color = DiaryColors.paper,
-    );
-    canvas.drawCircle(
-      Offset(18, size.height / 2),
-      5,
-      Paint()
-        ..color = DiaryColors.ink.withValues(alpha: 0.5)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2,
+  Widget build(BuildContext context) {
+    final fg = _isAdd ? DiaryColors.inkMuted : DiaryColors.ink;
+    return Material(
+      color: DiaryColors.paper,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DiaryTheme.radius),
+        side: _isAdd
+            ? BorderSide.none
+            : const BorderSide(color: DiaryColors.lineStrong),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(DiaryTheme.radius),
+        child: Container(
+          width: width,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+          child: Row(
+            // Folders: name left, count right. 폴더 추가: centred.
+            mainAxisAlignment: _isAdd
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.spaceBetween,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 16, color: fg),
+                const SizedBox(width: 4),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: DiaryTheme.ui(14, weight: FontWeight.w700, color: fg),
+                ),
+              ),
+              if (count != null) ...[
+                const SizedBox(width: 6),
+                Text(
+                  '$count',
+                  style: DiaryTheme.ui(
+                    14,
+                    weight: FontWeight.w500,
+                    color: DiaryColors.inkSoft,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

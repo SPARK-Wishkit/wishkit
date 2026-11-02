@@ -126,7 +126,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
 
     return AuthPage(
       children: [
-        Text('wishkit', style: DiaryTheme.display(36)),
+        Text('wishkit', style: DiaryTheme.logo(36)),
         const SizedBox(height: 8),
         Text('계정 찾기', style: DiaryTheme.body(18, weight: FontWeight.w700)),
         const SizedBox(height: 16),
@@ -193,7 +193,6 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
         DiaryButton(
           label: loading ? '처리 중...' : _buttonLabel,
           filled: true,
-          color: DiaryColors.folderBlue,
           onPressed: loading
               ? null
               : (resetDone && mode == _RecoveryMode.password)

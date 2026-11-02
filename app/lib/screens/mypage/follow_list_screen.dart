@@ -62,7 +62,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
     final emptyText = isFollowers ? '팔로워가 없습니다' : '팔로우하고 있는 사람이 없습니다';
 
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       appBar: AppBar(
         backgroundColor: DiaryColors.white,
         elevation: 0,
@@ -70,7 +70,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
-        title: Text(title, style: DiaryTheme.ui(16, weight: FontWeight.w700)),
+        title: Text(title, style: DiaryTheme.ui(17, weight: FontWeight.w700)),
       ),
       body: SafeArea(
         child: _loading
@@ -91,7 +91,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
                         ),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: _users!.length,
                         itemBuilder: (context, i) {
                           final u = _users![i];

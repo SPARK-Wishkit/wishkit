@@ -96,7 +96,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
     return AuthPage(
       children: [
-        Text('wishkit', style: DiaryTheme.display(36)),
+        Text('wishkit', style: DiaryTheme.logo(36)),
         const SizedBox(height: 8),
         Text('이메일 인증', style: DiaryTheme.body(18, weight: FontWeight.w700)),
         const SizedBox(height: 12),
@@ -127,14 +127,12 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         DiaryButton(
           label: busy ? '확인 중...' : '인증하기',
           filled: true,
-          color: DiaryColors.folderBlue,
           onPressed: busy ? null : _confirm,
         ),
         const SizedBox(height: 10),
         DiaryButton(
           label: wait > 0 ? '코드 다시 보내기 ($wait초)' : '코드 다시 보내기',
           filled: false,
-          color: DiaryColors.folderBlue,
           onPressed: busy || wait > 0 ? null : _resend,
         ),
         const SizedBox(height: 8),

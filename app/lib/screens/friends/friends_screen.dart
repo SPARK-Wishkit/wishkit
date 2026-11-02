@@ -77,18 +77,18 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final tab = store.friendsTab;
 
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       body: SafeArea(
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Text('내 친구', style: DiaryTheme.display(34)),
+                      Text('내 친구', style: DiaryTheme.display(24)),
                       const Spacer(),
                       if (refreshing)
                         const Padding(
@@ -125,70 +125,54 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: searchCtrl,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: '이름·아이디로 검색',
-                      prefixIcon: const Icon(Icons.search),
-                      filled: true,
-                      fillColor: DiaryColors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
+                  const SizedBox(height: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: SizedBox(
+                      height: 42,
+                      child: TextField(
+                        controller: searchCtrl,
+                        onChanged: (_) => setState(() {}),
+                        style: DiaryTheme.ui(14),
+                        textAlignVertical: TextAlignVertical.center,
+                        decoration: InputDecoration(
+                          hintText: '이름·아이디로 검색',
+                          hintStyle: DiaryTheme.ui(
+                            14,
+                            color: DiaryColors.inkSoft,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.search,
+                            size: 20,
+                            color: DiaryColors.ink,
+                          ),
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                          filled: true,
+                          fillColor: DiaryColors.band,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(
+                              DiaryTheme.radius,
+                            ),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _TabChip(
-                          label: '팔로잉',
-                          color: DiaryColors.folderBlue,
-                          active: tab == 0,
-                          onTap: () => store.selectFriendsTab(0),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: _TabChip(
-                          label: '팔로워',
-                          color: DiaryColors.folderYellow,
-                          active: tab == 1,
-                          onTap: () => store.selectFriendsTab(1),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: _TabChip(
-                          label: 'wishlist',
-                          color: DiaryColors.folderPink,
-                          active: tab == 2,
-                          onTap: () => store.selectFriendsTab(2),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: _TabChip(
-                          label: '살까말까',
-                          color: DiaryColors.folderPeach,
-                          active: tab == 3,
-                          onTap: () => store.selectFriendsTab(3),
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 4),
+            _UnderlineTabs(
+              labels: const ['팔로잉', '팔로워', 'wishlist', '살까말까'],
+              selected: tab,
+              onSelect: store.selectFriendsTab,
+            ),
             Expanded(
               child: SpiralNotebook(
-                folderColor: DiaryColors.canvas,
-                border: Border.all(color: DiaryColors.fileCream, width: 3),
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: switch (tab) {
                     0 => _FollowingList(
                       following: followingFriends,
@@ -256,10 +240,10 @@ class _FollowingList extends StatelessWidget {
           ),
         if (discover.isNotEmpty) ...[
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+            padding: const EdgeInsets.fromLTRB(0, 20, 0, 4),
             child: Text(
               searching ? '검색 결과' : '친구 찾아보기',
-              style: DiaryTheme.body(13, weight: FontWeight.w700),
+              style: DiaryTheme.body(16, weight: FontWeight.w700),
             ),
           ),
           for (final f in discover)
@@ -327,8 +311,7 @@ class _FollowersList extends StatelessWidget {
           trailing: OutlinedButton(
             onPressed: () => _confirmRemove(context, u),
             style: OutlinedButton.styleFrom(
-              foregroundColor: DiaryColors.ink,
-              side: BorderSide(color: DiaryColors.ink.withValues(alpha: 0.35)),
+              minimumSize: const Size(72, 34),
               padding: const EdgeInsets.symmetric(horizontal: 12),
             ),
             child: const Text('삭제'),
@@ -395,25 +378,19 @@ class _FollowButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (isFollowing) {
-      return OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: DiaryColors.ink,
-          side: BorderSide(color: DiaryColors.ink.withValues(alpha: 0.35)),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-        ),
-        child: const Text('팔로잉'),
-      );
-    }
-    return FilledButton(
+    // Quiet by default: outlined 팔로우, soft gray 팔로잉. No solid black.
+    return OutlinedButton(
       onPressed: onPressed,
-      style: FilledButton.styleFrom(
-        backgroundColor: DiaryColors.ink,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(72, 32),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        backgroundColor: isFollowing ? DiaryColors.band : DiaryColors.white,
+        foregroundColor: isFollowing ? DiaryColors.inkSoft : DiaryColors.ink,
+        side: BorderSide(
+          color: isFollowing ? DiaryColors.band : DiaryColors.lineStrong,
+        ),
       ),
-      child: const Text('팔로우'),
+      child: Text(isFollowing ? '팔로잉' : '팔로우'),
     );
   }
 }
@@ -480,7 +457,7 @@ class _FriendWishlistsPane extends StatelessWidget {
                               child: Column(
                                 children: [
                                   ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(DiaryTheme.radius),
                                     child: Image.network(
                                       p.image,
                                       width: 72,
@@ -489,7 +466,7 @@ class _FriendWishlistsPane extends StatelessWidget {
                                       errorBuilder: (_, __, ___) => Container(
                                         width: 72,
                                         height: 72,
-                                        color: DiaryColors.paper,
+                                        color: DiaryColors.surfaceSoft,
                                         child: const Icon(Icons.image_outlined),
                                       ),
                                     ),
@@ -512,8 +489,10 @@ class _FriendWishlistsPane extends StatelessWidget {
                         .toList(),
                   ),
                 ),
-                Center(
-                  child: TextButton(
+                const SizedBox(height: 4),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
                     onPressed: () => context.push('/friend-wishlist/${w.id}'),
                     child: const Text('위시리스트 전체보기'),
                   ),
@@ -548,7 +527,7 @@ class _SalkamalkaFeedPane extends StatelessWidget {
         final e = entries[i];
         final b = e.basket;
         return WhiteProductCard(
-          backgroundColor: e.isMine ? DiaryColors.mineCard : DiaryColors.white,
+          backgroundColor: e.isMine ? DiaryColors.band : DiaryColors.white,
           onTap: () => context.push('/shared/${b.id}'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -633,7 +612,9 @@ class _SalkamalkaFeedPane extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(right: 6),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(
+                              DiaryTheme.radius,
+                            ),
                             child: Image.network(
                               p.image,
                               width: 56,
@@ -718,48 +699,58 @@ class _SalkamalkaFeedPane extends StatelessWidget {
   }
 }
 
-class _TabChip extends StatelessWidget {
-  const _TabChip({
-    required this.label,
-    required this.color,
-    required this.active,
-    required this.onTap,
+/// Full-width text tabs with a black underline on the active one.
+class _UnderlineTabs extends StatelessWidget {
+  const _UnderlineTabs({
+    required this.labels,
+    required this.selected,
+    required this.onSelect,
   });
 
-  final String label;
-  final Color color;
-  final bool active;
-  final VoidCallback onTap;
+  final List<String> labels;
+  final int selected;
+  final ValueChanged<int> onSelect;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
-          border: Border(
-            bottom: BorderSide(
-              color: active ? DiaryColors.accent : Colors.transparent,
-              width: 2.5,
+    return Container(
+      height: 46,
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: DiaryColors.line)),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: InkWell(
+                onTap: () => onSelect(i),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: i == selected
+                            ? DiaryColors.ink
+                            : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  child: OneLineText(
+                    labels[i],
+                    textAlign: TextAlign.center,
+                    style: DiaryTheme.ui(
+                      15,
+                      weight: i == selected ? FontWeight.w700 : FontWeight.w500,
+                      color: i == selected
+                          ? DiaryColors.ink
+                          : DiaryColors.inkSoft,
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            style: DiaryTheme.body(
-              13,
-              weight: active ? FontWeight.w700 : FontWeight.w500,
-            ),
-          ),
-        ),
+        ],
       ),
     );
   }

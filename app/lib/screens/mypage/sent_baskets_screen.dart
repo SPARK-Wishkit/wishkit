@@ -18,7 +18,7 @@ class SentBasketsScreen extends StatelessWidget {
     final baskets = store.sentBaskets;
 
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       appBar: AppBar(
         backgroundColor: DiaryColors.white,
         elevation: 0,
@@ -28,7 +28,7 @@ class SentBasketsScreen extends StatelessWidget {
         ),
         title: Text(
           '내가 보낸 살까말까',
-          style: DiaryTheme.ui(18, weight: FontWeight.w700),
+          style: DiaryTheme.ui(17, weight: FontWeight.w700),
         ),
       ),
       body: baskets.isEmpty
@@ -43,7 +43,7 @@ class SentBasketsScreen extends StatelessWidget {
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               itemCount: baskets.length,
               itemBuilder: (context, i) {
                 final b = baskets[i];
@@ -80,7 +80,7 @@ class SentBasketsScreen extends StatelessWidget {
                               Padding(
                                 padding: const EdgeInsets.only(right: 6),
                                 child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(DiaryTheme.radius),
                                   child: Image.network(
                                     p.image,
                                     width: 56,
@@ -89,7 +89,7 @@ class SentBasketsScreen extends StatelessWidget {
                                     errorBuilder: (_, __, ___) => Container(
                                       width: 56,
                                       height: 56,
-                                      color: DiaryColors.paper,
+                                      color: DiaryColors.surfaceSoft,
                                     ),
                                   ),
                                 ),

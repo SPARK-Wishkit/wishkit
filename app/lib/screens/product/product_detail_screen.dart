@@ -156,14 +156,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
     final isOwn =
         !_openedFromSomeoneElse && store.productById(product.id) != null;
-    final tab = store.tabs.firstWhere(
-      (t) => t.id == product.listId,
-      orElse: () => store.tabs.first,
-    );
-    final folderColor = store.tabColor(tab);
-
     return Scaffold(
-      backgroundColor: folderColor,
+      backgroundColor: DiaryColors.paper,
       appBar: AppBar(
         backgroundColor: DiaryColors.white,
         leading: IconButton(
@@ -182,12 +176,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           children: [
             Expanded(
               child: Container(
-                margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                child: ClipPath(
-                  clipper: _TornTopClipper(),
+                child: ClipRect(
                   child: DiaryGridPaper(
                     borderRadius: 0,
-                    padding: const EdgeInsets.fromLTRB(14, 28, 14, 14),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                     child: ListView(
                       children: [
                         WhiteProductCard(
@@ -196,7 +188,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(DiaryTheme.radius),
                                 child: AspectRatio(
                                   aspectRatio: 1,
                                   child: Image.network(
@@ -256,14 +248,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: DiaryColors.folderPeach,
-                                    borderRadius: BorderRadius.circular(8),
+                                    color: DiaryColors.sale.withValues(
+                                      alpha: 0.08,
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      DiaryTheme.radius,
+                                    ),
                                   ),
                                   child: Text(
-                                    '↘ ${product.discount}% 할인 중',
+                                    '${product.discount}% 할인 중',
                                     style: DiaryTheme.body(
                                       12,
-                                      weight: FontWeight.w600,
+                                      weight: FontWeight.w700,
+                                      color: DiaryColors.sale,
                                     ),
                                   ),
                                 ),
@@ -286,10 +283,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(DiaryTheme.radius),
                             border: Border.all(
-                              color: DiaryColors.ink.withValues(alpha: 0.7),
-                              width: 1.4,
+                              color: DiaryColors.lineStrong,
                             ),
                           ),
                           child: Column(
@@ -361,7 +357,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               child: DiaryButton(
                                 label: '상품 보러가기',
                                 filled: true,
-                                color: DiaryColors.folderMint,
                                 icon: Icons.open_in_new,
                                 onPressed: () async {
                                   final url =
@@ -439,20 +434,19 @@ class _TagPhotoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () => _openFull(context),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(DiaryTheme.radius),
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(DiaryTheme.radius),
           border: Border.all(
-            color: DiaryColors.ink.withValues(alpha: 0.7),
-            width: 1.4,
+            color: DiaryColors.lineStrong,
           ),
         ),
         child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(DiaryTheme.radius),
               child: Image.network(
                 url,
                 width: 56,
@@ -545,23 +539,4 @@ String relativeCheckedLabel(DateTime at, DateTime now) {
   if (diff.inHours < 1) return '${diff.inMinutes}분 전';
   if (diff.inDays < 1) return '${diff.inHours}시간 전';
   return '${diff.inDays}일 전';
-}
-
-class _TornTopClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path()..moveTo(0, 18);
-    const step = 18.0;
-    for (double x = 0; x <= size.width; x += step) {
-      path.quadraticBezierTo(x + step / 2, 0, x + step, 18);
-    }
-    path
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }

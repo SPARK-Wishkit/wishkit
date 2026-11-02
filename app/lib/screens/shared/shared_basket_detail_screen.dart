@@ -58,7 +58,7 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
     final canComment = threadId.isNotEmpty && store.isLoggedIn;
 
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       appBar: AppBar(
         backgroundColor: DiaryColors.white,
         elevation: 0,
@@ -68,7 +68,7 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
         ),
         title: Text(
           basket.title,
-          style: DiaryTheme.ui(16, weight: FontWeight.w700),
+          style: DiaryTheme.ui(17, weight: FontWeight.w700),
         ),
         actions: [
           if (isMine)
@@ -135,7 +135,7 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
                     const SizedBox(height: 16),
                     Text(
                       '고민 중인 상품 ${basket.items.length}개',
-                      style: DiaryTheme.body(13, weight: FontWeight.w700),
+                      style: DiaryTheme.body(16, weight: FontWeight.w700),
                     ),
                     const SizedBox(height: 8),
                     if (basket.items.isEmpty)
@@ -165,7 +165,7 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
                     const SizedBox(height: 8),
                     Text(
                       '댓글 ${comments.length}',
-                      style: DiaryTheme.body(13, weight: FontWeight.w700),
+                      style: DiaryTheme.body(16, weight: FontWeight.w700),
                     ),
                     const SizedBox(height: 8),
                     if (!canComment)
@@ -386,7 +386,7 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
   Widget _composer(AppStore store, SharedBasket basket) {
     return Material(
       color: DiaryColors.white,
-      elevation: 8,
+      shape: const Border(top: BorderSide(color: DiaryColors.line)),
       child: SafeArea(
         top: false,
         child: Padding(
@@ -437,13 +437,13 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
                             ? '댓글 달기...'
                             : '답글 달기...',
                         filled: true,
-                        fillColor: DiaryColors.paper,
+                        fillColor: DiaryColors.band,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 10,
                         ),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(DiaryTheme.radius),
                           borderSide: BorderSide.none,
                         ),
                       ),
