@@ -1,5 +1,23 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-02 - 태그 찾기: 몰 우선순위 · 사이트마다 하나 · 화면 밖 품번 확인
+
+🌟 **쉬운 설명**
+- 태그로 찾은 후보 페이지를 **공식몰 → 무신사 → SSF샵 → 에이블리 → 그 밖의 몰** 순서로 열어요. 예전엔 쇼핑몰끼리는 검색 결과 순서 그대로였어요.
+- 같은 몰 페이지는 하나만 열어요. 무신사 페이지 여러 개를 여느라 다른 몰을 볼 시간을 다 쓰는 일이 없어져요.
+- 맞는 페이지인데 화면에 품번이 안 보여서 탈락하던 경우를 줄였어요. 대표 사진 주소나 페이지 속 상품 정보(검색엔진용 데이터)에 품번이 있으면 확인된 것으로 봐요.
+- AI 호출은 늘지 않아요(태그당 Gemini 2번 그대로). 이미 연 페이지에서 더 찾아보는 계산이라 시간도 거의 안 늘어요.
+
+🔧 **기술 설명**
+- `tag_identify.parse_search_output`: `MALL_PRIORITY = (musinsa, ssfshop, a-bly)`로 쇼핑몰 후보 안정 정렬, `_site_key`로 사이트(www·m. 포함)당 후보 1개. 응답 텍스트의 직접 URL이 그라운딩 리다이렉트보다 먼저 남는다.
+- `render._code_hints`: 대표 상품을 가리키는 곳만 모은다 — og:image·twitter:image·og:url·canonical·`product:*` 메타(가격·통화 키 제외), JSON-LD Product/ProductGroup의 sku·mpn·gtin*·productID·model·image·url과 offers의 코드. 추천 상품 이미지·본문 스크립트 데이터는 엉뚱한 일치를 막으려고 일부러 안 본다. 최대 60개, 실패하면 빈 목록.
+- `tag_codes.hint_evidence`: 단서를 영문·숫자 덩어리로 나눠 덩어리(이웃 최대 4개 연결) 단위로만 비교 — `3612345` 속 `12345`, 구분자 없이 붙은 다른 색상(`DV1234200`)은 거른다. 근거 이름·세기는 `code_evidence`와 같고, 후보 기록의 reason에 `(화면 밖 정보)`를 붙여 로그에서 셀 수 있게 했다.
+- `PageView.code_hints` 추가, `main._render_for_identify`가 전달. 모듈 설명의 "휴대폰 WebView로 읽는다"를 지금 구조(서버 /extract)로 정정.
+- 테스트: `test_tag_identify.py` 4개, `test_tag_codes.py` 7개, `test_render_meta.py` 2개 추가.
+- ⚠️ 엔진 반영은 `bash engine/deploy/engine.sh deploy`. 순서는 로그의 몰별 탈락 이유를 보고 `MALL_PRIORITY`만 고치면 된다.
+
+---
+
 ## 2026-11-02 - 엔진 추출 결과 캐시 제거
 
 🌟 **쉬운 설명**

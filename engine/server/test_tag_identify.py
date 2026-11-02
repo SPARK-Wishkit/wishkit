@@ -296,3 +296,48 @@ def test_google_search_429_gives_quota_note():
     out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(TAG_1993), search=search,
                         render_page=render_page, time_left=lambda: 40))
     assert out.status == "not_found" and "한도" in out.note
+
+
+# ── 2026-11-02: 몰 우선순위 · 사이트마다 하나 · 화면 밖 품번 ──────────────
+
+def test_parse_search_output_orders_malls_by_priority():
+    text = """OFFICIAL_DOMAIN: nike.com
+URL: https://www.29cm.co.kr/products/9
+URL: https://a-bly.com/goods/3
+URL: https://www.ssfshop.com/x/GM1
+URL: https://www.musinsa.com/products/1
+URL: https://www.nike.com/kr/t/af1/DV1234-100
+"""
+    _, cands = parse_search_output(text, [])
+    assert [c.hint_host for c in cands] == [
+        "nike.com", "musinsa.com", "ssfshop.com", "a-bly.com", "29cm.co.kr",
+    ]
+
+
+def test_parse_search_output_keeps_one_candidate_per_site():
+    text = """OFFICIAL_DOMAIN: nike.com
+URL: https://www.musinsa.com/products/1
+URL: https://m.musinsa.com/products/2
+URL: https://www.nike.com/kr/t/a
+URL: https://www.nike.com/kr/t/b
+"""
+    sources = [{"uri": REDIRECT, "title": "musinsa.com"}]
+    _, cands = parse_search_output(text, sources)
+    assert [c.url for c in cands] == ["https://www.nike.com/kr/t/a", "https://www.musinsa.com/products/1"]
+
+
+def test_page_matches_uses_hidden_code_hints():
+    tag = dict(NIKE_TAG)
+    assert page_matches(tag, "나이키 에어포스 1 '07", "https://x.com/p/1") is None
+    hints = ["https://img.x.com/goods/DV1234-100_01.jpg"]
+    assert page_matches(tag, "나이키 에어포스 1 '07", "https://x.com/p/1", hints) == "product_code"
+
+
+def test_identify_confirms_page_by_structured_sku_and_marks_reason():
+    url = "https://www.musinsa.com/products/1"
+    page = PageView(True, url, "나이키 에어포스 1 '07 139,000원", code_hints=["DV1234-100"])
+    read_tag, search, render_page, _ = _fakes(f"OFFICIAL_DOMAIN: 없음\nURL: {url}", {url: page})
+    out = _run(identify(b"img", "image/jpeg", read_tag=read_tag, search=search,
+                        render_page=render_page, time_left=lambda: 40))
+    assert out.status == "found" and out.match["verified_by"] == "product_code"
+    assert out.checked[0]["reason"] == "product_code (화면 밖 정보)"
