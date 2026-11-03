@@ -99,7 +99,7 @@ async def _extract(url: str) -> dict:
     if r.blocked:
         raise HTTPException(502, f"상품 페이지 접근이 차단됨(final_url={r.final_url})")
 
-    text_result, text_elapsed_ms = await _run_gemini(call_gemini, r.cleaned_html)
+    text_result, text_elapsed_ms = await _run_gemini(call_gemini, r.cleaned_html, r.price_candidates)
     if not text_result.ok or not text_result.data:
         raise HTTPException(502, f"AI 호출 실패: {text_result.error}")
     extracted = text_result.data
@@ -108,7 +108,7 @@ async def _extract(url: str) -> dict:
     vision_elapsed_ms = 0
     if extracted.get("ambiguous") and r.screenshot:
         vision_result, vision_elapsed_ms = await _run_gemini(
-            call_gemini_vision, r.screenshot, r.image_candidates
+            call_gemini_vision, r.screenshot, r.image_candidates, r.price_candidates
         )
         if vision_result.ok and vision_result.data:
             extracted = vision_result.data
@@ -118,7 +118,7 @@ async def _extract(url: str) -> dict:
 
     response = {
         **extracted,
-        "grounding": grounding_check(extracted, r.raw_text, r.image_candidates),
+        "grounding": grounding_check(extracted, r.raw_text, r.image_candidates, r.price_candidates),
         "screenshot_fallback_used": screenshot_fallback_used,
         "render": {"ok": r.ok, "blocked": r.blocked, "final_url": r.final_url},
         "metrics": {

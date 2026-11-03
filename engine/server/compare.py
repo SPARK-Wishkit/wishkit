@@ -52,8 +52,38 @@ def _price_grounded(price, regular_price, text_numbers: set[int], percents: set[
     return False
 
 
-def grounding_check(extracted: dict, raw_text: str, image_candidates: list[str]) -> dict:
-    """AI가 뽑은 값이 실제 페이지 원문에 등장하는지 확인 (환각 방지 안전판)."""
+def most_prominent_prices(price_candidates: list[dict] | None) -> set[int]:
+    """첫 화면에서 취소선 없이 가장 큰 글자로 표시된 가격(들). 같은 크기가 여럿이면 전부.
+    후보가 없으면 빈 집합."""
+    pool = [c for c in price_candidates or [] if c.get("first_screen") and not c.get("struck")]
+    if not pool:
+        return set()
+    top = max(c["font_px"] for c in pool)
+    return {int(c["value"]) for c in pool if c["font_px"] == top}
+
+
+def _price_prominence(price, price_candidates: list[dict] | None) -> tuple[int | None, bool | None]:
+    """(가장 크게 표시된 가격, AI가 고른 가격이 그것과 같은지). 2026-11 가격 정책("가장 크게
+    홍보하는 가격")을 AI가 지켰는지 코드로 확인한다. 같은 크기가 여럿이면 대표 가격은 None으로 두고,
+    그중 하나와 같으면 True. 판단할 근거(후보·가격)가 없으면 판정은 None."""
+    top_values = most_prominent_prices(price_candidates)
+    representative = next(iter(top_values)) if len(top_values) == 1 else None
+    if price is None or not top_values:
+        return representative, None
+    return representative, int(price) in top_values
+
+
+def grounding_check(
+    extracted: dict,
+    raw_text: str,
+    image_candidates: list[str],
+    price_candidates: list[dict] | None = None,
+) -> dict:
+    """AI가 뽑은 값이 실제 페이지 원문에 등장하는지 확인 (환각 방지 안전판).
+
+    `price_is_most_prominent`는 원문 존재 여부와 별개로, 고른 가격이 화면에서 가장 큰 글자의
+    가격인지를 본다. 측정 오차(같은 가격이 여러 크기로 표시, 몰마다 다른 마크업)가 있을 수 있어
+    `all_grounded`에는 넣지 않는다 — 회귀 테스트와 로그에서 정책 준수율을 보는 용도."""
     price_info = extracted.get("price") or {}
     price, regular_price = price_info.get("unconditional_price"), price_info.get("regular_price")
     name = extracted.get("product_name")
@@ -68,11 +98,15 @@ def grounding_check(extracted: dict, raw_text: str, image_candidates: list[str])
         image in image_candidates or _basename(image) in map(_basename, image_candidates)
     )
 
+    most_prominent_price, price_is_most_prominent = _price_prominence(price, price_candidates)
+
     return {
         "price_grounded": price_grounded,
         "name_grounded": name_grounded,
         "image_grounded": image_grounded,
         "all_grounded": price_grounded and name_grounded and image_grounded,
+        "most_prominent_price": most_prominent_price,
+        "price_is_most_prominent": price_is_most_prominent,
     }
 
 

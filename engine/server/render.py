@@ -45,7 +45,7 @@ BLOCK_PATTERNS = re.compile(
 
 MAX_CLEANED_CHARS = 130000  # AI 입력 토큰 비용 통제용 상한 (근거: engine-ai-prototype 17절)
 
-VIEWPORT = {"width": 1280, "height": 1600}
+VIEWPORT = {"width": 1280, "height": 1600}  # 높이를 바꾸면 아래 FIRST_SCREEN_PX도 같이 바꿀 것
 
 # 렌더링 완료 대기 조건 (design-doc-snapshot 21절, 유니클로 레이스 컨디션 근본 수정).
 # 가격 텍스트가 실제로 보이면 즉시 종료(강한 신호). ld+json 가격/본문 길이 같은 약한 신호는
@@ -58,6 +58,60 @@ _JS_WEAK_READY = r"""() => {
   const ld = document.querySelector('script[type="application/ld+json"]');
   return (!!ld && /"(price|offers)"/i.test(ld.textContent)) || document.body.innerText.length > 1500;
 }"""
+
+# 화면 가격 후보 측정 (2026-11 가격 정책 변경: "상품 페이지에서 가장 크게 홍보하는 가격").
+# 정제된 HTML에는 글자 크기 정보가 없어서, 렌더링된 화면에서 가격처럼 보이는 글자마다 실제 글자
+# 크기·굵기·위치·취소선 여부를 재서 Gemini에 같이 넘긴다(prompts.format_price_candidates).
+# 가격 모양: "34,800"(콤마) 또는 "34800원"/"₩34800". 콤마 없는 4자리 이상 숫자는 연도·상품번호와
+# 헷갈리므로 원/₩ 표시가 붙을 때만 인정한다. 화면에 안 보이는 요소(크기 0, 숨김)는 뺀다.
+_JS_PRICE_CANDIDATES = r"""() => {
+  const RE = /(\d{1,3}(?:,\d{3})+)|(?:₩\s*(\d{4,}))|(?:(\d{4,})\s*원)/g;
+  const out = [];
+  const seen = new Map();  // 요소 → 이미 넣은 가격들 (같은 요소·같은 가격은 한 번만)
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    const el = node.parentElement;
+    if (!el) continue;
+    const values = [...node.textContent.matchAll(RE)]
+      .map(m => parseInt((m[1] || m[2] || m[3]).replace(/,/g, ''), 10));
+    if (!values.length) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || parseFloat(cs.opacity) === 0) continue;
+    let struck = false;
+    for (let a = el, i = 0; a && i < 4; a = a.parentElement, i++) {
+      if (['DEL', 'S', 'STRIKE'].includes(a.tagName) ||
+          getComputedStyle(a).textDecorationLine.includes('line-through')) { struck = true; break; }
+    }
+    // 주변 글자: "쿠폰적용가 29,800원"처럼 라벨이 붙은 범위까지(80자 이하인 가장 큰 조상)
+    let context = (el.innerText || node.textContent).replace(/\s+/g, ' ').trim();
+    for (let a = el.parentElement, i = 0; a && i < 3; a = a.parentElement, i++) {
+      const t = (a.innerText || '').replace(/\s+/g, ' ').trim();
+      if (t.length > 80) break;
+      context = t;
+    }
+    if (!seen.has(el)) seen.set(el, new Set());
+    for (const value of values) {
+      if (seen.get(el).has(value)) continue;
+      seen.get(el).add(value);
+      out.push({
+        value: value,
+        font_px: parseFloat(cs.fontSize) || 0,
+        font_weight: parseInt(cs.fontWeight, 10) || 400,
+        struck: struck,
+        top: Math.round(rect.top + window.scrollY),
+        context: context.slice(0, 80),
+      });
+    }
+  }
+  out.sort((a, b) => (b.font_px - a.font_px) || (a.top - b.top));
+  return out.slice(0, 25);
+}"""
+
+# 첫 화면(상품 페이지에 들어갔을 때 스크롤 없이 보이는 범위)의 높이 — 뷰포트 높이와 같다.
+FIRST_SCREEN_PX = 1600
 
 _STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "link", "meta"]
 _KEEP_ATTRS = {"id", "src", "href", "content", "property", "alt", "aria-label"}
@@ -72,6 +126,9 @@ class RenderResult:
     image_candidates: list[str] = field(default_factory=list)
     screenshot: bytes = b""
     meta_text: str = ""  # <title>·설명 메타 태그 글자. 품번이 본문엔 없고 메타에만 있는 몰이 있다(무신사)
+    # 화면에서 잰 가격 후보(글자 큰 순, 최대 25개). 각 항목: value, font_px, font_weight, struck,
+    # top, context, first_screen. 측정이 실패하면 빈 목록(추출은 그대로 진행).
+    price_candidates: list[dict] = field(default_factory=list)
     error: str | None = None
 
     @property
@@ -134,6 +191,15 @@ def _meta_text(html: str) -> str:
     return " ".join(dict.fromkeys(p for p in parts if p))  # 같은 문장 중복 제거(순서 유지)
 
 
+async def measure_price_candidates(page) -> list[dict]:
+    """지금 화면에 보이는 가격 후보를 글자 크기와 함께 잰다. 실패해도 예외를 던지지 않는다."""
+    try:
+        raw = await page.evaluate(_JS_PRICE_CANDIDATES)
+    except Exception:  # noqa: BLE001 — 측정 실패는 추출 흐름을 막지 않음
+        return []
+    return [{**c, "first_screen": c["top"] < FIRST_SCREEN_PX} for c in raw]
+
+
 async def _goto_and_wait(page, url: str, nav_timeout_ms: int) -> None:
     await page.goto(url, timeout=nav_timeout_ms, wait_until="domcontentloaded")
     for i in range(POLL_MAX_ITERATIONS):
@@ -166,6 +232,7 @@ async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> 
                 pass
 
         cleaned_html, raw_text, images = _clean_html(html)
+        price_candidates = await measure_price_candidates(page)
         try:
             screenshot = await page.screenshot(type="jpeg", quality=70)
         except Exception:  # noqa: BLE001 — 스크린샷 실패는 텍스트 추출 흐름을 막지 않음
@@ -179,6 +246,7 @@ async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> 
             image_candidates=images,
             screenshot=screenshot,
             meta_text=_meta_text(html),
+            price_candidates=price_candidates,
         )
     except Exception as exc:  # noqa: BLE001
         return RenderResult(error=f"{type(exc).__name__}: {exc}")

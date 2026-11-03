@@ -83,6 +83,7 @@ def main():
                   f"price={(body.get('price') or {}).get('unconditional_price')} "
                   f"ambiguous={body.get('ambiguous')} "
                   f"grounded={(body.get('grounding') or {}).get('all_grounded')} "
+                  f"largest={(body.get('grounding') or {}).get('price_is_most_prominent')} "
                   f"({wall_ms}ms, peak_rss={(body.get('metrics') or {}).get('peak_rss_mb')}MB)")
         else:
             print(f"[{i}/{len(cases)}] {case['mall']:8s} HTTP {status}: {body.get('detail')}")
@@ -101,6 +102,13 @@ def main():
     print(f"완전 일치(MATCH): {full_match}/{n} ({full_match/n:.0%})")
     print(f"그라운딩 통과: {grounded}/{n} ({grounded/n:.0%})")
     print(f"HTTP 비정상 응답: {n - len(ok_results)}/{n}")
+    # 2026-11 가격 정책("가장 크게 홍보하는 가격") 준수: 고른 가격이 화면에서 잰 가장 큰 가격과 같은지.
+    # None(후보 측정 실패·가격 기권)은 판정 불가로 따로 센다.
+    judged = [(r["extracted"].get("grounding") or {}).get("price_is_most_prominent") for r in ok_results]
+    largest_yes = sum(1 for v in judged if v is True)
+    largest_known = sum(1 for v in judged if v is not None)
+    print(f"가장 큰 가격 선택: {largest_yes}/{largest_known} (판정 불가 {len(judged) - largest_known}건)")
+    print("※ golden_catalog.json의 가격 정답이 옛 정책(조건 없는 가격) 기준이면 가격 일치율은 그만큼 낮게 나온다.")
 
     if args.baseline:
         baseline = json.loads(Path(args.baseline).read_text(encoding="utf-8"))

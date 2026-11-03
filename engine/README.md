@@ -23,6 +23,21 @@ Tier 1 전환까지 끝난 상태이며, 그 과정은 `docs/reports/2026-09-19-
 당분간 서로 다른 이야기를 할 수 있으니, 이 폴더를 보고 헷갈리면 그 두 문서(및
 `ENGINE_DEVELOPMENT_HANDOFF.md`에 새로 추가된 노트)를 먼저 대조해볼 것.
 
+## 가격 정책 — "상품 페이지에서 가장 크게 홍보하는 가격" (2026-11 팀 회의 결정)
+
+- `/extract`가 돌려주는 `price.unconditional_price`는 **상품 페이지에 들어갔을 때 메인 상품 영역에서
+  가장 크게 표시된 판매 가격**이다. 쿠폰가·회원가·첫구매가처럼 조건이 붙은 가격이라도 가장 크게 표시돼
+  있으면 그 값을 쓴다. 계산하지 않고 화면에 표시된 숫자 그대로 쓴다.
+- 필드 이름은 Lambda(`parsing-proxy`)·앱 호환 때문에 예전 이름(`unconditional_price`, "조건 없는 가격")을
+  그대로 쓴다. **이름과 뜻이 다르다는 점에 주의.**
+- "가장 크게"는 렌더링한 화면에서 가격처럼 보이는 글자마다 실제 글자 크기·취소선·위치를 재서
+  (`render.measure_price_candidates`) Gemini에 같이 넘기는 방식으로 판단한다.
+- 응답의 `grounding.most_prominent_price`(첫 화면에서 취소선 없이 가장 큰 가격)와
+  `grounding.price_is_most_prominent`(AI가 그 가격을 골랐는지)로 정책 준수를 코드로 확인한다.
+  `all_grounded`에는 넣지 않았다.
+- ⚠️ `testdata/golden_catalog.json`의 가격 정답과 아래 정확도 수치(58%·86%)는 **옛 정책 기준**이다.
+  새 정책으로 다시 재야 한다.
+
 ## 이 폴더와 `engine-ai-prototype`의 관계
 
 `engine-ai-prototype/`(이 저장소 밖, 별도 폴더)은 이 파이프라인의 **원본 프로토타입**이다 —
