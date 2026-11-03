@@ -108,6 +108,8 @@ def main():
     largest_yes = sum(1 for v in judged if v is True)
     largest_known = sum(1 for v in judged if v is not None)
     print(f"가장 큰 가격 선택: {largest_yes}/{largest_known} (판정 불가 {len(judged) - largest_known}건)")
+    withheld = sum(1 for r in ok_results if (r["extracted"].get("grounding") or {}).get("price_withheld"))
+    print(f"정책 위반으로 가격 비움: {withheld}건")
     print("※ golden_catalog.json의 가격 정답이 옛 정책(조건 없는 가격) 기준이면 가격 일치율은 그만큼 낮게 나온다.")
 
     if args.baseline:

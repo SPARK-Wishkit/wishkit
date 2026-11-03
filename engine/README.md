@@ -35,6 +35,10 @@ Tier 1 전환까지 끝난 상태이며, 그 과정은 `docs/reports/2026-09-19-
 - 응답의 `grounding.most_prominent_price`(첫 화면에서 취소선 없이 가장 큰 가격)와
   `grounding.price_is_most_prominent`(AI가 그 가격을 골랐는지)로 정책 준수를 코드로 확인한다.
   `all_grounded`에는 넣지 않았다.
+- 첫 화면에서 가장 큰 가격이 **하나로 분명한데** AI가 다른 가격을 고르면, 가격을 비우고
+  `ambiguous: true`로 돌려준다(`compare.withhold_off_policy_price`, 응답 `grounding.price_withheld: true`).
+  측정값으로 바꿔 넣지는 않는다 — 측정도 틀릴 수 있어서 "틀린 값보다 빈 값" 원칙을 따른다. 같은 크기
+  가격이 여럿(동점)이거나 측정 후보가 없으면 AI 답을 그대로 쓴다.
 - ⚠️ `testdata/golden_catalog.json`의 가격 정답과 아래 정확도 수치(58%·86%)는 **옛 정책 기준**이다.
   새 정책으로 다시 재야 한다.
 

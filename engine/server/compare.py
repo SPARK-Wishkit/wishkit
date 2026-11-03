@@ -110,6 +110,23 @@ def grounding_check(
     }
 
 
+def withhold_off_policy_price(extracted: dict, grounding: dict) -> dict:
+    """첫 화면에서 가장 크게 표시된 가격이 하나로 분명한데(most_prominent_price) AI가 다른 가격을
+    골랐으면, 그 가격을 버리고 ambiguous로 돌린 사본을 돌려준다. 측정값으로 바꿔 넣지는 않는다 —
+    측정도 틀릴 수 있으니 "틀린 값보다 빈 값" 원칙을 따른다. 같은 크기 동점(대표값 None)이나
+    판단 근거가 없는 경우(None)는 그대로 둔다. 원래 AI 답은 ambiguity_reason에 남긴다."""
+    if grounding.get("price_is_most_prominent") is not False or grounding.get("most_prominent_price") is None:
+        return extracted
+    price_info = dict(extracted.get("price") or {})
+    ai_price = price_info.get("unconditional_price")
+    price_info["unconditional_price"] = None
+    reason = (
+        f"AI가 고른 가격({ai_price:,}원)이 화면에서 가장 크게 표시된 가격"
+        f"({grounding['most_prominent_price']:,}원)과 달라 비움"
+    )
+    return {**extracted, "price": price_info, "ambiguous": True, "ambiguity_reason": reason, "confidence": "low"}
+
+
 def _normalize_name(s: str) -> str:
     return re.sub(r"\s+", "", s or "").lower()
 

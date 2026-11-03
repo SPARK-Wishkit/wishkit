@@ -27,7 +27,7 @@ from playwright.async_api import async_playwright
 from pydantic import BaseModel, HttpUrl
 
 import config
-from compare import grounding_check
+from compare import grounding_check, withhold_off_policy_price
 from metrics import PeakRSSSampler, now_ms
 from providers import ProviderResult, call_gemini, call_gemini_vision
 from render import launch_browser, render
@@ -116,9 +116,16 @@ async def _extract(url: str) -> dict:
         else:
             logger.warning("스크린샷 폴백 실패(%s) — 텍스트 결과를 그대로 사용", vision_result.error)
 
+    # 그라운딩은 AI 원래 답으로 잰다(정책 위반 여부가 로그·회귀 테스트에 남도록). 그다음 위반이면 가격을 비운다.
+    grounding = grounding_check(extracted, r.raw_text, r.image_candidates, r.price_candidates)
+    final = withhold_off_policy_price(extracted, grounding)
+    grounding["price_withheld"] = final is not extracted
+    if grounding["price_withheld"]:
+        logger.info("가격 정책 위반으로 가격 비움: %s (%s)", url, final["ambiguity_reason"])
+
     response = {
-        **extracted,
-        "grounding": grounding_check(extracted, r.raw_text, r.image_candidates, r.price_candidates),
+        **final,
+        "grounding": grounding,
         "screenshot_fallback_used": screenshot_fallback_used,
         "render": {"ok": r.ok, "blocked": r.blocked, "final_url": r.final_url},
         "metrics": {

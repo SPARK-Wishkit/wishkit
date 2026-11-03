@@ -5,6 +5,8 @@
 🌟 **쉬운 설명**
 - 팀 회의 결정에 따라 엔진이 읽는 가격의 기준을 바꿨어요. 예전에는 쿠폰가·회원가를 빼고 "조건 없이 바로 결제할 수 있는 가격"을 골랐는데, 이제는 **상품 페이지에서 가장 크게 보여 주는 가격**을 골라요. 쿠폰적용가가 가장 크게 보이면 쿠폰적용가가 담겨요.
 - "가장 크게"를 정확히 고르려고, 엔진이 화면을 열었을 때 가격 글자마다 실제 글자 크기를 재서 AI에게 같이 알려 줘요. AI가 정말 가장 큰 가격을 골랐는지도 엔진이 확인해서 응답에 적어 줘요.
+- AI가 화면에서 가장 큰 가격을 두고 다른 가격을 고르면, 그 값을 쓰지 않고 가격을 비운 채 "애매함"으로 돌려줘요(틀린 값보다 빈 값). 앱에서는 기존처럼 "가격을 못 읽음"으로 보여요.
+- 실제 30개 상품(KREAM·SSF샵 제외)으로 로컬 테스트: 오류 0건, AI가 가장 큰 가격을 고른 비율 27/29. 퀸잇 1건에서 AI가 규칙을 어긴 걸 발견해 위 안전장치를 넣었어요.
 - 앱과 서버 함수(Lambda)는 고칠 게 없어요. 가격 칸 이름은 그대로예요.
 - ⚠️ 앱은 이 가격을 지금도 "확정된 구매가"처럼 보여 줘요. 쿠폰가가 확정 구매가로 보여도 괜찮은지는 앱 담당과 확인이 필요해요.
 
@@ -13,8 +15,10 @@
 - `prompts.py`: 시스템 프롬프트 가격 정책을 새 기준으로 다시 씀(조건부 가격도 가장 크면 채택, 계산 금지, 추천·배송비·적립금 등 제외). few-shot 1·5·6번(옛 "쿠폰가 배제" 사례)을 새 기준으로 고침, 2·3·4번은 유지. 사용자·비전 프롬프트에 "화면 가격 후보" 블록 추가(`format_price_candidates`).
 - `providers.py`: `call_gemini`·`call_gemini_vision`이 `price_candidates`를 받는다. `main.py`가 렌더링 결과를 넘긴다.
 - `compare.py`: `grounding_check`에 `most_prominent_price`, `price_is_most_prominent` 추가(첫 화면·취소선 없음 기준, 같은 크기가 여럿이면 그중 하나면 통과). `all_grounded`에는 넣지 않음.
-- `tools/golden_regression_check.py`: "가장 큰 가격 선택" 비율을 따로 출력.
-- 테스트: `test_price_policy.py` 7개 추가(로컬 헤드리스 크롬으로 실제 글자 크기 측정, 판정, 프롬프트, `/extract` 배선). 전체 81개 통과.
+- `compare.withhold_off_policy_price` + `main.py`: `most_prominent_price`가 하나로 정해졌는데 `price_is_most_prominent`가 false면 `unconditional_price`를 null, `ambiguous: true`, `confidence: "low"`로 바꾸고 원래 AI 값은 `ambiguity_reason`에 남긴다. 측정값으로 대체하지 않음. 그라운딩은 AI 원래 답 기준으로 계산하고 `grounding.price_withheld`로 비웠는지 알린다. 동점·후보 없음은 그대로 둔다.
+- `tools/golden_regression_check.py`: "가장 큰 가격 선택" 비율과 "정책 위반으로 가격 비움" 건수를 따로 출력.
+- 로컬 회귀(30개, KREAM·SSF샵 제외, `EXTRACT_TIMEOUT_S=25`, 안전장치 넣기 전): HTTP 오류 0/30, 그라운딩 28/30, 가장 큰 가격 선택 27/29(판정 불가 1), 골든 완전 일치 11/30(골든이 옛 기준이라 예상된 불일치). 위반은 퀸잇(가장 큰 "첫구매 특가" 32,900 대신 35,900)·4910(측정과 무관한 9,206 — 4910 렌더링 불안정과 관련 추정).
+- 테스트: `test_price_policy.py` 9개 추가(로컬 헤드리스 크롬으로 실제 글자 크기 측정, 판정, 가격 비우기, 프롬프트, `/extract` 배선). 전체 83개 통과.
 - ⚠️ `engine/testdata/golden_catalog.json` 가격 정답과 기존 정확도 기준선(58%·86%)은 옛 정책 기준이다. 새 정책으로 실제 몰에서 다시 재야 한다(엔진 배포 필요, 아직 안 함).
 - ⚠️ 엔진 반영은 `bash engine/deploy/engine.sh deploy`.
 

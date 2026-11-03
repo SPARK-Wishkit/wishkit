@@ -11,7 +11,7 @@ import asyncio
 from fastapi.testclient import TestClient
 from playwright.async_api import async_playwright
 
-from compare import grounding_check, most_prominent_prices
+from compare import grounding_check, most_prominent_prices, withhold_off_policy_price
 from prompts import build_user_prompt, build_vision_user_prompt, format_price_candidates
 from render import FIRST_SCREEN_PX, launch_browser, measure_price_candidates
 
@@ -105,6 +105,27 @@ def test_grounding_prominence_with_tie():
     assert g["price_is_most_prominent"] is True  # 그중 하나를 골랐으면 정책 위반은 아님
 
 
+def test_off_policy_price_is_withheld_not_replaced():
+    # 퀸잇 #22 사례: 가장 큰 "첫구매 특가"를 두고 더 작은 가격을 고르면 측정값으로 바꾸지 않고 비운다.
+    ext = {**_extracted(34800), "ambiguous": False, "ambiguity_reason": None, "confidence": "high"}
+    g = grounding_check(ext, "99,000원 34,800원 29,800원", [], CANDS)
+    out = withhold_off_policy_price(ext, g)
+    assert out["price"]["unconditional_price"] is None
+    assert out["price"]["regular_price"] == 99000
+    assert out["ambiguous"] is True and out["confidence"] == "low"
+    assert "34,800원" in out["ambiguity_reason"] and "29,800원" in out["ambiguity_reason"]
+    assert ext["price"]["unconditional_price"] == 34800  # 원본은 건드리지 않음
+
+
+def test_withhold_leaves_compliant_tie_and_unknown_alone():
+    ok = _extracted(29800)
+    assert withhold_off_policy_price(ok, grounding_check(ok, "29,800원", [], CANDS)) is ok
+    tie = [_cand(29800, 28), _cand(31800, 28)]
+    other = _extracted(34800)  # 동점 둘 다 아닌 값이지만 대표값이 없어서 판정 보류
+    assert withhold_off_policy_price(other, grounding_check(other, "34,800원", [], tie)) is other
+    assert withhold_off_policy_price(other, grounding_check(other, "34,800원", [])) is other
+
+
 def test_prompt_lists_candidates_with_flags():
     text = format_price_candidates([_cand(29800, 28, context="쿠폰적용가 29,800원"), _cand(99000, 14, struck=True)])
     assert "29,800원 | 글자 28px · 굵기 400 · 첫 화면 | 주변 글자: '쿠폰적용가 29,800원'" in text
@@ -144,3 +165,23 @@ def test_extract_passes_candidates_to_gemini_and_grounding(monkeypatch):
     assert body["price"]["unconditional_price"] == 29800
     assert body["grounding"]["price_is_most_prominent"] is True
     assert body["grounding"]["most_prominent_price"] == 29800
+    assert body["grounding"]["price_withheld"] is False
+
+    # 같은 화면에서 AI가 즉시할인가(작은 글자)를 고르면 가격을 비우고 ambiguous로 돌려준다.
+    def off_policy_gemini(cleaned_html, price_candidates=None, **_):
+        return ProviderResult("gemini", "m", True, {**_extracted(34800), "ambiguous": False,
+                                                    "ambiguity_reason": None, "confidence": "high"}, 1)
+
+    async def no_screenshot_render(browser, url, *, nav_timeout_ms):
+        r = await fake_render(browser, url, nav_timeout_ms=nav_timeout_ms)
+        r.raw_text += " 34,800원"
+        return r
+
+    monkeypatch.setattr(main, "call_gemini", off_policy_gemini)
+    monkeypatch.setattr(main, "render", no_screenshot_render)
+    with TestClient(main.app) as client:
+        body = client.post("/extract", json={"url": "https://example.com/p/1"}).json()
+    assert body["price"]["unconditional_price"] is None
+    assert body["ambiguous"] is True
+    assert body["grounding"]["price_is_most_prominent"] is False  # AI 원래 답 기준 판정은 남음
+    assert body["grounding"]["price_withheld"] is True
