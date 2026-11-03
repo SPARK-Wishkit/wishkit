@@ -39,8 +39,11 @@ Tier 1 전환까지 끝난 상태이며, 그 과정은 `docs/reports/2026-09-19-
   `ambiguous: true`로 돌려준다(`compare.withhold_off_policy_price`, 응답 `grounding.price_withheld: true`).
   측정값으로 바꿔 넣지는 않는다 — 측정도 틀릴 수 있어서 "틀린 값보다 빈 값" 원칙을 따른다. 같은 크기
   가격이 여럿(동점)이거나 측정 후보가 없으면 AI 답을 그대로 쓴다.
-- ⚠️ `testdata/golden_catalog.json`의 가격 정답과 아래 정확도 수치(58%·86%)는 **옛 정책 기준**이다.
-  새 정책으로 다시 재야 한다.
+- 늦게 그려지는 쿠폰가·첫구매가를 놓치지 않도록, 가격이 보인 뒤 가장 큰 가격이 1초 동안 그대로일 때까지
+  기다린다(`render._settle_prices`, 최대 3초).
+- `testdata/golden_catalog.json`의 가격 정답은 2026-11-03 사람 검수로 새 기준에 맞췄다(29개,
+  `docs/reports/2026-11-03-promoted-price-human-review.md`). 유니클로 1개와 KREAM·SSF샵 6개는 아직 옛 기준이다.
+  아래 정확도 수치(58%·86%)도 옛 기준이다.
 
 ## 이 폴더와 `engine-ai-prototype`의 관계
 

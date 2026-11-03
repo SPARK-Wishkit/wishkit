@@ -13,7 +13,12 @@ from playwright.async_api import async_playwright
 
 from compare import grounding_check, most_prominent_prices, withhold_off_policy_price
 from prompts import build_user_prompt, build_vision_user_prompt, format_price_candidates
-from render import FIRST_SCREEN_PX, launch_browser, measure_price_candidates
+from render import (
+    FIRST_SCREEN_PX,
+    _settle_prices,
+    launch_browser,
+    measure_price_candidates,
+)
 
 # 에이블리·4910처럼 쿠폰적용가가 가장 크게 표시되는 상품 페이지를 흉내 낸 화면.
 ABLY_LIKE_PAGE = f"""<html><body style="margin:0">
@@ -64,6 +69,34 @@ def test_measure_reads_font_size_strikethrough_and_position():
 
     # 취소선(120,000원 30px)·스크롤 아래(5,000원 36px)를 빼면 쿠폰적용가가 가장 크다.
     assert most_prominent_prices(cands) == {29800}
+
+
+# 퀸잇처럼 기본 가격이 먼저 보이고 0.5초 뒤에 더 큰 첫구매 특가가 그려지는 화면.
+LATE_COUPON_PAGE = """<html><body>
+<span style="font-size:16px">35,900원</span>
+<div id="late"></div>
+<script>setTimeout(() => {
+  document.getElementById('late').innerHTML = '<b style="font-size:20px">32,900원</b> 첫구매 특가';
+}, 500);</script>
+</body></html>"""
+
+
+def test_settle_waits_for_late_bigger_price():
+    async def run():
+        async with async_playwright() as pw:
+            browser = await launch_browser(pw)
+            try:
+                page = await browser.new_page(viewport={"width": 1280, "height": FIRST_SCREEN_PX})
+                await page.set_content(LATE_COUPON_PAGE)
+                before = most_prominent_prices(await measure_price_candidates(page))
+                await _settle_prices(page)
+                return before, most_prominent_prices(await measure_price_candidates(page))
+            finally:
+                await browser.close()
+
+    before, after = asyncio.run(run())
+    assert before == {35900}  # 가격이 처음 보인 순간에는 아직 기본 가격뿐
+    assert after == {32900}
 
 
 def _cand(value, font_px, *, struck=False, first_screen=True, context=""):

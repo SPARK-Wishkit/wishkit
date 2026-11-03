@@ -113,6 +113,13 @@ _JS_PRICE_CANDIDATES = r"""() => {
 # 첫 화면(상품 페이지에 들어갔을 때 스크롤 없이 보이는 범위)의 높이 — 뷰포트 높이와 같다.
 FIRST_SCREEN_PX = 1600
 
+# 가장 큰 가격 안정화 대기 (2026-11-03). 퀸잇은 기본 가격이 먼저 보이고 약 0.5초 뒤에 더 큰
+# "첫구매 특가"가 그려진다. 가격이 보이자마자 끝내면 그걸 놓치므로, 첫 화면에서 가장 크게 표시된
+# 가격(들)이 PRICE_SETTLE_STABLE_S 동안 바뀌지 않을 때까지 기다린다(최대 PRICE_SETTLE_MAX_S).
+PRICE_SETTLE_POLL_S = 0.25
+PRICE_SETTLE_STABLE_S = 1.0
+PRICE_SETTLE_MAX_S = 3.0
+
 _STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "link", "meta"]
 _KEEP_ATTRS = {"id", "src", "href", "content", "property", "alt", "aria-label"}
 
@@ -200,14 +207,40 @@ async def measure_price_candidates(page) -> list[dict]:
     return [{**c, "first_screen": c["top"] < FIRST_SCREEN_PX} for c in raw]
 
 
+def _top_price_signature(cands: list[dict]) -> frozenset[int]:
+    """첫 화면에서 취소선 없이 가장 큰 글자로 표시된 가격들(compare.most_prominent_prices와 같은 기준)."""
+    pool = [c for c in cands if c["first_screen"] and not c["struck"]]
+    if not pool:
+        return frozenset()
+    top = max(c["font_px"] for c in pool)
+    return frozenset(c["value"] for c in pool if c["font_px"] == top)
+
+
+async def _settle_prices(page) -> None:
+    """가장 크게 표시된 가격이 일정 시간 바뀌지 않을 때까지 기다린다. 늦게 그려지는 쿠폰가·
+    첫구매가를 놓치지 않기 위함. 측정이 계속 실패하거나(빈 목록) 최대 시간이 지나면 그냥 끝낸다."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + PRICE_SETTLE_MAX_S
+    last = _top_price_signature(await measure_price_candidates(page))
+    stable_since = loop.time()
+    while loop.time() < deadline:
+        await asyncio.sleep(PRICE_SETTLE_POLL_S)
+        sig = _top_price_signature(await measure_price_candidates(page))
+        if sig != last:
+            last, stable_since = sig, loop.time()
+        elif loop.time() - stable_since >= PRICE_SETTLE_STABLE_S:
+            return
+
+
 async def _goto_and_wait(page, url: str, nav_timeout_ms: int) -> None:
     await page.goto(url, timeout=nav_timeout_ms, wait_until="domcontentloaded")
     for i in range(POLL_MAX_ITERATIONS):
         if await page.evaluate(_JS_PRICE_VISIBLE):
-            return
+            break
         if i * POLL_INTERVAL_S >= MIN_WAIT_BEFORE_WEAK_SIGNAL_S and await page.evaluate(_JS_WEAK_READY):
-            return
+            break
         await asyncio.sleep(POLL_INTERVAL_S)
+    await _settle_prices(page)
 
 
 async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> RenderResult:
