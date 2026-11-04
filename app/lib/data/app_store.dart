@@ -726,6 +726,18 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 선택(체크)한 상품을 살까말까 바구니에서 한 번에 뺀다. 위시리스트의 상품은 그대로 둔다.
+  /// 뺀 개수를 돌려준다.
+  Future<int> removeSelectedFromBasket() async {
+    final before = basket.length;
+    basket = basket.where((b) => !b.isSelected).toList();
+    final removed = before - basket.length;
+    if (removed == 0) return 0;
+    await _persistBasket();
+    notifyListeners();
+    return removed;
+  }
+
   /// Returns null when a save for the same product is already in flight.
   Future<Product?> addParsedProduct(
     ParsedProductInfo info, {
@@ -962,15 +974,27 @@ class AppStore extends ChangeNotifier {
     await _loadInboxSafely(userId);
     _syncFriendCounts();
     final profile = await _repo.loadProfile(userId);
-    if (profile != null) {
-      currentUser = profile;
-    } else {
+    // 숫자는 방금 불러온 실제 목록으로 — 프로필 문서에 저장된 팔로워 수는 옛 값일 수 있다.
+    currentUser = (profile ?? currentUser).copyWith(
+      following: following.length,
+      followers: followerUsers.length,
+    );
+    notifyListeners();
+  }
+
+  /// 팔로워·팔로잉 숫자만 가볍게 다시 센다(마이페이지 당겨서 새로고침, 팔로우 알림이 왔을 때).
+  Future<void> refreshSocialCounts() async {
+    final userId = uid;
+    if (userId == null) return;
+    try {
+      final following = await _repo.followingIds(userId);
+      final followers = await _repo.followerIds(userId);
       currentUser = currentUser.copyWith(
         following: following.length,
-        followers: followerUsers.length,
+        followers: followers.length,
       );
-    }
-    notifyListeners();
+      notifyListeners();
+    } catch (_) {}
   }
 
   Future<void> refreshNotifications() async {
@@ -1006,15 +1030,13 @@ class AppStore extends ChangeNotifier {
     final idx = friends.indexWhere((f) => f.id == friendId);
     if (idx < 0) return false;
     if (!_actionCooldown.begin('follow:$friendId')) return false;
+    final previousFriends = friends;
+    final previousFollowing = currentUser.following;
     try {
       final wasFollowing = friends[idx].isFollowing;
       final next = !wasFollowing;
-      await _repo.setFollowing(
-        myUid: userId,
-        targetUid: friendId,
-        follow: next,
-        actor: next ? currentUser.copyWith(uid: userId) : null,
-      );
+      // 버튼·팔로잉 숫자는 바로 바꾸고(낙관적 반영), 서버 저장이 실패하면 되돌린다.
+      // 예전에는 저장 + 친구 위시리스트 다시 불러오기가 끝난 뒤에야 숫자가 바뀌어 반박자 늦었다.
       friends = [
         for (var i = 0; i < friends.length; i++)
           if (i == idx) friends[i].copyWith(isFollowing: next) else friends[i],
@@ -1022,9 +1044,25 @@ class AppStore extends ChangeNotifier {
       currentUser = currentUser.copyWith(
         following: friends.where((f) => f.isFollowing).length,
       );
-      friendWishlists = await _repo.loadFriendWishlists(friends);
-      _syncFriendCounts();
       notifyListeners();
+      try {
+        await _repo.setFollowing(
+          myUid: userId,
+          targetUid: friendId,
+          follow: next,
+          actor: next ? currentUser.copyWith(uid: userId) : null,
+        );
+      } catch (_) {
+        friends = previousFriends;
+        currentUser = currentUser.copyWith(following: previousFollowing);
+        notifyListeners();
+        rethrow;
+      }
+      try {
+        friendWishlists = await _repo.loadFriendWishlists(friends);
+        _syncFriendCounts();
+        notifyListeners();
+      } catch (_) {}
       return true;
     } finally {
       _actionCooldown.end('follow:$friendId');
@@ -1054,6 +1092,13 @@ class AppStore extends ChangeNotifier {
     final seen = <String>{};
     _notificationSub = _repo.watchNotifications(userId).listen((list) {
       if (primed) {
+        // 누가 나를 팔로우했다는 새 알림이 오면 팔로워 숫자를 바로 다시 센다.
+        final newFollow = list.any(
+          (n) => !seen.contains(n.id) && n.type == AppNotificationType.follow,
+        );
+        if (newFollow) {
+          unawaited(refreshSocialCounts());
+        }
         for (final n in list) {
           if (!seen.contains(n.id) &&
               n.type != AppNotificationType.review &&
@@ -1421,7 +1466,16 @@ class AppStore extends ChangeNotifier {
         ? current.publicPageId!
         : const Uuid().v4();
     final expiresAt = DateTime.now().add(kSharePageTtl);
-    final html = buildSharePageHtml(basket: current, expiresAt: expiresAt);
+    // 미리보기 이미지는 앱 로고. 올리기에 실패해도 공유는 막지 않는다(첫 상품 사진으로 대신).
+    String? ogImageUrl;
+    try {
+      ogImageUrl = await _repo.uploadShareOgImage();
+    } catch (_) {}
+    final html = buildSharePageHtml(
+      basket: current,
+      expiresAt: expiresAt,
+      ogImageUrl: ogImageUrl,
+    );
     final url = await _repo.uploadSharePage(
       uid: userId,
       pageId: pageId,

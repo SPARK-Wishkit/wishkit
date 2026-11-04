@@ -5,13 +5,61 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../auth/auth_validators.dart';
 import '../../data/app_store.dart';
 import '../../theme/avatar_presets.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
 
-class MyPageScreen extends StatelessWidget {
+class MyPageScreen extends StatefulWidget {
   const MyPageScreen({super.key});
+
+  @override
+  State<MyPageScreen> createState() => _MyPageScreenState();
+}
+
+class _MyPageScreenState extends State<MyPageScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // 마이페이지를 열 때 팔로워·팔로잉 숫자를 다시 센다(다른 기기·다른 사람이 바꾼 것 반영).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AppStore>().refreshSocialCounts();
+    });
+  }
+
+  /// 알림 켜기/끄기 + 무엇이 달라지는지 안내.
+  Future<void> _toggleNotifications(BuildContext context, AppStore store) async {
+    final next = !store.notificationsEnabled;
+    await store.setNotificationsEnabled(next);
+    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 4),
+        content: Row(
+          children: [
+            Icon(
+              next
+                  ? Icons.notifications_active_outlined
+                  : Icons.notifications_off_outlined,
+              color: DiaryColors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                next
+                    ? '알림을 켰어요. 팔로우·살까말까 같은 새 소식이 휴대폰 상단 배너로 와요. '
+                        '(휴대폰 설정에서 wishkit 알림이 허용돼 있어야 해요)'
+                    : '알림을 껐어요. 배너로는 오지 않고, 새 소식은 앱의 알림 목록에서 볼 수 있어요.',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +70,11 @@ class MyPageScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: DiaryColors.paper,
       body: SafeArea(
-        child: ListView(
+        child: RefreshIndicator(
+          color: DiaryColors.ink,
+          onRefresh: store.refreshSocialCounts,
+          child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.zero,
           children: [
             Padding(
@@ -199,38 +251,71 @@ class MyPageScreen extends StatelessWidget {
               ),
             ),
             const SectionBand(height: 6),
+            // 메뉴 줄 높이: 예전 44의 1.5배(66).
             MenuRow(
-              compact: true,
+              height: 66,
               label: '내가 보낸 살까말까',
               icon: Icons.outbox_outlined,
               onTap: () => context.push('/sent-baskets'),
             ),
             MenuRow(
-              compact: true,
+              height: 66,
               label: '알림 설정',
-              icon: Icons.notifications_none,
+              // 종 모양으로 지금 상태를 보여 준다: 켜짐 = 울리는 종, 꺼짐 = 빗금 친 종.
+              icon: store.notificationsEnabled
+                  ? Icons.notifications_active_outlined
+                  : Icons.notifications_off_outlined,
               trailing: Text(
                 store.notificationsEnabled ? '켜짐' : '꺼짐',
-                style: DiaryTheme.ui(13, color: DiaryColors.inkSoft),
+                style: DiaryTheme.ui(
+                  14,
+                  weight: FontWeight.w600,
+                  color: store.notificationsEnabled
+                      ? DiaryColors.ink
+                      : DiaryColors.inkSoft,
+                ),
               ),
-              onTap: () =>
-                  store.setNotificationsEnabled(!store.notificationsEnabled),
+              onTap: () => _toggleNotifications(context, store),
             ),
             MenuRow(
-              compact: true,
+              height: 66,
               label: '앱 정보',
               icon: Icons.info_outline,
               onTap: () {
-                showAboutDialog(
+                // 기본 showAboutDialog 는 "View licenses" 버튼이 붙어서 직접 만든 창을 쓴다.
+                showDialog<void>(
                   context: context,
-                  applicationName: '통합 위시리스트',
-                  applicationVersion: '0.1.0',
-                  applicationLegalese: 'MZ diary scrapbook wishlist',
+                  builder: (ctx) => AlertDialog(
+                    title: Text('wishkit', style: DiaryTheme.logo(26)),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '버전 1.0.0',
+                          style: DiaryTheme.ui(13, color: DiaryColors.inkSoft),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '여러 쇼핑몰에 흩어진 위시리스트를 한곳에서 관리합니다.\n'
+                          '구매가 고민되는 상품은 친구에게 의견을 물을 수 있습니다.',
+                          style: DiaryTheme.body(14).copyWith(height: 1.5),
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('닫기'),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
             const SizedBox(height: 24),
           ],
+        ),
         ),
       ),
     );
@@ -244,7 +329,7 @@ class MyPageScreen extends StatelessWidget {
       context: context,
       backgroundColor: DiaryColors.paper,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
       ),
       builder: (ctx) {
         return SafeArea(
@@ -411,27 +496,82 @@ class MyPageScreen extends StatelessWidget {
                 '비밀번호 변경',
                 style: DiaryTheme.ui(17, weight: FontWeight.w700),
               ),
+              // 다른 앱들처럼: 칸 위에 이름표, "현재"와 "새 비밀번호" 묶음 사이는 구분선으로 띄우고,
+              // 새 비밀번호 규칙과 두 칸이 같은지를 칸 바로 아래에서 알려 준다.
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const SizedBox(height: 4),
+                    _fieldLabel('현재 비밀번호'),
                     PasswordTextField(
                       controller: currentCtrl,
-                      decoration: const InputDecoration(labelText: '현재 비밀번호'),
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        hintText: '지금 쓰는 비밀번호',
+                      ),
                     ),
+                    const SizedBox(height: 22),
+                    const Divider(height: 1, color: DiaryColors.line),
+                    const SizedBox(height: 22),
+                    _fieldLabel('새 비밀번호'),
                     PasswordTextField(
                       controller: nextCtrl,
-                      decoration: const InputDecoration(labelText: '새 비밀번호'),
+                      textInputAction: TextInputAction.next,
+                      decoration: InputDecoration(
+                        hintText: '새 비밀번호',
+                        helperText:
+                            '${AuthValidators.passwordMinLength}자 이상, 숫자 포함',
+                      ),
                     ),
+                    const SizedBox(height: 12),
                     PasswordTextField(
                       controller: confirmCtrl,
-                      decoration: const InputDecoration(labelText: '새 비밀번호 확인'),
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        hintText: '새 비밀번호 다시 입력',
+                      ),
+                    ),
+                    // 두 칸이 같은지 바로 보여 준다.
+                    ListenableBuilder(
+                      listenable: Listenable.merge([nextCtrl, confirmCtrl]),
+                      builder: (context, _) {
+                        if (confirmCtrl.text.isEmpty) {
+                          return const SizedBox(height: 8);
+                        }
+                        final same = nextCtrl.text == confirmCtrl.text;
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8, left: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                same ? Icons.check_circle : Icons.error_outline,
+                                size: 16,
+                                color: same
+                                    ? DiaryColors.ink
+                                    : DiaryColors.sale,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                same ? '비밀번호가 일치해요' : '비밀번호가 일치하지 않아요',
+                                style: DiaryTheme.ui(
+                                  12,
+                                  color: same
+                                      ? DiaryColors.ink
+                                      : DiaryColors.sale,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                     if (error != null) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Text(
                         error!,
-                        style: DiaryTheme.body(12, color: DiaryColors.pin),
+                        style: DiaryTheme.body(12, color: DiaryColors.sale),
                       ),
                     ],
                   ],
@@ -444,6 +584,15 @@ class MyPageScreen extends StatelessWidget {
                 ),
                 TextButton(
                   onPressed: () {
+                    if (currentCtrl.text.isEmpty) {
+                      setLocal(() => error = '현재 비밀번호를 입력해 주세요.');
+                      return;
+                    }
+                    final rule = AuthValidators.password(nextCtrl.text);
+                    if (rule != null) {
+                      setLocal(() => error = rule);
+                      return;
+                    }
                     if (nextCtrl.text != confirmCtrl.text) {
                       setLocal(() => error = '새 비밀번호가 서로 달라요.');
                       return;
@@ -520,18 +669,20 @@ class MyPageScreen extends StatelessWidget {
                     Center(
                       child: CircleAvatar(radius: 40, backgroundImage: preview),
                     ),
-                    const SizedBox(height: 14),
+                    // 테두리 칸 위에 떠 있는 라벨이 위 칸과 겹치지 않게 칸 사이를 띄운다.
+                    const SizedBox(height: 20),
                     TextField(
                       controller: nameCtrl,
                       decoration: const InputDecoration(labelText: '이름'),
                     ),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: handleCtrl,
                       decoration: const InputDecoration(
                         labelText: '아이디 (@없이 입력 가능)',
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 20),
                     Text(
                       '기본 이미지',
                       style: DiaryTheme.body(13, weight: FontWeight.w700),
@@ -784,3 +935,13 @@ class _FolderChip extends StatelessWidget {
     );
   }
 }
+
+
+/// 입력칸 위에 붙는 작은 이름표(비밀번호 변경 등).
+Widget _fieldLabel(String text) => Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 6),
+      child: Text(
+        text,
+        style: DiaryTheme.ui(13, weight: FontWeight.w700),
+      ),
+    );

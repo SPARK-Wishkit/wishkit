@@ -277,7 +277,7 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
       context: context,
       backgroundColor: DiaryColors.paper,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
       ),
       builder: (ctx) => SafeArea(
         child: Padding(

@@ -84,7 +84,7 @@ class SharedWishlistScreen extends StatelessWidget {
                   ),
                   child: ClipRRect(
                     borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(15),
+                      top: Radius.circular(DiaryTheme.radius),
                     ),
                     child: DiaryGridPaper(
                       padding: EdgeInsets.zero,

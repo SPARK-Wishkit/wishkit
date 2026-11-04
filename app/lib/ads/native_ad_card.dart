@@ -92,7 +92,7 @@ class _NativeAdCardState extends State<NativeAdCard>
     // 광고 화면(AdWidget)은 자기 크기가 없어 주어진 최대 크기까지 늘어난다. 예전에는 최대 높이 200 으로
     // 둬서 내용(약 90)보다 훨씬 큰 빈 회색 칸이 생겼다 — 상품 카드와 같은 높이로 고정한다.
     return SizedBox(
-      height: ListCardMetrics.height,
+      height: ListCardMetrics.heightOf(context),
       child: Material(
         color: NativeAdCard.background,
         elevation: ListCardMetrics.elevation,

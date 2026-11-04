@@ -366,19 +366,24 @@ class HomeShell extends StatelessWidget {
         ),
       ),
       floatingActionButton: showWishlistFab
-          ? FloatingActionButton.extended(
-              backgroundColor: DiaryColors.surfaceSoft,
-              foregroundColor: DiaryColors.ink,
-              elevation: 4,
-              highlightElevation: 6,
-              shape: const StadiumBorder(),
-              extendedPadding: const EdgeInsets.symmetric(horizontal: 26),
-              onPressed: () => context.push('/share'),
-              label: Text(
-                '공유 담기',
-                style: DiaryTheme.ui(16, weight: FontWeight.w700),
+          // 기본 FAB(높이 56)는 목록을 너무 가려서 한 단계 작게(높이 44).
+          ? SizedBox(
+              height: 44,
+              child: FloatingActionButton.extended(
+                backgroundColor: DiaryColors.surfaceSoft,
+                foregroundColor: DiaryColors.ink,
+                elevation: 3,
+                highlightElevation: 5,
+                shape: const StadiumBorder(),
+                extendedPadding: const EdgeInsets.symmetric(horizontal: 18),
+                extendedIconLabelSpacing: 6,
+                onPressed: () => context.push('/share'),
+                label: Text(
+                  '공유 담기',
+                  style: DiaryTheme.ui(14, weight: FontWeight.w700),
+                ),
+                icon: const Icon(Icons.link, size: 18),
               ),
-              icon: const Icon(Icons.link, size: 22),
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.miniEndFloat,

@@ -24,28 +24,12 @@ class WishlistScreen extends StatefulWidget {
 class _WishlistScreenState extends State<WishlistScreen> {
   final _tabsRowKey = GlobalKey<_TabsRowState>();
 
-  /// Product ids checked for "선택삭제". Pruned to the visible list each build.
-  final Set<int> _selected = {};
-
-  Future<void> _deleteSelected(AppStore store) async {
-    final ids = _selected.toList();
-    if (ids.isEmpty) return;
-    setState(_selected.clear);
-    for (final id in ids) {
-      await store.removeProduct(id);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppStore>();
     final tab = store.selectedTab;
     final products = store.displayedProducts;
     final adFeed = AdFeed(products.length, every: AdsConfig.feedEvery);
-    final visibleIds = products.map((p) => p.id).toSet();
-    _selected.removeWhere((id) => !visibleIds.contains(id));
-    final allSelected =
-        products.isNotEmpty && _selected.length == products.length;
 
     return Scaffold(
       backgroundColor: DiaryColors.canvas,
@@ -65,7 +49,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
               child: _TabsRow(
                 key: _tabsRowKey,
                 store: store,
-                onDoubleTapTab: (t) => _openListEditSheet(context, store, t),
+                onEditTab: (t) => _openListEditSheet(context, store, t),
                 onAdd: () => _showAddListDialog(context, store),
                 onMoveProduct: (p, t) =>
                     _handleMoveProduct(context, store, p, t),
@@ -83,7 +67,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                       topLeft: Radius.circular(
                         store.selectedTabId == 'all' ? 0 : 18,
                       ),
-                      topRight: const Radius.circular(18),
+                      topRight: const Radius.circular(DiaryTheme.radius),
                     ),
                   ),
                   child: ClipRRect(
@@ -91,7 +75,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                       topLeft: Radius.circular(
                         store.selectedTabId == 'all' ? 0 : 18,
                       ),
-                      topRight: const Radius.circular(18),
+                      topRight: const Radius.circular(DiaryTheme.radius),
                     ),
                     child: DiaryGridPaper(
                       padding: EdgeInsets.zero,
@@ -102,22 +86,6 @@ class _WishlistScreenState extends State<WishlistScreen> {
                             _PrivacyBanner(
                               isPublic: tab.isPublic,
                               onToggle: () => store.toggleTabPublic(tab.id),
-                            ),
-                          if (products.isNotEmpty)
-                            _SelectBar(
-                              selected: _selected.length,
-                              total: products.length,
-                              allSelected: allSelected,
-                              onToggleAll: () => setState(() {
-                                if (allSelected) {
-                                  _selected.clear();
-                                } else {
-                                  _selected.addAll(visibleIds);
-                                }
-                              }),
-                              onDeleteSelected: _selected.isEmpty
-                                  ? null
-                                  : () => _deleteSelected(store),
                             ),
                           Expanded(
                             child: products.isEmpty
@@ -135,7 +103,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                       16,
                                       4,
                                       16,
-                                      96, // room for the floating 공유 담기 pill
+                                      80, // room for the floating 공유 담기 pill
                                     ),
                                     itemCount: adFeed.length,
                                     separatorBuilder: (_, __) =>
@@ -155,14 +123,6 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                             context.push('/product/${p.id}'),
                                         onDelete: () =>
                                             store.removeProduct(p.id),
-                                        selected: _selected.contains(p.id),
-                                        onSelectChanged: (v) => setState(() {
-                                          if (v) {
-                                            _selected.add(p.id);
-                                          } else {
-                                            _selected.remove(p.id);
-                                          }
-                                        }),
                                       );
                                       return LayoutBuilder(
                                         builder: (context, constraints) {
@@ -185,7 +145,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                               child: Material(
                                                 color: Colors.transparent,
                                                 borderRadius:
-                                                    BorderRadius.circular(14),
+                                                    BorderRadius.circular(DiaryTheme.radius),
                                                 child: SizedBox(
                                                   width: constraints.maxWidth,
                                                   child: card,
@@ -237,12 +197,12 @@ class _WishlistScreenState extends State<WishlistScreen> {
     AppStore store,
     WishlistTab tab,
   ) async {
-    HapticFeedback.mediumImpact();
+    HapticFeedback.selectionClick();
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: DiaryColors.paper,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
       ),
       builder: (ctx) {
         final latest = store.tabs.firstWhere(
@@ -448,13 +408,14 @@ class _TabsRow extends StatefulWidget {
   const _TabsRow({
     super.key,
     required this.store,
-    required this.onDoubleTapTab,
+    required this.onEditTab,
     required this.onAdd,
     required this.onMoveProduct,
   });
 
   final AppStore store;
-  final void Function(WishlistTab tab) onDoubleTapTab;
+  /// 선택된 탭의 연필 버튼 → 리스트 편집(비공개·이름 변경·삭제).
+  final void Function(WishlistTab tab) onEditTab;
   final VoidCallback onAdd;
   final void Function(Product product, WishlistTab tab) onMoveProduct;
 
@@ -620,7 +581,7 @@ class _TabsRowState extends State<_TabsRow> {
         return Material(
           elevation: 3,
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(DiaryTheme.radius),
           child: child,
         );
       },
@@ -667,7 +628,7 @@ class _TabsRowState extends State<_TabsRow> {
                   selected: store.selectedTabId == tab.id,
                   count: store.countFor(tab),
                   onTap: () => store.selectTab(tab.id),
-                  onDoubleTap: () => widget.onDoubleTapTab(tab),
+                  onEdit: () => widget.onEditTab(tab),
                   highlighted: candidateData.isNotEmpty,
                 );
               },
@@ -686,7 +647,7 @@ class _FolderTab extends StatelessWidget {
     required this.selected,
     required this.count,
     required this.onTap,
-    this.onDoubleTap,
+    this.onEdit,
     this.highlighted = false,
   });
 
@@ -694,7 +655,9 @@ class _FolderTab extends StatelessWidget {
   final bool selected;
   final int count;
   final VoidCallback onTap;
-  final VoidCallback? onDoubleTap;
+
+  /// 선택된 탭에만 연필 버튼으로 보인다(꾹 누르기는 탭 순서 바꾸기라 쓰지 않는다).
+  final VoidCallback? onEdit;
   final bool highlighted;
 
   @override
@@ -715,9 +678,8 @@ class _FolderTab extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
         onTap: onTap,
-        onDoubleTap: onDoubleTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutBack,
@@ -728,7 +690,7 @@ class _FolderTab extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
           ),
           child: AnimatedScale(
             scale: highlighted ? 1.22 : 1,
@@ -762,6 +724,24 @@ class _FolderTab extends StatelessWidget {
                     color: countColor,
                   ),
                 ),
+                if (selected && !highlighted && onEdit != null)
+                  // 탭 글자보다 넉넉한 누름 영역(약 30×30)을 둔다.
+                  Semantics(
+                    button: true,
+                    label: '${tab.name} 리스트 편집',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onEdit,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
+                        child: Icon(
+                          Icons.edit_outlined,
+                          size: 16,
+                          color: fg,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -781,14 +761,14 @@ class _AddListTab extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
         onTap: onTap,
         child: Container(
           width: 64,
           margin: const EdgeInsets.only(top: 6),
           decoration: BoxDecoration(
             color: DiaryColors.tabIdle,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
             border: Border.all(color: DiaryColors.line),
           ),
           child: const Icon(Icons.add, size: 22, color: DiaryColors.inkMuted),
@@ -812,7 +792,7 @@ class _PrivacyBanner extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: DiaryColors.surfaceSoft,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(DiaryTheme.radius),
         ),
         child: Row(
           children: [
@@ -865,76 +845,10 @@ class _PrivacyBanner extends StatelessWidget {
   }
 }
 
-/// 전체선택 (n/m) · 선택삭제
-class _SelectBar extends StatelessWidget {
-  const _SelectBar({
-    required this.selected,
-    required this.total,
-    required this.allSelected,
-    required this.onToggleAll,
-    required this.onDeleteSelected,
-  });
-
-  final int selected;
-  final int total;
-  final bool allSelected;
-  final VoidCallback onToggleAll;
-  final VoidCallback? onDeleteSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
-      child: Row(
-        children: [
-          InkWell(
-            onTap: onToggleAll,
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  SelectBox(checked: allSelected),
-                  const SizedBox(width: 10),
-                  Text(
-                    '전체선택',
-                    style: DiaryTheme.ui(15, weight: FontWeight.w600),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '($selected/$total)',
-                    style: DiaryTheme.ui(14, color: DiaryColors.inkSoft),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const Spacer(),
-          TextButton(
-            onPressed: onDeleteSelected,
-            style: TextButton.styleFrom(
-              foregroundColor: DiaryColors.inkMuted,
-              disabledForegroundColor: DiaryColors.inkSoft,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-            ),
-            child: Text(
-              '선택삭제',
-              style: DiaryTheme.ui(
-                14,
-                color: onDeleteSelected == null
-                    ? DiaryColors.inkSoft
-                    : DiaryColors.ink,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Shared product row used by own wishlist, friend lists, and shared baskets.
 /// The leading checkbox only appears when [onSelectChanged] is given.
+///
+/// 높이는 [ListCardMetrics.heightOf]로 고정 — 상품명이 1줄이든 2줄이든, 광고 카드와도 같은 크기.
 class WishlistProductCard extends StatelessWidget {
   const WishlistProductCard({
     super.key,
@@ -962,137 +876,142 @@ class WishlistProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rate = _discountRate;
-    // 광고 카드(NativeAdCard)와 높이를 맞춘다. 글자를 크게 설정한 기기에서는 더 커질 수 있다.
-    final card = Material(
-      color: DiaryColors.paper,
-      elevation: ListCardMetrics.elevation,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(ListCardMetrics.radius),
-        side: const BorderSide(color: DiaryColors.line),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(ListCardMetrics.radius),
-        onTap: onOpen,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            onSelectChanged != null ? 4 : 12,
-            12,
-            4,
-            12,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (onSelectChanged != null)
-                Padding(
-                  // (88 thumb - 46 tap box) / 2 → vertically centred on the thumb
-                  padding: const EdgeInsets.only(top: 21),
-                  child: InkWell(
-                  onTap: () => onSelectChanged!(!selected),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: SelectBox(checked: selected),
-                  ),
-                ),
-                ),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  product.image,
-                  width: 88,
-                  height: 88,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 88,
-                    height: 88,
-                    color: DiaryColors.surfaceSoft,
-                    child: const Icon(
-                      Icons.checkroom_outlined,
-                      size: 30,
-                      color: DiaryColors.grid,
+    const thumb = ListCardMetrics.thumbSize;
+    final hasOriginal =
+        product.originalPrice != null && product.originalPrice! > product.price;
+    return SizedBox(
+      height: ListCardMetrics.heightOf(context),
+      child: Material(
+        color: DiaryColors.paper,
+        elevation: ListCardMetrics.elevation,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(ListCardMetrics.radius),
+          side: const BorderSide(color: DiaryColors.line),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(ListCardMetrics.radius),
+          onTap: onOpen,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              onSelectChanged != null ? 4 : 12,
+              ListCardMetrics.verticalPadding,
+              4,
+              ListCardMetrics.verticalPadding,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (onSelectChanged != null)
+                  InkWell(
+                    onTap: () => onSelectChanged!(!selected),
+                    borderRadius: BorderRadius.circular(DiaryTheme.radius),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: SelectBox(checked: selected),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      product.platform,
-                      style: DiaryTheme.product(
-                        12,
-                        color: DiaryColors.inkSoft,
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(DiaryTheme.radius),
+                  child: Image.network(
+                    product.image,
+                    width: thumb,
+                    height: thumb,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: thumb,
+                      height: thumb,
+                      color: DiaryColors.surfaceSoft,
+                      child: const Icon(
+                        Icons.checkroom_outlined,
+                        size: 26,
+                        color: DiaryColors.grid,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      product.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: DiaryTheme.product(
-                        15,
-                        weight: FontWeight.w700,
-                      ).copyWith(height: 1.3),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 6,
-                      children: [
-                        if (product.originalPrice != null &&
-                            product.originalPrice! > product.price)
-                          Text(
-                            formatWon(product.originalPrice!),
-                            style: DiaryTheme.product(
-                              12,
-                              color: DiaryColors.inkSoft,
-                            ).copyWith(decoration: TextDecoration.lineThrough),
-                          ),
-                        Text(
-                          formatWon(product.price),
-                          style: DiaryTheme.product(
-                            17,
-                            weight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (rate != null) ...[
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        product.platform,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DiaryTheme.product(
+                          ListCardMetrics.platformSize,
+                          color: DiaryColors.inkSoft,
+                        ).copyWith(height: ListCardMetrics.lineHeight),
+                      ),
                       const SizedBox(height: 2),
                       Text(
-                        '$rate%',
+                        product.name,
+                        maxLines: ListCardMetrics.nameMaxLines,
+                        overflow: TextOverflow.ellipsis,
                         style: DiaryTheme.product(
-                          13,
+                          ListCardMetrics.nameSize,
                           weight: FontWeight.w700,
-                          color: DiaryColors.sale,
-                        ),
+                        ).copyWith(height: ListCardMetrics.lineHeight),
+                      ),
+                      const SizedBox(height: 4),
+                      // 할인율 · 판매가 · 정가를 한 줄에. 좁으면 정가만 줄여서 잘라낸다.
+                      Row(
+                        children: [
+                          if (rate != null) ...[
+                            Text(
+                              '$rate%',
+                              style: DiaryTheme.product(
+                                ListCardMetrics.priceSize,
+                                weight: FontWeight.w800,
+                                color: DiaryColors.sale,
+                              ).copyWith(height: ListCardMetrics.lineHeight),
+                            ),
+                            const SizedBox(width: 5),
+                          ],
+                          Text(
+                            formatWon(product.price),
+                            style: DiaryTheme.product(
+                              ListCardMetrics.priceSize,
+                              weight: FontWeight.w800,
+                            ).copyWith(height: ListCardMetrics.lineHeight),
+                          ),
+                          if (hasOriginal) ...[
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                formatWon(product.originalPrice!),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: DiaryTheme.product(
+                                  11,
+                                  color: DiaryColors.inkSoft,
+                                ).copyWith(
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
-                  ],
-                ),
-              ),
-              if (onDelete != null)
-                IconButton(
-                  onPressed: onDelete,
-                  icon: const Icon(
-                    Icons.close,
-                    size: 20,
-                    color: DiaryColors.inkSoft,
                   ),
-                  visualDensity: VisualDensity.compact,
                 ),
-            ],
+                if (onDelete != null)
+                  IconButton(
+                    onPressed: onDelete,
+                    icon: const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: DiaryColors.inkSoft,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+              ],
+            ),
           ),
         ),
       ),
-    );
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: ListCardMetrics.height),
-      child: card,
     );
   }
 }

@@ -592,20 +592,36 @@ class _SalkamalkaFeedPane extends StatelessWidget {
                   ),
                 ],
               ),
-              if (b.memo.trim().isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  b.memo.trim(),
+              // 메모가 없거나 한 줄이어도 카드 크기가 같게: 메모 칸은 항상 두 줄 높이,
+              // 사진 줄도 항상 자리를 잡는다.
+              const SizedBox(height: 8),
+              SizedBox(
+                height: MediaQuery.textScalerOf(context).scale(13) *
+                    _memoLineHeight *
+                    2,
+                child: Text(
+                  b.memo.trim().isEmpty ? '남긴 메모가 없어요' : b.memo.trim(),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: DiaryTheme.body(13),
+                  strutStyle: const StrutStyle(
+                    fontSize: 13,
+                    height: _memoLineHeight,
+                    forceStrutHeight: true,
+                  ),
+                  style: DiaryTheme.body(
+                    13,
+                    color: b.memo.trim().isEmpty
+                        ? DiaryColors.inkSoft
+                        : DiaryColors.ink,
+                  ),
                 ),
-              ],
-              if (b.items.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 56,
-                  child: ListView(
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 56,
+                child: b.items.isEmpty
+                    ? null
+                    : ListView(
                     scrollDirection: Axis.horizontal,
                     children: [
                       for (final p in b.items.take(8))
@@ -630,14 +646,16 @@ class _SalkamalkaFeedPane extends StatelessWidget {
                         ),
                     ],
                   ),
-                ),
-              ],
+              ),
             ],
           ),
         );
       },
     );
   }
+
+  /// 살까말까 카드 메모 한 줄 높이(글자 크기의 배수). 카드 크기를 맞추는 데 쓴다.
+  static const _memoLineHeight = 1.4;
 
   /// Hides the entry from this feed only — never deletes the basket.
   Future<void> _confirmHide(BuildContext context, SalkamalkaFeedEntry e) async {

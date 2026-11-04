@@ -286,7 +286,8 @@ class _BasketPickerSheetState extends State<BasketPickerSheet> {
         DiaryButton(
           label: '$selectedCount개 담기',
           filled: true,
-          icon: Icons.add_shopping_cart,
+          // 살까말까 "바구니"에 담는 동작 — 결제용 쇼핑카트가 아니라 장바구니(바구니) 모양.
+          icon: Icons.shopping_basket_outlined,
           onPressed: selectedCount == 0 ? null : _confirm,
         ),
       ],

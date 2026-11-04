@@ -38,21 +38,43 @@ class SalkamalkaScreen extends StatelessWidget {
               decoration: const BoxDecoration(
                 border: Border(bottom: BorderSide(color: DiaryColors.line)),
               ),
-              child: Text.rich(
-                TextSpan(
-                  style: DiaryTheme.ui(14, weight: FontWeight.w600),
-                  children: [
-                    const TextSpan(text: '선택한 상품 '),
-                    TextSpan(
-                      text: '$selected',
-                      style: DiaryTheme.ui(14, weight: FontWeight.w800),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        style: DiaryTheme.ui(14, weight: FontWeight.w600),
+                        children: [
+                          const TextSpan(text: '선택한 상품 '),
+                          TextSpan(
+                            text: '$selected',
+                            style: DiaryTheme.ui(14, weight: FontWeight.w800),
+                          ),
+                          TextSpan(
+                            text: ' / ${store.basket.length}',
+                            style:
+                                DiaryTheme.ui(14, color: DiaryColors.inkSoft),
+                          ),
+                        ],
+                      ),
                     ),
-                    TextSpan(
-                      text: ' / ${store.basket.length}',
-                      style: DiaryTheme.ui(14, color: DiaryColors.inkSoft),
+                  ),
+                  // 체크한 상품을 한 번에 바구니에서 빼기.
+                  TextButton.icon(
+                    onPressed: selected == 0
+                        ? null
+                        : () => _removeSelected(context, store, selected),
+                    style: TextButton.styleFrom(
+                      foregroundColor: DiaryColors.ink,
+                      disabledForegroundColor: DiaryColors.inkSoft,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                  ],
-                ),
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: Text('선택 삭제', style: DiaryTheme.ui(14)),
+                  ),
+                ],
               ),
             ),
             Expanded(
@@ -183,6 +205,50 @@ class SalkamalkaScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _removeSelected(
+    BuildContext context,
+    AppStore store,
+    int count,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: DiaryColors.paper,
+        title: Text(
+          '선택한 상품 $count개를 뺄까요?',
+          style: DiaryTheme.ui(17, weight: FontWeight.w700),
+        ),
+        content: Text(
+          '살까말까 바구니에서만 빠지고, 위시리스트에는 그대로 남습니다.',
+          style: DiaryTheme.body(14, color: DiaryColors.inkMuted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              '삭제',
+              style: DiaryTheme.ui(
+                14,
+                weight: FontWeight.w700,
+                color: DiaryColors.sale,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final removed = await store.removeSelectedFromBasket();
+    if (!context.mounted || removed == 0) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$removed개를 살까말까에서 뺐어요')),
     );
   }
 
