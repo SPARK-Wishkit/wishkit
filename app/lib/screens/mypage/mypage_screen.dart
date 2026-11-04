@@ -10,8 +10,55 @@ import '../../theme/avatar_presets.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
 
-class MyPageScreen extends StatelessWidget {
+class MyPageScreen extends StatefulWidget {
   const MyPageScreen({super.key});
+
+  @override
+  State<MyPageScreen> createState() => _MyPageScreenState();
+}
+
+class _MyPageScreenState extends State<MyPageScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // 마이페이지를 열 때 팔로워·팔로잉 숫자를 다시 센다(다른 기기·다른 사람이 바꾼 것 반영).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AppStore>().refreshSocialCounts();
+    });
+  }
+
+  /// 알림 켜기/끄기 + 무엇이 달라지는지 안내.
+  Future<void> _toggleNotifications(BuildContext context, AppStore store) async {
+    final next = !store.notificationsEnabled;
+    await store.setNotificationsEnabled(next);
+    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 4),
+        content: Row(
+          children: [
+            Icon(
+              next
+                  ? Icons.notifications_active_outlined
+                  : Icons.notifications_off_outlined,
+              color: DiaryColors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                next
+                    ? '알림을 켰어요. 팔로우·살까말까 같은 새 소식이 휴대폰 상단 배너로 와요. '
+                        '(휴대폰 설정에서 wishkit 알림이 허용돼 있어야 해요)'
+                    : '알림을 껐어요. 배너로는 오지 않고, 새 소식은 앱의 알림 목록에서 볼 수 있어요.',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +69,11 @@ class MyPageScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: DiaryColors.paper,
       body: SafeArea(
-        child: ListView(
+        child: RefreshIndicator(
+          color: DiaryColors.ink,
+          onRefresh: store.refreshSocialCounts,
+          child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.zero,
           children: [
             Padding(
@@ -199,25 +250,34 @@ class MyPageScreen extends StatelessWidget {
               ),
             ),
             const SectionBand(height: 6),
+            // 메뉴 줄 높이: 예전 44의 1.5배(66).
             MenuRow(
-              compact: true,
+              height: 66,
               label: '내가 보낸 살까말까',
               icon: Icons.outbox_outlined,
               onTap: () => context.push('/sent-baskets'),
             ),
             MenuRow(
-              compact: true,
+              height: 66,
               label: '알림 설정',
-              icon: Icons.notifications_none,
+              // 종 모양으로 지금 상태를 보여 준다: 켜짐 = 울리는 종, 꺼짐 = 빗금 친 종.
+              icon: store.notificationsEnabled
+                  ? Icons.notifications_active_outlined
+                  : Icons.notifications_off_outlined,
               trailing: Text(
                 store.notificationsEnabled ? '켜짐' : '꺼짐',
-                style: DiaryTheme.ui(13, color: DiaryColors.inkSoft),
+                style: DiaryTheme.ui(
+                  14,
+                  weight: FontWeight.w600,
+                  color: store.notificationsEnabled
+                      ? DiaryColors.ink
+                      : DiaryColors.inkSoft,
+                ),
               ),
-              onTap: () =>
-                  store.setNotificationsEnabled(!store.notificationsEnabled),
+              onTap: () => _toggleNotifications(context, store),
             ),
             MenuRow(
-              compact: true,
+              height: 66,
               label: '앱 정보',
               icon: Icons.info_outline,
               onTap: () {
@@ -231,6 +291,7 @@ class MyPageScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
           ],
+        ),
         ),
       ),
     );
@@ -415,14 +476,18 @@ class MyPageScreen extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // 칸 사이를 띄워 라벨이 위 칸 테두리와 겹치지 않게.
+                    const SizedBox(height: 8),
                     PasswordTextField(
                       controller: currentCtrl,
                       decoration: const InputDecoration(labelText: '현재 비밀번호'),
                     ),
+                    const SizedBox(height: 16),
                     PasswordTextField(
                       controller: nextCtrl,
                       decoration: const InputDecoration(labelText: '새 비밀번호'),
                     ),
+                    const SizedBox(height: 16),
                     PasswordTextField(
                       controller: confirmCtrl,
                       decoration: const InputDecoration(labelText: '새 비밀번호 확인'),
@@ -520,18 +585,20 @@ class MyPageScreen extends StatelessWidget {
                     Center(
                       child: CircleAvatar(radius: 40, backgroundImage: preview),
                     ),
-                    const SizedBox(height: 14),
+                    // 테두리 칸 위에 떠 있는 라벨이 위 칸과 겹치지 않게 칸 사이를 띄운다.
+                    const SizedBox(height: 20),
                     TextField(
                       controller: nameCtrl,
                       decoration: const InputDecoration(labelText: '이름'),
                     ),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: handleCtrl,
                       decoration: const InputDecoration(
                         labelText: '아이디 (@없이 입력 가능)',
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 20),
                     Text(
                       '기본 이미지',
                       style: DiaryTheme.body(13, weight: FontWeight.w700),

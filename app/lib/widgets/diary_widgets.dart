@@ -72,6 +72,7 @@ class MenuRow extends StatelessWidget {
     this.icon,
     this.trailing,
     this.compact = false,
+    this.height,
   });
 
   final String label;
@@ -82,12 +83,15 @@ class MenuRow extends StatelessWidget {
   /// Shorter row (44px, 14pt) for secondary menus.
   final bool compact;
 
+  /// 줄 높이를 직접 정할 때(기본: compact 44, 아니면 54).
+  final double? height;
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
       child: Container(
-        height: compact ? 44 : 54,
+        height: height ?? (compact ? 44 : 54),
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: DiaryColors.line)),
