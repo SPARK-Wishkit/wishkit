@@ -103,16 +103,11 @@ class SharedWishlistScreen extends StatelessWidget {
                               padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
                               itemCount: adFeed.length,
                               separatorBuilder: (_, __) =>
-                                  const SizedBox.shrink(),
+                                  const SizedBox(height: 12),
                               itemBuilder: (context, i) {
                                 if (adFeed.isAd(i)) {
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 10,
-                                    ),
-                                    child: NativeAdCard(
-                                      key: ValueKey('ad-${adFeed.adSlot(i)}'),
-                                    ),
+                                  return NativeAdCard(
+                                    key: ValueKey('ad-${adFeed.adSlot(i)}'),
                                   );
                                 }
                                 final p = products[adFeed.itemIndex(i)];

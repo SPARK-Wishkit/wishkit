@@ -11,6 +11,7 @@ import '../../ads/native_ad_card.dart';
 import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
+import '../../theme/list_card.dart';
 import '../../widgets/diary_widgets.dart';
 
 class WishlistScreen extends StatefulWidget {
@@ -105,19 +106,13 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                       80, // room for the floating 공유 담기 pill
                                     ),
                                     itemCount: adFeed.length,
-                                    // 상품 줄은 밑줄로 구분되므로 간격 없음. 광고만 위아래 여백.
                                     separatorBuilder: (_, __) =>
-                                        const SizedBox.shrink(),
+                                        const SizedBox(height: 12),
                                     itemBuilder: (context, i) {
                                       if (adFeed.isAd(i)) {
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 10,
-                                          ),
-                                          child: NativeAdCard(
-                                            key: ValueKey(
-                                              'ad-${tab.id}-${adFeed.adSlot(i)}',
-                                            ),
+                                        return NativeAdCard(
+                                          key: ValueKey(
+                                            'ad-${tab.id}-${adFeed.adSlot(i)}',
                                           ),
                                         );
                                       }
@@ -859,111 +854,138 @@ class WishlistProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rate = _discountRate;
-    final hasOriginal =
-        product.originalPrice != null && product.originalPrice! > product.price;
-    // 살까말까 목록(WhiteProductCard)과 같은 납작한 줄 모양·비율: 테두리 없이 밑줄로 구분, 사진 76.
-    return Material(
-      color: DiaryColors.white,
+    // 광고 카드(NativeAdCard)와 높이를 맞춘다. 글자를 크게 설정한 기기에서는 더 커질 수 있다.
+    final card = Material(
+      color: DiaryColors.paper,
+      elevation: ListCardMetrics.elevation,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(ListCardMetrics.radius),
+        side: const BorderSide(color: DiaryColors.line),
+      ),
       child: InkWell(
+        borderRadius: BorderRadius.circular(ListCardMetrics.radius),
         onTap: onOpen,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: DiaryColors.line)),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            onSelectChanged != null ? 4 : 12,
+            12,
+            4,
+            12,
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (onSelectChanged != null)
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
+                Padding(
+                  // (88 thumb - 46 tap box) / 2 → vertically centred on the thumb
+                  padding: const EdgeInsets.only(top: 21),
+                  child: InkWell(
                   onTap: () => onSelectChanged!(!selected),
+                  borderRadius: BorderRadius.circular(8),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 2, 12, 12),
+                    padding: const EdgeInsets.all(12),
                     child: SelectBox(checked: selected),
                   ),
                 ),
+                ),
               ClipRRect(
-                borderRadius: BorderRadius.circular(DiaryTheme.radius),
+                borderRadius: BorderRadius.circular(12),
                 child: Image.network(
                   product.image,
-                  width: 76,
-                  height: 76,
+                  width: 88,
+                  height: 88,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(
-                    width: 76,
-                    height: 76,
+                    width: 88,
+                    height: 88,
                     color: DiaryColors.surfaceSoft,
                     child: const Icon(
                       Icons.checkroom_outlined,
+                      size: 30,
                       color: DiaryColors.grid,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       product.platform,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DiaryTheme.product(12, weight: FontWeight.w700),
+                      style: DiaryTheme.product(
+                        12,
+                        color: DiaryColors.inkSoft,
+                      ),
                     ),
                     const SizedBox(height: 2),
+                    // 긴 상품명이 잘리지 않게 3줄까지, 14pt.
                     Text(
                       product.name,
-                      maxLines: 2,
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: DiaryTheme.product(13, color: DiaryColors.inkMuted),
+                      style: DiaryTheme.product(
+                        14,
+                        weight: FontWeight.w700,
+                      ).copyWith(height: 1.3),
                     ),
                     const SizedBox(height: 6),
-                    if (hasOriginal)
-                      Text(
-                        formatWon(product.originalPrice!),
-                        style: DiaryTheme.product(
-                          11,
-                          color: DiaryColors.inkSoft,
-                        ).copyWith(decoration: TextDecoration.lineThrough),
-                      ),
-                    Row(
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
                       children: [
-                        if (rate != null) ...[
+                        if (product.originalPrice != null &&
+                            product.originalPrice! > product.price)
                           Text(
-                            '$rate%',
+                            formatWon(product.originalPrice!),
                             style: DiaryTheme.product(
-                              15,
-                              weight: FontWeight.w800,
-                              color: DiaryColors.sale,
-                            ),
+                              12,
+                              color: DiaryColors.inkSoft,
+                            ).copyWith(decoration: TextDecoration.lineThrough),
                           ),
-                          const SizedBox(width: 6),
-                        ],
                         Text(
                           formatWon(product.price),
-                          style: DiaryTheme.product(15, weight: FontWeight.w800),
+                          style: DiaryTheme.product(
+                            17,
+                            weight: FontWeight.w700,
+                          ),
                         ),
                       ],
                     ),
+                    if (rate != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '$rate%',
+                        style: DiaryTheme.product(
+                          13,
+                          weight: FontWeight.w700,
+                          color: DiaryColors.sale,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
               if (onDelete != null)
                 IconButton(
                   onPressed: onDelete,
-                  visualDensity: VisualDensity.compact,
                   icon: const Icon(
                     Icons.close,
-                    size: 18,
+                    size: 20,
                     color: DiaryColors.inkSoft,
                   ),
+                  visualDensity: VisualDensity.compact,
                 ),
             ],
           ),
         ),
       ),
+    );
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: ListCardMetrics.height),
+      child: card,
     );
   }
 }

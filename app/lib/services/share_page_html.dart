@@ -55,10 +55,22 @@ String buildSharePageHtml({
     '$owner 님이 살까말까 바구니에서 상품 ${basket.items.length}개를 공유했어요',
   );
 
-  final cards = basket.items.map(_productCardHtml).join('\n');
+  // 목록의 카드는 상품 사이트로 바로 가지 않고, 앱의 상품 화면처럼 이 페이지 안의 상세(#item-N)를 연다.
+  // 상세에서 고민하는 이유·할인을 보고 "상품 보러가기" 버튼으로 이동한다.
+  final items = basket.items;
+  final cards = [
+    for (var i = 0; i < items.length; i++) _productCardHtml(items[i], i + 1),
+  ].join('\n');
+  final details = [
+    for (var i = 0; i < items.length; i++) _productDetailHtml(items[i], i + 1),
+  ].join('\n');
+  final note = basket.memo.trim();
+  final noteHtml = note.isEmpty
+      ? ''
+      : '<p class="note">${htmlEscape(note)}</p>\n      ';
   final body = cards.isEmpty
       ? '<p class="empty">아직 공개된 아이템이 없어요</p>'
-      : cards;
+      : '$noteHtml<h2 class="count">고민 중인 상품 ${items.length}개</h2>\n$cards';
 
   return '''<!DOCTYPE html>
 <html lang="ko">
@@ -168,6 +180,50 @@ String buildSharePageHtml({
       padding: 8px 20px 32px;
     }
     footer .brand { font-size: 14px; color: var(--ink); margin-top: 6px; }
+    .note {
+      margin: 4px 0 14px;
+      padding: 12px 14px;
+      background: var(--soft);
+      border-radius: 12px;
+      font-size: 15px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .count { margin: 4px 0 10px; font-size: 16px; font-weight: 700; }
+    /* 상품 상세(앱 상품 화면과 같은 구성). 스크립트가 없어도 #item-N 으로 열린다. */
+    .detail { display: none; padding: 12px 16px 24px; }
+    .detail:target { display: block; }
+    body.detail-open #list { display: none; }
+    .back {
+      display: inline-flex; align-items: center; gap: 4px;
+      margin: 0 0 12px; color: var(--ink); font-size: 14px; text-decoration: none;
+    }
+    .hero {
+      width: 100%; aspect-ratio: 1 / 1; object-fit: cover;
+      border-radius: 14px; background: var(--soft); display: block;
+    }
+    .detail .platform { margin-top: 12px; }
+    .detail .name { font-size: 18px; -webkit-line-clamp: unset; display: block; margin-top: 2px; }
+    .detail .price-row { margin-top: 6px; }
+    .detail .price { font-size: 20px; font-weight: 800; }
+    .detail .original { font-size: 13px; }
+    .chip {
+      display: inline-block; margin-top: 8px; padding: 4px 8px;
+      border-radius: 8px; background: rgba(224, 50, 43, 0.08);
+      color: var(--sale); font-size: 12px; font-weight: 700;
+    }
+    .reason {
+      margin-top: 14px; padding: 12px;
+      border: 1px solid #d6d6d6; border-radius: 12px;
+    }
+    .reason h3 { margin: 0; font-size: 14px; font-weight: 700; }
+    .reason p { margin: 6px 0 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+    .reason p.none { color: var(--soft-ink); font-size: 13px; }
+    .go {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      margin-top: 14px; height: 48px; border-radius: 12px;
+      background: var(--ink); color: #fff; font-size: 15px; font-weight: 700; text-decoration: none;
+    }
   </style>
 </head>
 <body>
@@ -177,14 +233,27 @@ String buildSharePageHtml({
       <h1>$title</h1>
       <p class="subtitle">$owner 님이 공유한 살까말까 바구니</p>
     </header>
-    <main>
+    <main id="list">
       $body
     </main>
+$details
     <footer>
       이 페이지는 $expiryLabel까지 볼 수 있어요. 그 뒤에는 자동으로 사라집니다.
       <div class="brand">wishkit</div>
     </footer>
   </div>
+  <script>
+    // 상품 카드를 누르면 목록 대신 그 상품 상세만 보이게(뒤로 가기 = 목록).
+    function route() {
+      var id = location.hash.slice(1);
+      var d = id ? document.getElementById(id) : null;
+      var open = !!(d && d.classList.contains('detail'));
+      document.body.classList.toggle('detail-open', open);
+      window.scrollTo(0, 0);
+    }
+    window.addEventListener('hashchange', route);
+    route();
+  </script>
 </body>
 </html>
 ''';
@@ -199,7 +268,7 @@ int? _discountRate(Product p) {
   return ((orig - p.price) * 100 / orig).round();
 }
 
-String _productCardHtml(Product product) {
+String _productCardHtml(Product product, int index) {
   final platform = htmlEscape(product.platform);
   final name = htmlEscape(product.name);
   final price = htmlEscape(formatWon(product.price));
@@ -213,16 +282,48 @@ String _productCardHtml(Product product) {
   final image = imageUrl == null
       ? '<div class="thumb" aria-hidden="true"></div>'
       : '<img class="thumb" src="${htmlEscape(imageUrl)}" alt="" loading="lazy">';
-  final href = safeHttpUrl(product.productUrl);
-  final inner = '''
+  return '''      <a class="card" href="#item-$index">
       $image
       <div class="info">
         <div class="platform">$platform</div>
         <div class="name">$name</div>
         <div class="price-row">$original<span class="price">$price</span></div>$rateHtml
-      </div>''';
-  if (href == null) {
-    return '      <div class="card">$inner\n      </div>';
-  }
-  return '      <a class="card" href="${htmlEscape(href)}" target="_blank" rel="noopener noreferrer">$inner\n      </a>';
+      </div>
+      </a>''';
+}
+
+/// 앱의 상품 화면과 같은 구성: 큰 사진 · 쇼핑몰 · 이름 · 가격 · 할인 · 고민하는 이유 · 상품 보러가기.
+String _productDetailHtml(Product product, int index) {
+  final platform = htmlEscape(product.platform);
+  final name = htmlEscape(product.name);
+  final price = htmlEscape(formatWon(product.price));
+  final original = product.originalPrice == null ||
+          product.originalPrice! <= product.price
+      ? ''
+      : '<span class="original">${htmlEscape(formatWon(product.originalPrice!))}</span>';
+  final rate = _discountRate(product);
+  final chip = rate == null ? '' : '\n    <div class="chip">$rate% 할인 중</div>';
+  final imageUrl = safeHttpUrl(product.image);
+  final image = imageUrl == null
+      ? '<div class="hero" aria-hidden="true"></div>'
+      : '<img class="hero" src="${htmlEscape(imageUrl)}" alt="">';
+  final memo = (product.memo ?? '').trim();
+  final reason = memo.isEmpty
+      ? '<p class="none">남긴 이유가 없어요</p>'
+      : '<p>${htmlEscape(memo)}</p>';
+  final href = safeHttpUrl(product.productUrl);
+  final go = href == null
+      ? ''
+      : '\n    <a class="go" href="${htmlEscape(href)}" target="_blank" rel="noopener noreferrer">상품 보러가기 ↗</a>';
+  return '''  <section class="detail" id="item-$index">
+    <a class="back" href="#">← 목록으로</a>
+    $image
+    <div class="platform">$platform</div>
+    <div class="name">$name</div>
+    <div class="price-row"><span class="price">$price</span>$original</div>$chip
+    <div class="reason">
+      <h3>고민하는 이유</h3>
+      $reason
+    </div>$go
+  </section>''';
 }

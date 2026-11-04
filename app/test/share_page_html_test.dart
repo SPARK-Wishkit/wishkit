@@ -52,6 +52,41 @@ void main() {
     expect(html, isNot(contains('ftp://files.example.com/x')));
   });
 
+  test('cards open an in-page detail with reason, discount and a link button', () {
+    final withMemo = SharedBasket(
+      id: 'sb-2',
+      title: '살까말까',
+      ownerName: '지은',
+      memo: '둘 중 뭐가 나아?',
+      createdAt: DateTime(2026, 8, 17),
+      items: [
+        Product(
+          id: 1,
+          listId: 'all',
+          name: '니트',
+          price: 32000,
+          originalPrice: 40000,
+          image: 'https://example.com/knit.png',
+          platform: '테스트몰',
+          productUrl: 'https://shop.example.com/item/1',
+          memo: '색이 예뻐서 <고민>',
+        ),
+      ],
+    );
+    final html = buildSharePageHtml(basket: withMemo, expiresAt: DateTime(2026, 9, 14));
+    // 카드는 상품 사이트가 아니라 페이지 안 상세로.
+    expect(html, contains('<a class="card" href="#item-1">'));
+    expect(html, contains('<section class="detail" id="item-1">'));
+    expect(html, contains('고민하는 이유'));
+    expect(html, contains('색이 예뻐서 &lt;고민&gt;'));
+    expect(html, contains('20% 할인 중'));
+    expect(html, contains('<a class="go" href="https://shop.example.com/item/1"'));
+    expect(html, contains('상품 보러가기'));
+    // 보낸 사람 메모와 개수.
+    expect(html, contains('둘 중 뭐가 나아?'));
+    expect(html, contains('고민 중인 상품 1개'));
+  });
+
   test('og:image is the app logo when given, else the first product photo', () {
     final withLogo = buildSharePageHtml(
       basket: basket,
