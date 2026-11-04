@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -527,6 +528,11 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   icon: Icons.photo_camera_outlined,
                   onPressed: loading || identifying ? null : _pickTagPhoto,
                 ),
+                // 읽는 동안 멈춘 것처럼 보이지 않게: 도는 표시 + 바뀌는 안내 문구.
+                if (loading || identifying) ...[
+                  const SizedBox(height: 12),
+                  const ParsingProgress(messages: ['정보를 불러오고 있어요']),
+                ],
                 if (tagResult != null &&
                     tagResult!.status != TagIdentifyStatus.notATag) ...[
                   const SizedBox(height: 10),
@@ -787,6 +793,86 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+
+/// 상품·태그를 읽는 동안 보여 주는 진행 표시: 도는 원 + 몇 초마다 바뀌는 안내 문구 + 걸린 시간.
+class ParsingProgress extends StatefulWidget {
+  const ParsingProgress({
+    super.key,
+    required this.messages,
+    this.interval = const Duration(milliseconds: 2500),
+  });
+
+  final List<String> messages;
+  final Duration interval;
+
+  @override
+  State<ParsingProgress> createState() => _ParsingProgressState();
+}
+
+class _ParsingProgressState extends State<ParsingProgress> {
+  Timer? _timer;
+  final _watch = Stopwatch()..start();
+
+  @override
+  void initState() {
+    super.initState();
+    // 1초마다 다시 그려 걸린 시간을 갱신하고, [interval]마다 문구를 바꾼다.
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final msgs = widget.messages;
+    final step = _watch.elapsedMilliseconds ~/ widget.interval.inMilliseconds;
+    final message = msgs.isEmpty ? '불러오는 중이에요' : msgs[step % msgs.length];
+    final seconds = _watch.elapsed.inSeconds;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: DiaryColors.band,
+        borderRadius: BorderRadius.circular(DiaryTheme.radius),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.4,
+              color: DiaryColors.ink,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: Text(
+                '$message...',
+                key: ValueKey(message),
+                style: DiaryTheme.ui(14, weight: FontWeight.w600),
+              ),
+            ),
+          ),
+          if (seconds >= 3)
+            Text(
+              '$seconds초',
+              style: DiaryTheme.ui(12, color: DiaryColors.inkSoft),
+            ),
+        ],
       ),
     );
   }
