@@ -160,7 +160,6 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 10),
                       ],
                     const SizedBox(height: 8),
                     Text(

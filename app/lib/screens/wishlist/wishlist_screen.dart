@@ -11,7 +11,6 @@ import '../../ads/native_ad_card.dart';
 import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
-import '../../theme/list_card.dart';
 import '../../widgets/diary_widgets.dart';
 
 class WishlistScreen extends StatefulWidget {
@@ -24,16 +23,68 @@ class WishlistScreen extends StatefulWidget {
 class _WishlistScreenState extends State<WishlistScreen> {
   final _tabsRowKey = GlobalKey<_TabsRowState>();
 
-  /// Product ids checked for "선택삭제". Pruned to the visible list each build.
+  /// Product ids checked for "폴더 이동". Pruned to the visible list each build.
   final Set<int> _selected = {};
 
-  Future<void> _deleteSelected(AppStore store) async {
+  /// 선택한 상품을 한 번에 다른 폴더로 옮긴다(예전 "선택삭제" 자리 — 지우기는 카드의 X로 충분).
+  Future<void> _moveSelected(BuildContext context, AppStore store) async {
     final ids = _selected.toList();
     if (ids.isEmpty) return;
-    setState(_selected.clear);
-    for (final id in ids) {
-      await store.removeProduct(id);
+    final current = store.selectedTab.id;
+    final targets =
+        store.tabs.where((t) => t.id != 'all' && t.id != current).toList();
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('옮길 수 있는 다른 폴더가 없어요')),
+      );
+      return;
     }
+    final target = await showModalBottomSheet<WishlistTab>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+              child: Text(
+                '${ids.length}개를 어느 폴더로 옮길까요?',
+                style: DiaryTheme.ui(16, weight: FontWeight.w700),
+              ),
+            ),
+            for (final t in targets)
+              ListTile(
+                leading: const Icon(Icons.folder_outlined),
+                title: Text(t.name, style: DiaryTheme.ui(15)),
+                onTap: () => Navigator.of(sheetCtx).pop(t),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (target == null || !context.mounted) return;
+    setState(_selected.clear);
+    var failed = 0;
+    for (final id in ids) {
+      try {
+        await store.moveProduct(id, target.id);
+      } catch (_) {
+        failed++;
+      }
+    }
+    if (!context.mounted) return;
+    final moved = ids.length - failed;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          failed == 0
+              ? '$moved개를 \'${target.name}\'(으)로 옮겼어요'
+              : '$moved개를 옮기고 $failed개는 실패했어요',
+        ),
+      ),
+    );
   }
 
   @override
@@ -115,9 +166,9 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                   _selected.addAll(visibleIds);
                                 }
                               }),
-                              onDeleteSelected: _selected.isEmpty
+                              onMoveSelected: _selected.isEmpty
                                   ? null
-                                  : () => _deleteSelected(store),
+                                  : () => _moveSelected(context, store),
                             ),
                           Expanded(
                             child: products.isEmpty
@@ -138,13 +189,19 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                       80, // room for the floating 공유 담기 pill
                                     ),
                                     itemCount: adFeed.length,
+                                    // 상품 줄은 밑줄로 구분되므로 간격 없음. 광고만 위아래 여백.
                                     separatorBuilder: (_, __) =>
-                                        const SizedBox(height: 12),
+                                        const SizedBox.shrink(),
                                     itemBuilder: (context, i) {
                                       if (adFeed.isAd(i)) {
-                                        return NativeAdCard(
-                                          key: ValueKey(
-                                            'ad-${tab.id}-${adFeed.adSlot(i)}',
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 10,
+                                          ),
+                                          child: NativeAdCard(
+                                            key: ValueKey(
+                                              'ad-${tab.id}-${adFeed.adSlot(i)}',
+                                            ),
                                           ),
                                         );
                                       }
@@ -865,21 +922,21 @@ class _PrivacyBanner extends StatelessWidget {
   }
 }
 
-/// 전체선택 (n/m) · 선택삭제
+/// 전체선택 (n/m) · 폴더 이동
 class _SelectBar extends StatelessWidget {
   const _SelectBar({
     required this.selected,
     required this.total,
     required this.allSelected,
     required this.onToggleAll,
-    required this.onDeleteSelected,
+    required this.onMoveSelected,
   });
 
   final int selected;
   final int total;
   final bool allSelected;
   final VoidCallback onToggleAll;
-  final VoidCallback? onDeleteSelected;
+  final VoidCallback? onMoveSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -910,18 +967,19 @@ class _SelectBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          TextButton(
-            onPressed: onDeleteSelected,
+          TextButton.icon(
+            onPressed: onMoveSelected,
             style: TextButton.styleFrom(
-              foregroundColor: DiaryColors.inkMuted,
+              foregroundColor: DiaryColors.ink,
               disabledForegroundColor: DiaryColors.inkSoft,
               padding: const EdgeInsets.symmetric(horizontal: 8),
             ),
-            child: Text(
-              '선택삭제',
+            icon: const Icon(Icons.drive_file_move_outline, size: 18),
+            label: Text(
+              '폴더 이동',
               style: DiaryTheme.ui(
                 14,
-                color: onDeleteSelected == null
+                color: onMoveSelected == null
                     ? DiaryColors.inkSoft
                     : DiaryColors.ink,
               ),
@@ -962,137 +1020,111 @@ class WishlistProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rate = _discountRate;
-    // 광고 카드(NativeAdCard)와 높이를 맞춘다. 글자를 크게 설정한 기기에서는 더 커질 수 있다.
-    final card = Material(
-      color: DiaryColors.paper,
-      elevation: ListCardMetrics.elevation,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(ListCardMetrics.radius),
-        side: const BorderSide(color: DiaryColors.line),
-      ),
+    final hasOriginal =
+        product.originalPrice != null && product.originalPrice! > product.price;
+    // 살까말까 목록(WhiteProductCard)과 같은 납작한 줄 모양·비율: 테두리 없이 밑줄로 구분, 사진 76.
+    return Material(
+      color: DiaryColors.white,
       child: InkWell(
-        borderRadius: BorderRadius.circular(ListCardMetrics.radius),
         onTap: onOpen,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            onSelectChanged != null ? 4 : 12,
-            12,
-            4,
-            12,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: DiaryColors.line)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (onSelectChanged != null)
-                Padding(
-                  // (88 thumb - 46 tap box) / 2 → vertically centred on the thumb
-                  padding: const EdgeInsets.only(top: 21),
-                  child: InkWell(
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => onSelectChanged!(!selected),
-                  borderRadius: BorderRadius.circular(8),
                   child: Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.fromLTRB(4, 2, 12, 12),
                     child: SelectBox(checked: selected),
                   ),
                 ),
-                ),
               ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(DiaryTheme.radius),
                 child: Image.network(
                   product.image,
-                  width: 88,
-                  height: 88,
+                  width: 76,
+                  height: 76,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(
-                    width: 88,
-                    height: 88,
+                    width: 76,
+                    height: 76,
                     color: DiaryColors.surfaceSoft,
                     child: const Icon(
                       Icons.checkroom_outlined,
-                      size: 30,
                       color: DiaryColors.grid,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       product.platform,
-                      style: DiaryTheme.product(
-                        12,
-                        color: DiaryColors.inkSoft,
-                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DiaryTheme.product(12, weight: FontWeight.w700),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       product.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: DiaryTheme.product(
-                        15,
-                        weight: FontWeight.w700,
-                      ).copyWith(height: 1.3),
+                      style: DiaryTheme.product(13, color: DiaryColors.inkMuted),
                     ),
                     const SizedBox(height: 6),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 6,
+                    if (hasOriginal)
+                      Text(
+                        formatWon(product.originalPrice!),
+                        style: DiaryTheme.product(
+                          11,
+                          color: DiaryColors.inkSoft,
+                        ).copyWith(decoration: TextDecoration.lineThrough),
+                      ),
+                    Row(
                       children: [
-                        if (product.originalPrice != null &&
-                            product.originalPrice! > product.price)
+                        if (rate != null) ...[
                           Text(
-                            formatWon(product.originalPrice!),
+                            '$rate%',
                             style: DiaryTheme.product(
-                              12,
-                              color: DiaryColors.inkSoft,
-                            ).copyWith(decoration: TextDecoration.lineThrough),
+                              15,
+                              weight: FontWeight.w800,
+                              color: DiaryColors.sale,
+                            ),
                           ),
+                          const SizedBox(width: 6),
+                        ],
                         Text(
                           formatWon(product.price),
-                          style: DiaryTheme.product(
-                            17,
-                            weight: FontWeight.w700,
-                          ),
+                          style: DiaryTheme.product(15, weight: FontWeight.w800),
                         ),
                       ],
                     ),
-                    if (rate != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        '$rate%',
-                        style: DiaryTheme.product(
-                          13,
-                          weight: FontWeight.w700,
-                          color: DiaryColors.sale,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
               if (onDelete != null)
                 IconButton(
                   onPressed: onDelete,
+                  visualDensity: VisualDensity.compact,
                   icon: const Icon(
                     Icons.close,
-                    size: 20,
+                    size: 18,
                     color: DiaryColors.inkSoft,
                   ),
-                  visualDensity: VisualDensity.compact,
                 ),
             ],
           ),
         ),
       ),
-    );
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: ListCardMetrics.height),
-      child: card,
     );
   }
 }
