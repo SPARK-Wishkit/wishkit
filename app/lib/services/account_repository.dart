@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/services.dart' show rootBundle;
+
 import '../models/models.dart';
 import 'aws/basket_store.dart';
 import 'aws/file_store.dart';
@@ -131,6 +133,12 @@ class AccountRepository {
     required DateTime expiresAt,
   }) =>
       _files.uploadSharePage(pageId: pageId, html: html);
+
+  /// 공유 링크 미리보기용 로고(앱에 들어 있는 assets/share/og-wishkit.png)를 올리고 공개 주소를 돌려준다.
+  Future<String> uploadShareOgImage() async {
+    final data = await rootBundle.load('assets/share/og-wishkit.png');
+    return _files.uploadShareOgImage(data.buffer.asUint8List());
+  }
 
   Future<List<WishlistTab>> loadTabs(String uid) => _aws.loadTabs(uid);
 

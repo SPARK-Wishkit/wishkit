@@ -176,6 +176,23 @@ class AwsFileStore {
     return sharePageUrlFor(path);
   }
 
+  /// 공유 링크 미리보기(og:image)용 로고 이미지를 공유 페이지와 같은 폴더에 올리고 공개 주소를 돌려준다.
+  ///
+  /// 공유 페이지와 같은 share-pages/ 폴더라서 같은 공개 배달망으로 열리고, 28일 자동 삭제도 같이 받는다.
+  /// 공유할 때마다 다시 올리므로(같은 이름에 덮어쓰기) 이 이미지는 가장 최근 공유 페이지보다 먼저
+  /// 지워지지 않는다.
+  Future<String> uploadShareOgImage(List<int> pngBytes) async {
+    if (pngBytes.isEmpty) throw Exception('미리보기 이미지가 비어 있어요.');
+    final path = await _t.upload(
+      folder: 'share-pages',
+      relativePath: 'og-wishkit.png',
+      file: null,
+      bytes: pngBytes,
+      contentType: 'image/png',
+    );
+    return sharePageUrlFor(path);
+  }
+
   /// 태그 사진으로 담은 상품의 태그 사진을 올리고 영구 주소를 돌려준다.
   ///
   /// 파일 이름은 추측할 수 없는 무작위 값이다 — 주소는 주인의 상품 기록에만 저장되고,

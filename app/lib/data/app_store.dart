@@ -1421,7 +1421,16 @@ class AppStore extends ChangeNotifier {
         ? current.publicPageId!
         : const Uuid().v4();
     final expiresAt = DateTime.now().add(kSharePageTtl);
-    final html = buildSharePageHtml(basket: current, expiresAt: expiresAt);
+    // 미리보기 이미지는 앱 로고. 올리기에 실패해도 공유는 막지 않는다(첫 상품 사진으로 대신).
+    String? ogImageUrl;
+    try {
+      ogImageUrl = await _repo.uploadShareOgImage();
+    } catch (_) {}
+    final html = buildSharePageHtml(
+      basket: current,
+      expiresAt: expiresAt,
+      ogImageUrl: ogImageUrl,
+    );
     final url = await _repo.uploadSharePage(
       uid: userId,
       pageId: pageId,

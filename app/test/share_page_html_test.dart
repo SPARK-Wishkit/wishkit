@@ -52,6 +52,28 @@ void main() {
     expect(html, isNot(contains('ftp://files.example.com/x')));
   });
 
+  test('og:image is the app logo when given, else the first product photo', () {
+    final withLogo = buildSharePageHtml(
+      basket: basket,
+      expiresAt: DateTime(2026, 9, 14),
+      ogImageUrl: 'https://share.example.net/me/og-wishkit.png',
+    );
+    expect(
+      withLogo,
+      contains('<meta property="og:image" content="https://share.example.net/me/og-wishkit.png">'),
+    );
+    expect(withLogo, contains('<meta property="og:image:width" content="1200">'));
+    expect(withLogo, contains('summary_large_image'));
+
+    final fallback = buildSharePageHtml(
+      basket: basket,
+      expiresAt: DateTime(2026, 9, 14),
+      ogImageUrl: 'javascript:alert(1)',
+    );
+    expect(fallback, isNot(contains('javascript:')));
+    expect(fallback, isNot(contains('og:image:width')));
+  });
+
   test('share page uses the current app design (흑백·Righteous 로고·할인율)', () {
     final html = buildSharePageHtml(
       basket: basket,

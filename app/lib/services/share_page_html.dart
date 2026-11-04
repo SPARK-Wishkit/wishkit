@@ -30,6 +30,7 @@ String formatShareExpiry(DateTime expiresAt) {
 String buildSharePageHtml({
   required SharedBasket basket,
   required DateTime expiresAt,
+  String? ogImageUrl,
 }) {
   final title = htmlEscape(
     basket.title.trim().isEmpty ? '살까말까 공유' : basket.title.trim(),
@@ -42,7 +43,14 @@ String buildSharePageHtml({
       .map((p) => safeHttpUrl(p.image))
       .whereType<String>()
       .firstOrNull;
-  final ogImage = firstImage == null ? '' : htmlEscape(firstImage);
+  // 미리보기 이미지: 앱 로고([ogImageUrl])가 있으면 그걸, 없으면(올리기 실패 등) 첫 상품 사진.
+  final logo = ogImageUrl == null ? null : safeHttpUrl(ogImageUrl);
+  final ogImage = htmlEscape(logo ?? firstImage ?? '');
+  final ogImageSize = logo == null
+      ? ''
+      : '\n  <meta property="og:image:width" content="1200">'
+          '\n  <meta property="og:image:height" content="630">'
+          '\n  <meta name="twitter:card" content="summary_large_image">';
   final description = htmlEscape(
     '$owner 님이 살까말까 바구니에서 상품 ${basket.items.length}개를 공유했어요',
   );
@@ -61,7 +69,7 @@ String buildSharePageHtml({
   <meta name="description" content="$description">
   <meta property="og:title" content="$title">
   <meta property="og:description" content="$description">
-  ${ogImage.isEmpty ? '' : '<meta property="og:image" content="$ogImage">'}
+  ${ogImage.isEmpty ? '' : '<meta property="og:image" content="$ogImage">$ogImageSize'}
   <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

@@ -82,6 +82,21 @@ void main() {
     expect(url, 'https://cdn.example.net/share-pages/ap-northeast-2%3Ame-id/p1.html');
   });
 
+  test('공유 미리보기 로고: 공유 페이지와 같은 폴더·같은 공개 배달망, 같은 이름에 덮어쓰기', () async {
+    final shareStore = AwsFileStore(
+      transport: s3,
+      baseUrl: 'https://cdn.example.net',
+      sharePagesBaseUrl: 'https://share.example.net',
+    );
+    final a = await shareStore.uploadShareOgImage([1, 2, 3]);
+    final b = await shareStore.uploadShareOgImage([4, 5]);
+    expect(a, 'https://share.example.net/ap-northeast-2%3Ame-id/og-wishkit.png');
+    expect(b, a);
+    final saved = s3.files['share-pages/ap-northeast-2:me-id/og-wishkit.png']!;
+    expect(saved.$1, [4, 5]);
+    expect(saved.$2, 'image/png');
+  });
+
   test('확장자별 형식 (이미지가 아니면 jpg — 기존 동작)', () {
     expect(AwsFileStore.imageType('a.PNG'), ('png', 'image/png'));
     expect(AwsFileStore.imageType('a.webp'), ('webp', 'image/webp'));

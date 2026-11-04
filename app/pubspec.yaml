@@ -79,6 +79,10 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # 살까말까 공유 링크의 미리보기(og:image)로 쓰는 로고 이미지 — 공유할 때 공유 페이지와 함께 올린다.
+  assets:
+    - assets/share/og-wishkit.png
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
