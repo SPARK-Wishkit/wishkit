@@ -49,7 +49,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
               child: _TabsRow(
                 key: _tabsRowKey,
                 store: store,
-                onDoubleTapTab: (t) => _openListEditSheet(context, store, t),
+                onEditTab: (t) => _openListEditSheet(context, store, t),
                 onAdd: () => _showAddListDialog(context, store),
                 onMoveProduct: (p, t) =>
                     _handleMoveProduct(context, store, p, t),
@@ -197,7 +197,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
     AppStore store,
     WishlistTab tab,
   ) async {
-    HapticFeedback.mediumImpact();
+    HapticFeedback.selectionClick();
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: DiaryColors.paper,
@@ -408,13 +408,14 @@ class _TabsRow extends StatefulWidget {
   const _TabsRow({
     super.key,
     required this.store,
-    required this.onDoubleTapTab,
+    required this.onEditTab,
     required this.onAdd,
     required this.onMoveProduct,
   });
 
   final AppStore store;
-  final void Function(WishlistTab tab) onDoubleTapTab;
+  /// 선택된 탭의 연필 버튼 → 리스트 편집(비공개·이름 변경·삭제).
+  final void Function(WishlistTab tab) onEditTab;
   final VoidCallback onAdd;
   final void Function(Product product, WishlistTab tab) onMoveProduct;
 
@@ -627,7 +628,7 @@ class _TabsRowState extends State<_TabsRow> {
                   selected: store.selectedTabId == tab.id,
                   count: store.countFor(tab),
                   onTap: () => store.selectTab(tab.id),
-                  onDoubleTap: () => widget.onDoubleTapTab(tab),
+                  onEdit: () => widget.onEditTab(tab),
                   highlighted: candidateData.isNotEmpty,
                 );
               },
@@ -646,7 +647,7 @@ class _FolderTab extends StatelessWidget {
     required this.selected,
     required this.count,
     required this.onTap,
-    this.onDoubleTap,
+    this.onEdit,
     this.highlighted = false,
   });
 
@@ -654,7 +655,9 @@ class _FolderTab extends StatelessWidget {
   final bool selected;
   final int count;
   final VoidCallback onTap;
-  final VoidCallback? onDoubleTap;
+
+  /// 선택된 탭에만 연필 버튼으로 보인다(꾹 누르기는 탭 순서 바꾸기라 쓰지 않는다).
+  final VoidCallback? onEdit;
   final bool highlighted;
 
   @override
@@ -677,7 +680,6 @@ class _FolderTab extends StatelessWidget {
       child: InkWell(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
         onTap: onTap,
-        onDoubleTap: onDoubleTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutBack,
@@ -722,6 +724,24 @@ class _FolderTab extends StatelessWidget {
                     color: countColor,
                   ),
                 ),
+                if (selected && !highlighted && onEdit != null)
+                  // 탭 글자보다 넉넉한 누름 영역(약 30×30)을 둔다.
+                  Semantics(
+                    button: true,
+                    label: '${tab.name} 리스트 편집',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onEdit,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
+                        child: Icon(
+                          Icons.edit_outlined,
+                          size: 16,
+                          color: fg,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
