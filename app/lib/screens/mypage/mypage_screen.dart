@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../auth/auth_validators.dart';
 import '../../data/app_store.dart';
 import '../../theme/avatar_presets.dart';
 import '../../theme/diary_theme.dart';
@@ -283,9 +284,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
               onTap: () {
                 showAboutDialog(
                   context: context,
-                  applicationName: '통합 위시리스트',
-                  applicationVersion: '0.1.0',
-                  applicationLegalese: 'MZ diary scrapbook wishlist',
+                  applicationName: 'wishkit',
+                  applicationVersion: '1.0.0',
+                  applicationLegalese:
+                      '여기저기 흩어진 쇼핑 위시리스트를 한곳에 모아 보세요.\n'
+                      '살까 말까 고민될 땐 친구에게 물어보고요.',
                 );
               },
             ),
@@ -472,31 +475,82 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 '비밀번호 변경',
                 style: DiaryTheme.ui(17, weight: FontWeight.w700),
               ),
+              // 다른 앱들처럼: 칸 위에 이름표, "현재"와 "새 비밀번호" 묶음 사이는 구분선으로 띄우고,
+              // 새 비밀번호 규칙과 두 칸이 같은지를 칸 바로 아래에서 알려 준다.
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // 칸 사이를 띄워 라벨이 위 칸 테두리와 겹치지 않게.
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
+                    _fieldLabel('현재 비밀번호'),
                     PasswordTextField(
                       controller: currentCtrl,
-                      decoration: const InputDecoration(labelText: '현재 비밀번호'),
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        hintText: '지금 쓰는 비밀번호',
+                      ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 22),
+                    const Divider(height: 1, color: DiaryColors.line),
+                    const SizedBox(height: 22),
+                    _fieldLabel('새 비밀번호'),
                     PasswordTextField(
                       controller: nextCtrl,
-                      decoration: const InputDecoration(labelText: '새 비밀번호'),
+                      textInputAction: TextInputAction.next,
+                      decoration: InputDecoration(
+                        hintText: '새 비밀번호',
+                        helperText:
+                            '${AuthValidators.passwordMinLength}자 이상, 숫자 포함',
+                      ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     PasswordTextField(
                       controller: confirmCtrl,
-                      decoration: const InputDecoration(labelText: '새 비밀번호 확인'),
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        hintText: '새 비밀번호 다시 입력',
+                      ),
+                    ),
+                    // 두 칸이 같은지 바로 보여 준다.
+                    ListenableBuilder(
+                      listenable: Listenable.merge([nextCtrl, confirmCtrl]),
+                      builder: (context, _) {
+                        if (confirmCtrl.text.isEmpty) {
+                          return const SizedBox(height: 8);
+                        }
+                        final same = nextCtrl.text == confirmCtrl.text;
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8, left: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                same ? Icons.check_circle : Icons.error_outline,
+                                size: 16,
+                                color: same
+                                    ? DiaryColors.ink
+                                    : DiaryColors.sale,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                same ? '비밀번호가 일치해요' : '비밀번호가 일치하지 않아요',
+                                style: DiaryTheme.ui(
+                                  12,
+                                  color: same
+                                      ? DiaryColors.ink
+                                      : DiaryColors.sale,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                     if (error != null) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Text(
                         error!,
-                        style: DiaryTheme.body(12, color: DiaryColors.pin),
+                        style: DiaryTheme.body(12, color: DiaryColors.sale),
                       ),
                     ],
                   ],
@@ -509,6 +563,15 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 ),
                 TextButton(
                   onPressed: () {
+                    if (currentCtrl.text.isEmpty) {
+                      setLocal(() => error = '현재 비밀번호를 입력해 주세요.');
+                      return;
+                    }
+                    final rule = AuthValidators.password(nextCtrl.text);
+                    if (rule != null) {
+                      setLocal(() => error = rule);
+                      return;
+                    }
                     if (nextCtrl.text != confirmCtrl.text) {
                       setLocal(() => error = '새 비밀번호가 서로 달라요.');
                       return;
@@ -851,3 +914,13 @@ class _FolderChip extends StatelessWidget {
     );
   }
 }
+
+
+/// 입력칸 위에 붙는 작은 이름표(비밀번호 변경 등).
+Widget _fieldLabel(String text) => Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 6),
+      child: Text(
+        text,
+        style: DiaryTheme.ui(13, weight: FontWeight.w700),
+      ),
+    );

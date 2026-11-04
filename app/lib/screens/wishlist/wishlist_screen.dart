@@ -23,80 +23,12 @@ class WishlistScreen extends StatefulWidget {
 class _WishlistScreenState extends State<WishlistScreen> {
   final _tabsRowKey = GlobalKey<_TabsRowState>();
 
-  /// Product ids checked for "폴더 이동". Pruned to the visible list each build.
-  final Set<int> _selected = {};
-
-  /// 선택한 상품을 한 번에 다른 폴더로 옮긴다(예전 "선택삭제" 자리 — 지우기는 카드의 X로 충분).
-  Future<void> _moveSelected(BuildContext context, AppStore store) async {
-    final ids = _selected.toList();
-    if (ids.isEmpty) return;
-    final current = store.selectedTab.id;
-    final targets =
-        store.tabs.where((t) => t.id != 'all' && t.id != current).toList();
-    if (targets.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('옮길 수 있는 다른 폴더가 없어요')),
-      );
-      return;
-    }
-    final target = await showModalBottomSheet<WishlistTab>(
-      context: context,
-      builder: (sheetCtx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-              child: Text(
-                '${ids.length}개를 어느 폴더로 옮길까요?',
-                style: DiaryTheme.ui(16, weight: FontWeight.w700),
-              ),
-            ),
-            for (final t in targets)
-              ListTile(
-                leading: const Icon(Icons.folder_outlined),
-                title: Text(t.name, style: DiaryTheme.ui(15)),
-                onTap: () => Navigator.of(sheetCtx).pop(t),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (target == null || !context.mounted) return;
-    setState(_selected.clear);
-    var failed = 0;
-    for (final id in ids) {
-      try {
-        await store.moveProduct(id, target.id);
-      } catch (_) {
-        failed++;
-      }
-    }
-    if (!context.mounted) return;
-    final moved = ids.length - failed;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          failed == 0
-              ? '$moved개를 \'${target.name}\'(으)로 옮겼어요'
-              : '$moved개를 옮기고 $failed개는 실패했어요',
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppStore>();
     final tab = store.selectedTab;
     final products = store.displayedProducts;
     final adFeed = AdFeed(products.length, every: AdsConfig.feedEvery);
-    final visibleIds = products.map((p) => p.id).toSet();
-    _selected.removeWhere((id) => !visibleIds.contains(id));
-    final allSelected =
-        products.isNotEmpty && _selected.length == products.length;
 
     return Scaffold(
       backgroundColor: DiaryColors.canvas,
@@ -154,22 +86,6 @@ class _WishlistScreenState extends State<WishlistScreen> {
                               isPublic: tab.isPublic,
                               onToggle: () => store.toggleTabPublic(tab.id),
                             ),
-                          if (products.isNotEmpty)
-                            _SelectBar(
-                              selected: _selected.length,
-                              total: products.length,
-                              allSelected: allSelected,
-                              onToggleAll: () => setState(() {
-                                if (allSelected) {
-                                  _selected.clear();
-                                } else {
-                                  _selected.addAll(visibleIds);
-                                }
-                              }),
-                              onMoveSelected: _selected.isEmpty
-                                  ? null
-                                  : () => _moveSelected(context, store),
-                            ),
                           Expanded(
                             child: products.isEmpty
                                 ? Center(
@@ -212,14 +128,6 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                             context.push('/product/${p.id}'),
                                         onDelete: () =>
                                             store.removeProduct(p.id),
-                                        selected: _selected.contains(p.id),
-                                        onSelectChanged: (v) => setState(() {
-                                          if (v) {
-                                            _selected.add(p.id);
-                                          } else {
-                                            _selected.remove(p.id);
-                                          }
-                                        }),
                                       );
                                       return LayoutBuilder(
                                         builder: (context, constraints) {
@@ -917,75 +825,6 @@ class _PrivacyBanner extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// 전체선택 (n/m) · 폴더 이동
-class _SelectBar extends StatelessWidget {
-  const _SelectBar({
-    required this.selected,
-    required this.total,
-    required this.allSelected,
-    required this.onToggleAll,
-    required this.onMoveSelected,
-  });
-
-  final int selected;
-  final int total;
-  final bool allSelected;
-  final VoidCallback onToggleAll;
-  final VoidCallback? onMoveSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
-      child: Row(
-        children: [
-          InkWell(
-            onTap: onToggleAll,
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  SelectBox(checked: allSelected),
-                  const SizedBox(width: 10),
-                  Text(
-                    '전체선택',
-                    style: DiaryTheme.ui(15, weight: FontWeight.w600),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '($selected/$total)',
-                    style: DiaryTheme.ui(14, color: DiaryColors.inkSoft),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const Spacer(),
-          TextButton.icon(
-            onPressed: onMoveSelected,
-            style: TextButton.styleFrom(
-              foregroundColor: DiaryColors.ink,
-              disabledForegroundColor: DiaryColors.inkSoft,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-            ),
-            icon: const Icon(Icons.drive_file_move_outline, size: 18),
-            label: Text(
-              '폴더 이동',
-              style: DiaryTheme.ui(
-                14,
-                color: onMoveSelected == null
-                    ? DiaryColors.inkSoft
-                    : DiaryColors.ink,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
