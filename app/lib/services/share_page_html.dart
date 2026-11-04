@@ -65,16 +65,18 @@ String buildSharePageHtml({
   <meta property="og:type" content="website">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Righteous&family=Noto+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
+    /* Mirrors DiaryColors / ListCardMetrics in the app (lib/theme). */
     :root {
-      --canvas: #ececea;
-      --paper: #f7f4ee;
-      --grid: rgba(217, 210, 198, 0.45);
-      --white: #ffffff;
-      --ink: #2f2a26;
-      --muted: #8b7e74;
-      --sand: #d5baa5;
+      --canvas: #f2f2f2;
+      --paper: #ffffff;
+      --surface-soft: #f3f3f3;
+      --line: #e8e8e8;
+      --ink: #000000;
+      --ink-muted: #3a3a3a;
+      --ink-soft: #6e6e6e;
+      --sale: #e0322b;
     }
     * { box-sizing: border-box; }
     body {
@@ -82,116 +84,132 @@ String buildSharePageHtml({
       background: var(--canvas);
       color: var(--ink);
       font-family: "Noto Sans KR", sans-serif;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+    /* Fill the screen height on every phone: sheet stretches, footer sits at the bottom. */
+    .page {
+      max-width: 560px;
+      margin: 0 auto;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
     }
     header {
-      background: var(--white);
-      padding: 16px 20px 12px;
+      padding: 18px 20px 12px;
     }
-    .brand {
-      font-family: Jua, sans-serif;
-      font-size: 13px;
-      color: var(--muted);
-      letter-spacing: 0.04em;
+    .logo {
+      font-family: Righteous, sans-serif;
+      font-size: 30px;
+      line-height: 1.1;
     }
     h1 {
-      margin: 4px 0 0;
-      font-family: Jua, sans-serif;
-      font-size: 22px;
-      font-weight: 500;
+      margin: 14px 0 0;
+      font-size: 19px;
+      font-weight: 700;
     }
     .subtitle {
-      margin: 8px 20px 0;
-      font-family: Jua, sans-serif;
+      margin: 4px 0 0;
       font-size: 13px;
-      color: var(--muted);
+      color: var(--ink-muted);
     }
-    .folder {
-      margin: 12px 12px 24px;
-      background: var(--sand);
-      border: 3px solid var(--sand);
+    .sheet {
+      margin: 0 12px;
+      background: var(--paper);
       border-radius: 18px 18px 0 0;
-      min-height: 70vh;
-    }
-    .paper {
-      background-color: var(--paper);
-      background-image:
-        linear-gradient(to right, var(--grid) 1px, transparent 1px),
-        linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
-      background-size: 18px 18px;
-      border-radius: 15px 15px 0 0;
-      padding: 12px 12px 28px;
-      min-height: 70vh;
+      padding: 16px 16px 28px;
+      flex: 1;
     }
     .card {
       display: flex;
-      gap: 12px;
+      gap: 14px;
       align-items: flex-start;
-      background: var(--white);
+      background: var(--paper);
+      border: 1px solid var(--line);
       border-radius: 14px;
-      padding: 10px;
-      margin-bottom: 10px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+      padding: 12px;
+      margin-bottom: 12px;
       color: inherit;
       text-decoration: none;
     }
+    /* Photo scales with screen width (88px on normal phones, smaller on narrow ones). */
     .thumb {
-      width: 72px;
-      height: 72px;
-      border-radius: 10px;
+      --thumb: clamp(64px, 22vw, 88px);
+      width: var(--thumb);
+      height: var(--thumb);
+      border-radius: 12px;
       object-fit: cover;
-      background: var(--paper);
-      flex: 0 0 72px;
+      background: var(--surface-soft);
+      flex: 0 0 var(--thumb);
     }
+    .info { min-width: 0; line-height: 1.35; }
     .platform {
-      font-size: 11px;
-      color: var(--muted);
+      font-size: 12px;
+      color: var(--ink-soft);
     }
     .name {
       margin-top: 2px;
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 700;
-      line-height: 1.35;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
-    .price-row { margin-top: 6px; }
+    .price-row {
+      margin-top: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      column-gap: 6px;
+    }
+    .original, .price { white-space: nowrap; }
     .original {
-      font-size: 11px;
-      color: var(--muted);
+      font-size: 12px;
+      color: var(--ink-soft);
       text-decoration: line-through;
-      margin-right: 6px;
     }
     .price {
+      font-size: 17px;
+      font-weight: 700;
+    }
+    .rate {
+      margin-top: 2px;
       font-size: 13px;
       font-weight: 700;
+      color: var(--sale);
     }
     .empty {
       text-align: center;
-      color: var(--muted);
-      font-family: Jua, sans-serif;
+      color: var(--ink-muted);
+      font-size: 14px;
       padding: 48px 12px;
     }
     footer {
       text-align: center;
-      color: var(--muted);
+      color: var(--ink-soft);
       font-size: 12px;
-      padding: 0 20px 32px;
+      padding: 20px 20px 32px;
       line-height: 1.5;
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="brand">wishkit</div>
-    <h1>$title</h1>
-  </header>
-  <p class="subtitle">$owner 님이 공유한 살까말까 바구니</p>
-  <div class="folder">
-    <div class="paper">
+  <div class="page">
+    <header>
+      <div class="logo">wishkit</div>
+      <h1>$title</h1>
+      <p class="subtitle">$owner 님이 공유한 살까말까 바구니</p>
+    </header>
+    <main class="sheet">
       $body
-    </div>
+    </main>
+    <footer>
+      이 페이지는 $expiryLabel까지 볼 수 있어요. 그 뒤에는 자동으로 사라집니다.
+    </footer>
   </div>
-  <footer>
-    이 페이지는 $expiryLabel까지 볼 수 있어요. 그 뒤에는 자동으로 사라집니다.
-  </footer>
 </body>
 </html>
 ''';
@@ -201,9 +219,12 @@ String _productCardHtml(Product product) {
   final platform = htmlEscape(product.platform);
   final name = htmlEscape(product.name);
   final price = htmlEscape(formatWon(product.price));
-  final original = product.originalPrice == null
+  final orig = product.originalPrice;
+  final original = (orig == null || orig <= product.price)
       ? ''
-      : '<span class="original">${htmlEscape(formatWon(product.originalPrice!))}</span>';
+      : '<span class="original">${htmlEscape(formatWon(orig))}</span>';
+  final rate = _discountRate(product);
+  final rateHtml = rate == null ? '' : '\n        <div class="rate">$rate%</div>';
   final imageUrl = safeHttpUrl(product.image);
   final image = imageUrl == null
       ? '<div class="thumb" aria-hidden="true"></div>'
@@ -211,13 +232,22 @@ String _productCardHtml(Product product) {
   final href = safeHttpUrl(product.productUrl);
   final inner = '''
       $image
-      <div>
+      <div class="info">
         <div class="platform">$platform</div>
         <div class="name">$name</div>
-        <div class="price-row">$original<span class="price">$price</span></div>
+        <div class="price-row">$original<span class="price">$price</span></div>$rateHtml
       </div>''';
   if (href == null) {
     return '      <div class="card">$inner\n      </div>';
   }
   return '      <a class="card" href="${htmlEscape(href)}" target="_blank" rel="noopener noreferrer">$inner\n      </a>';
+}
+
+/// Same rule as WishlistProductCard._discountRate in the app.
+int? _discountRate(Product product) {
+  final d = product.discount;
+  if (d != null && d > 0) return d;
+  final orig = product.originalPrice;
+  if (orig == null || orig <= product.price || orig == 0) return null;
+  return ((orig - product.price) * 100 / orig).round();
 }

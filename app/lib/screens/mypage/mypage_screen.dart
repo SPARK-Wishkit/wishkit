@@ -525,6 +525,9 @@ class MyPageScreen extends StatelessWidget {
                       controller: nameCtrl,
                       decoration: const InputDecoration(labelText: '이름'),
                     ),
+                    // Room for the 아이디 field's floating label, which sits
+                    // above its border and otherwise overlaps the 이름 box.
+                    const SizedBox(height: 16),
                     TextField(
                       controller: handleCtrl,
                       decoration: const InputDecoration(

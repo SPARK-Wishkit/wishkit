@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'diary_theme.dart';
+
 /// Lays the app out at a 390pt design width (iPhone 14), then scales the
 /// whole tree to the real phone width.
 ///
@@ -16,7 +18,42 @@ class DiaryScale {
   /// Largest scale before wide phones / tablets stop stretching.
   static const maxFactor = 1.15;
 
-  static const maxUserTextScale = 1.2;
+  /// Phone "Text Size" setting is ignored (1.0) so text keeps the same ratio
+  /// to cards/tabs on every phone. At 1.2 a larger system font made text wrap,
+  /// pushing prices to a new line and making every card taller.
+  static const maxUserTextScale = 1.0;
+
+  /// Design height (iPhone 14). Used to size the phone frame on tablets.
+  static const designHeight = 844.0;
+
+  /// A screen whose short side is at least this wide is treated as a tablet.
+  static const tabletShortestSide = 600.0;
+
+  /// Tablet frame scale range: portrait iPads hit the top (≈1.3×),
+  /// landscape iPads fall back to 1.0× (normal phone size).
+  static const tabletMinFactor = 1.0;
+  static const tabletMaxFactor = 1.3;
+
+  static bool isTablet(Size size) => size.shortestSide >= tabletShortestSide;
+
+  /// Phones: scale by width. Tablets: show the phone layout as a centered
+  /// frame sized from the screen height, so it looks like a big phone.
+  static double factorFor(Size size) {
+    if (size.width <= 0 || size.height <= 0) return 1;
+    if (isTablet(size)) {
+      final byHeight = (size.height / designHeight)
+          .clamp(tabletMinFactor, tabletMaxFactor);
+      // Never wider than the screen (e.g. split view).
+      return byHeight < size.width / designWidth
+          ? byHeight
+          : size.width / designWidth;
+    }
+    final byWidth = factorForWidth(size.width);
+    // Below ~312pt the min clamp would make the app wider than the screen.
+    return byWidth < size.width / designWidth
+        ? byWidth
+        : size.width / designWidth;
+  }
 
   static double factorForWidth(double width) {
     if (width <= 0) return 1;
@@ -24,7 +61,7 @@ class DiaryScale {
   }
 
   static double of(BuildContext context) =>
-      factorForWidth(MediaQuery.sizeOf(context).width);
+      factorFor(MediaQuery.sizeOf(context));
 
   static EdgeInsets scaleInsets(EdgeInsets insets, double factor) {
     if (factor == 0) return insets;
@@ -48,15 +85,17 @@ class DiaryScale {
             : mq.size.height;
         if (maxW <= 0 || maxH <= 0) return child;
 
-        final factor = factorForWidth(maxW);
+        final factor = factorFor(Size(maxW, maxH));
         final virtualHeight = maxH / factor;
+        final frameWidth = designWidth * factor;
+        // Gray sides + soft shadow only when there is space beside the app
+        // (iPad, landscape phone). On a normal phone the frame fills the width.
+        final framed = maxW - frameWidth > 1;
         final userScale =
             mq.textScaler.scale(1).clamp(1.0, maxUserTextScale);
 
-        return Align(
-          alignment: Alignment.topCenter,
-          child: SizedBox(
-            width: designWidth * factor,
+        final scaled = SizedBox(
+            width: frameWidth,
             height: maxH,
             child: FittedBox(
               fit: BoxFit.fitWidth,
@@ -77,6 +116,27 @@ class DiaryScale {
                   child: child,
                 ),
               ),
+            ),
+          );
+
+        if (!framed) {
+          return Align(alignment: Alignment.topCenter, child: scaled);
+        }
+        return ColoredBox(
+          // A shade darker than the app's own gray so the frame edge reads.
+          color: DiaryColors.tabIdle,
+          child: Center(
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x1F000000),
+                    blurRadius: 24,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: ClipRect(child: scaled),
             ),
           ),
         );

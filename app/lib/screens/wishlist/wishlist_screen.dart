@@ -24,28 +24,12 @@ class WishlistScreen extends StatefulWidget {
 class _WishlistScreenState extends State<WishlistScreen> {
   final _tabsRowKey = GlobalKey<_TabsRowState>();
 
-  /// Product ids checked for "선택삭제". Pruned to the visible list each build.
-  final Set<int> _selected = {};
-
-  Future<void> _deleteSelected(AppStore store) async {
-    final ids = _selected.toList();
-    if (ids.isEmpty) return;
-    setState(_selected.clear);
-    for (final id in ids) {
-      await store.removeProduct(id);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppStore>();
     final tab = store.selectedTab;
     final products = store.displayedProducts;
     final adFeed = AdFeed(products.length, every: AdsConfig.feedEvery);
-    final visibleIds = products.map((p) => p.id).toSet();
-    _selected.removeWhere((id) => !visibleIds.contains(id));
-    final allSelected =
-        products.isNotEmpty && _selected.length == products.length;
 
     return Scaffold(
       backgroundColor: DiaryColors.canvas,
@@ -103,22 +87,6 @@ class _WishlistScreenState extends State<WishlistScreen> {
                               isPublic: tab.isPublic,
                               onToggle: () => store.toggleTabPublic(tab.id),
                             ),
-                          if (products.isNotEmpty)
-                            _SelectBar(
-                              selected: _selected.length,
-                              total: products.length,
-                              allSelected: allSelected,
-                              onToggleAll: () => setState(() {
-                                if (allSelected) {
-                                  _selected.clear();
-                                } else {
-                                  _selected.addAll(visibleIds);
-                                }
-                              }),
-                              onDeleteSelected: _selected.isEmpty
-                                  ? null
-                                  : () => _deleteSelected(store),
-                            ),
                           Expanded(
                             child: products.isEmpty
                                 ? Center(
@@ -133,7 +101,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                 : ListView.separated(
                                     padding: const EdgeInsets.fromLTRB(
                                       16,
-                                      4,
+                                      16,
                                       16,
                                       96, // room for the floating 공유 담기 pill
                                     ),
@@ -155,14 +123,6 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                             context.push('/product/${p.id}'),
                                         onDelete: () =>
                                             store.removeProduct(p.id),
-                                        selected: _selected.contains(p.id),
-                                        onSelectChanged: (v) => setState(() {
-                                          if (v) {
-                                            _selected.add(p.id);
-                                          } else {
-                                            _selected.remove(p.id);
-                                          }
-                                        }),
                                       );
                                       return LayoutBuilder(
                                         builder: (context, constraints) {
@@ -860,74 +820,6 @@ class _PrivacyBanner extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// 전체선택 (n/m) · 선택삭제
-class _SelectBar extends StatelessWidget {
-  const _SelectBar({
-    required this.selected,
-    required this.total,
-    required this.allSelected,
-    required this.onToggleAll,
-    required this.onDeleteSelected,
-  });
-
-  final int selected;
-  final int total;
-  final bool allSelected;
-  final VoidCallback onToggleAll;
-  final VoidCallback? onDeleteSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
-      child: Row(
-        children: [
-          InkWell(
-            onTap: onToggleAll,
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  SelectBox(checked: allSelected),
-                  const SizedBox(width: 10),
-                  Text(
-                    '전체선택',
-                    style: DiaryTheme.ui(15, weight: FontWeight.w600),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '($selected/$total)',
-                    style: DiaryTheme.ui(14, color: DiaryColors.inkSoft),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const Spacer(),
-          TextButton(
-            onPressed: onDeleteSelected,
-            style: TextButton.styleFrom(
-              foregroundColor: DiaryColors.inkMuted,
-              disabledForegroundColor: DiaryColors.inkSoft,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-            ),
-            child: Text(
-              '선택삭제',
-              style: DiaryTheme.ui(
-                14,
-                color: onDeleteSelected == null
-                    ? DiaryColors.inkSoft
-                    : DiaryColors.ink,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
