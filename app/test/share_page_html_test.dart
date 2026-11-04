@@ -52,6 +52,20 @@ void main() {
     expect(html, isNot(contains('ftp://files.example.com/x')));
   });
 
+  test('share page uses the current app design (흑백·Righteous 로고·할인율)', () {
+    final html = buildSharePageHtml(
+      basket: basket,
+      expiresAt: DateTime(2026, 9, 14),
+    );
+    expect(html, contains('family=Righteous'));
+    expect(html, isNot(contains('family=Jua')));
+    expect(html, contains('--sale: #e0322b'));
+    // 40,000원 → 32,000원 = 20% 할인, 앱 카드와 같은 규칙.
+    expect(html, contains('<div class="rate">20%</div>'));
+    // 할인 없는 상품에는 할인율을 붙이지 않는다.
+    expect('<div class="rate">'.allMatches(html).length, 1);
+  });
+
   test('safeHttpUrl only allows http(s)', () {
     expect(safeHttpUrl('https://ok.example/a'), 'https://ok.example/a');
     expect(safeHttpUrl('http://ok.example/a'), 'http://ok.example/a');

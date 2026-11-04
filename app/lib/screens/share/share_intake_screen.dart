@@ -491,9 +491,10 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
             padding: EdgeInsets.zero,
             child: ListView(
               children: [
-                Text(
-                  '다른 앱에서 공유한 링크를\n위시리스트 카드로 정리해요',
-                  style: DiaryTheme.body(14, color: DiaryColors.inkMuted),
+                // 한 줄로 — 좁은 화면에서는 줄바꿈 대신 글자를 살짝 줄인다.
+                OneLineText(
+                  '다른 앱에서 공유한 링크를 위시리스트 카드로 정리해요',
+                  style: DiaryTheme.body(13, color: DiaryColors.inkMuted),
                 ),
                 const SizedBox(height: 14),
                 TextField(

@@ -135,7 +135,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                       16,
                                       4,
                                       16,
-                                      96, // room for the floating 공유 담기 pill
+                                      80, // room for the floating 공유 담기 pill
                                     ),
                                     itemCount: adFeed.length,
                                     separatorBuilder: (_, __) =>
