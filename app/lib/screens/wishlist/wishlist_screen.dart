@@ -877,8 +877,8 @@ class WishlistProductCard extends StatelessWidget {
             children: [
               if (onSelectChanged != null)
                 Padding(
-                  // (88 thumb - 46 tap box) / 2 → vertically centred on the thumb
-                  padding: const EdgeInsets.only(top: 21),
+                  // (72 thumb - 46 tap box) / 2 → vertically centred on the thumb
+                  padding: const EdgeInsets.only(top: 13),
                   child: InkWell(
                   onTap: () => onSelectChanged!(!selected),
                   borderRadius: BorderRadius.circular(8),
@@ -889,25 +889,25 @@ class WishlistProductCard extends StatelessWidget {
                 ),
                 ),
               ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 child: Image.network(
                   product.image,
-                  width: 88,
-                  height: 88,
+                  width: 72,
+                  height: 72,
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(
-                    width: 88,
-                    height: 88,
+                    width: 72,
+                    height: 72,
                     color: DiaryColors.surfaceSoft,
                     child: const Icon(
                       Icons.checkroom_outlined,
-                      size: 30,
+                      size: 26,
                       color: DiaryColors.grid,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -921,50 +921,49 @@ class WishlistProductCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    // 긴 상품명이 잘리지 않게 3줄까지, 14pt.
+                    // 긴 상품명이 잘리지 않게 3줄까지(대부분 1~2줄), 13pt.
                     Text(
                       product.name,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: DiaryTheme.product(
-                        14,
+                        13,
                         weight: FontWeight.w700,
                       ).copyWith(height: 1.3),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
+                    // 할인율 · 판매가 · 정가를 한 줄에(할인율이 따로 한 줄을 차지하지 않게).
                     Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 6,
+                      spacing: 5,
                       children: [
+                        if (rate != null)
+                          Text(
+                            '$rate%',
+                            style: DiaryTheme.product(
+                              15,
+                              weight: FontWeight.w800,
+                              color: DiaryColors.sale,
+                            ),
+                          ),
+                        Text(
+                          formatWon(product.price),
+                          style: DiaryTheme.product(
+                            15,
+                            weight: FontWeight.w800,
+                          ),
+                        ),
                         if (product.originalPrice != null &&
                             product.originalPrice! > product.price)
                           Text(
                             formatWon(product.originalPrice!),
                             style: DiaryTheme.product(
-                              12,
+                              11,
                               color: DiaryColors.inkSoft,
                             ).copyWith(decoration: TextDecoration.lineThrough),
                           ),
-                        Text(
-                          formatWon(product.price),
-                          style: DiaryTheme.product(
-                            17,
-                            weight: FontWeight.w700,
-                          ),
-                        ),
                       ],
                     ),
-                    if (rate != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        '$rate%',
-                        style: DiaryTheme.product(
-                          13,
-                          weight: FontWeight.w700,
-                          color: DiaryColors.sale,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -973,7 +972,7 @@ class WishlistProductCard extends StatelessWidget {
                   onPressed: onDelete,
                   icon: const Icon(
                     Icons.close,
-                    size: 20,
+                    size: 18,
                     color: DiaryColors.inkSoft,
                   ),
                   visualDensity: VisualDensity.compact,

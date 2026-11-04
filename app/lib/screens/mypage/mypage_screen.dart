@@ -287,8 +287,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
                   applicationName: 'wishkit',
                   applicationVersion: '1.0.0',
                   applicationLegalese:
-                      '여기저기 흩어진 쇼핑 위시리스트를 한곳에 모아 보세요.\n'
-                      '살까 말까 고민될 땐 친구에게 물어보고요.',
+                      '여러 쇼핑몰에 흩어진 위시리스트를 한곳에서 관리합니다.\n'
+                      '구매가 고민되는 상품은 친구에게 의견을 물을 수 있습니다.',
                 );
               },
             ),

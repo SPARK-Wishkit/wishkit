@@ -726,6 +726,18 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 선택(체크)한 상품을 살까말까 바구니에서 한 번에 뺀다. 위시리스트의 상품은 그대로 둔다.
+  /// 뺀 개수를 돌려준다.
+  Future<int> removeSelectedFromBasket() async {
+    final before = basket.length;
+    basket = basket.where((b) => !b.isSelected).toList();
+    final removed = before - basket.length;
+    if (removed == 0) return 0;
+    await _persistBasket();
+    notifyListeners();
+    return removed;
+  }
+
   /// Returns null when a save for the same product is already in flight.
   Future<Product?> addParsedProduct(
     ParsedProductInfo info, {
