@@ -9,7 +9,7 @@ class DiaryGridPaper extends StatelessWidget {
     required this.child,
     this.color = DiaryColors.paper,
     this.padding = const EdgeInsets.all(12),
-    this.borderRadius = 16,
+    this.borderRadius = DiaryTheme.radius,
     this.border,
   });
 

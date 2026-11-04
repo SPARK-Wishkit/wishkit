@@ -1,3 +1,5 @@
+import 'diary_theme.dart';
+
 /// 위시리스트 목록 카드(상품 카드·광고 카드) 공통 치수.
 ///
 /// 광고 카드가 상품 카드와 같은 크기로 보이게 두 카드가 이 값을 같이 쓴다.
@@ -7,7 +9,7 @@ abstract final class ListCardMetrics {
   static const height = 96.0;
 
   /// 모서리 둥글기.
-  static const radius = 14.0;
+  static const radius = DiaryTheme.radius;
 
   /// 카드 그림자 높이.
   static const elevation = 0.0;

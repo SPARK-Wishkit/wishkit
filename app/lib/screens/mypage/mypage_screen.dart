@@ -282,13 +282,34 @@ class _MyPageScreenState extends State<MyPageScreen> {
               label: '앱 정보',
               icon: Icons.info_outline,
               onTap: () {
-                showAboutDialog(
+                // 기본 showAboutDialog 는 "View licenses" 버튼이 붙어서 직접 만든 창을 쓴다.
+                showDialog<void>(
                   context: context,
-                  applicationName: 'wishkit',
-                  applicationVersion: '1.0.0',
-                  applicationLegalese:
-                      '여러 쇼핑몰에 흩어진 위시리스트를 한곳에서 관리합니다.\n'
-                      '구매가 고민되는 상품은 친구에게 의견을 물을 수 있습니다.',
+                  builder: (ctx) => AlertDialog(
+                    title: Text('wishkit', style: DiaryTheme.logo(26)),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '버전 1.0.0',
+                          style: DiaryTheme.ui(13, color: DiaryColors.inkSoft),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '여러 쇼핑몰에 흩어진 위시리스트를 한곳에서 관리합니다.\n'
+                          '구매가 고민되는 상품은 친구에게 의견을 물을 수 있습니다.',
+                          style: DiaryTheme.body(14).copyWith(height: 1.5),
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('닫기'),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
@@ -308,7 +329,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
       context: context,
       backgroundColor: DiaryColors.paper,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
       ),
       builder: (ctx) {
         return SafeArea(

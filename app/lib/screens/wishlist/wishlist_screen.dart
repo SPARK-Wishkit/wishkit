@@ -67,7 +67,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                       topLeft: Radius.circular(
                         store.selectedTabId == 'all' ? 0 : 18,
                       ),
-                      topRight: const Radius.circular(18),
+                      topRight: const Radius.circular(DiaryTheme.radius),
                     ),
                   ),
                   child: ClipRRect(
@@ -75,7 +75,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                       topLeft: Radius.circular(
                         store.selectedTabId == 'all' ? 0 : 18,
                       ),
-                      topRight: const Radius.circular(18),
+                      topRight: const Radius.circular(DiaryTheme.radius),
                     ),
                     child: DiaryGridPaper(
                       padding: EdgeInsets.zero,
@@ -145,7 +145,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                               child: Material(
                                                 color: Colors.transparent,
                                                 borderRadius:
-                                                    BorderRadius.circular(14),
+                                                    BorderRadius.circular(DiaryTheme.radius),
                                                 child: SizedBox(
                                                   width: constraints.maxWidth,
                                                   child: card,
@@ -202,7 +202,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
       context: context,
       backgroundColor: DiaryColors.paper,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
       ),
       builder: (ctx) {
         final latest = store.tabs.firstWhere(
@@ -580,7 +580,7 @@ class _TabsRowState extends State<_TabsRow> {
         return Material(
           elevation: 3,
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(DiaryTheme.radius),
           child: child,
         );
       },
@@ -675,7 +675,7 @@ class _FolderTab extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
         onTap: onTap,
         onDoubleTap: onDoubleTap,
         child: AnimatedContainer(
@@ -688,7 +688,7 @@ class _FolderTab extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
           ),
           child: AnimatedScale(
             scale: highlighted ? 1.22 : 1,
@@ -741,14 +741,14 @@ class _AddListTab extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
         onTap: onTap,
         child: Container(
           width: 64,
           margin: const EdgeInsets.only(top: 6),
           decoration: BoxDecoration(
             color: DiaryColors.tabIdle,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
             border: Border.all(color: DiaryColors.line),
           ),
           child: const Icon(Icons.add, size: 22, color: DiaryColors.inkMuted),
@@ -772,7 +772,7 @@ class _PrivacyBanner extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: DiaryColors.surfaceSoft,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(DiaryTheme.radius),
         ),
         child: Row(
           children: [
@@ -881,7 +881,7 @@ class WishlistProductCard extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 13),
                   child: InkWell(
                   onTap: () => onSelectChanged!(!selected),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(DiaryTheme.radius),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: SelectBox(checked: selected),
@@ -889,7 +889,7 @@ class WishlistProductCard extends StatelessWidget {
                 ),
                 ),
               ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(DiaryTheme.radius),
                 child: Image.network(
                   product.image,
                   width: 72,

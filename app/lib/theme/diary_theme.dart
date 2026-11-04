@@ -67,8 +67,9 @@ class DiaryColors {
 }
 
 class DiaryTheme {
-  /// Corner radius for buttons, inputs and thumbnails on list screens.
-  static const double radius = 4;
+  /// 앱 전체에서 쓰는 단 하나의 모서리 둥글기(버튼·입력칸·사진·카드·시트·대화상자·탭).
+  /// 체크 박스처럼 일부러 각진 작은 요소만 예외. 2026-11: 4 → 14 (너무 각져 보여서).
+  static const double radius = 14;
 
   static ThemeData get light {
     final base = ThemeData(
@@ -136,13 +137,13 @@ class DiaryTheme {
         surfaceTintColor: Colors.transparent,
         modalBackgroundColor: DiaryColors.white,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(radius)),
         ),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: DiaryColors.white,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
         titleTextStyle: ui(17, weight: FontWeight.w700),
         contentTextStyle: ui(14, color: DiaryColors.inkMuted),
       ),
