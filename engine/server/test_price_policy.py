@@ -142,7 +142,7 @@ def test_off_policy_price_is_withheld_not_replaced():
     # 퀸잇 #22 사례: 가장 큰 "첫구매 특가"를 두고 더 작은 가격을 고르면 측정값으로 바꾸지 않고 비운다.
     ext = {**_extracted(34800), "ambiguous": False, "ambiguity_reason": None, "confidence": "high"}
     g = grounding_check(ext, "99,000원 34,800원 29,800원", [], CANDS)
-    out = withhold_off_policy_price(ext, g)
+    out = withhold_off_policy_price(ext, g, CANDS)
     assert out["price"]["unconditional_price"] is None
     assert out["price"]["regular_price"] == 99000
     assert out["ambiguous"] is True and out["confidence"] == "low"
@@ -150,13 +150,25 @@ def test_off_policy_price_is_withheld_not_replaced():
     assert ext["price"]["unconditional_price"] == 34800  # 원본은 건드리지 않음
 
 
-def test_withhold_leaves_compliant_tie_and_unknown_alone():
+def test_tie_is_withheld_even_if_ai_picked_one_of_them():
+    # 지그재그 #18 사례: 같은 22px 가격 두 개 중 AI가 고른 쪽이 사람 판정과 달랐다 → 동점은 비운다.
+    tie = [_cand(185580, 22), _cand(129900, 22), _cand(235000, 14, struck=True)]
+    ext = _extracted(129900)
+    out = withhold_off_policy_price(ext, grounding_check(ext, "185,580원 129,900원", [], tie), tie)
+    assert out["price"]["unconditional_price"] is None and out["ambiguous"] is True
+    assert "129,900원, 185,580원" in out["ambiguity_reason"]
+
+
+def test_withhold_leaves_compliant_and_unknown_alone():
     ok = _extracted(29800)
-    assert withhold_off_policy_price(ok, grounding_check(ok, "29,800원", [], CANDS)) is ok
-    tie = [_cand(29800, 28), _cand(31800, 28)]
-    other = _extracted(34800)  # 동점 둘 다 아닌 값이지만 대표값이 없어서 판정 보류
-    assert withhold_off_policy_price(other, grounding_check(other, "34,800원", [], tie)) is other
-    assert withhold_off_policy_price(other, grounding_check(other, "34,800원", [])) is other
+    assert withhold_off_policy_price(ok, grounding_check(ok, "29,800원", [], CANDS), CANDS) is ok
+    other = _extracted(34800)  # 측정 후보가 없으면 판단 근거가 없어 그대로
+    assert withhold_off_policy_price(other, grounding_check(other, "34,800원", []), []) is other
+    empty = _extracted(None)
+    assert withhold_off_policy_price(empty, grounding_check(empty, "", [], CANDS), CANDS) is empty
+    # 같은 가격이 같은 크기로 두 번 표시된 건 동점이 아님(값 집합 기준)
+    dup = [_cand(29800, 28), _cand(29800, 28)]
+    assert withhold_off_policy_price(ok, grounding_check(ok, "29,800원", [], dup), dup) is ok
 
 
 def test_prompt_lists_candidates_with_flags():

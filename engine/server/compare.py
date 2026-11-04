@@ -110,20 +110,30 @@ def grounding_check(
     }
 
 
-def withhold_off_policy_price(extracted: dict, grounding: dict) -> dict:
-    """첫 화면에서 가장 크게 표시된 가격이 하나로 분명한데(most_prominent_price) AI가 다른 가격을
-    골랐으면, 그 가격을 버리고 ambiguous로 돌린 사본을 돌려준다. 측정값으로 바꿔 넣지는 않는다 —
-    측정도 틀릴 수 있으니 "틀린 값보다 빈 값" 원칙을 따른다. 같은 크기 동점(대표값 None)이나
-    판단 근거가 없는 경우(None)는 그대로 둔다. 원래 AI 답은 ambiguity_reason에 남긴다."""
-    if grounding.get("price_is_most_prominent") is not False or grounding.get("most_prominent_price") is None:
-        return extracted
+def withhold_off_policy_price(extracted: dict, grounding: dict, price_candidates: list[dict] | None = None) -> dict:
+    """가장 크게 표시된 가격을 확신할 수 없으면 가격을 버리고 ambiguous로 돌린 사본을 돌려준다.
+    측정값으로 바꿔 넣지는 않는다 — 측정도 틀릴 수 있으니 "틀린 값보다 빈 값" 원칙을 따른다.
+
+    - 가장 큰 가격이 하나로 분명한데(most_prominent_price) AI가 다른 가격을 고른 경우
+    - 같은 글자 크기의 서로 다른 가격이 여럿인 동점(2026-11-04 결정 — 사람 검수에서 동점은
+      AI가 고른 쪽이 맞기도 틀리기도 해서, 목표 "틀린 값 0%"를 위해 비움)
+    판단 근거(측정 후보 또는 AI 가격)가 없으면 그대로 둔다. 원래 AI 답은 ambiguity_reason에 남긴다."""
     price_info = dict(extracted.get("price") or {})
     ai_price = price_info.get("unconditional_price")
+    if ai_price is None:
+        return extracted
+    top_values = most_prominent_prices(price_candidates)
+    if len(top_values) > 1:
+        tied = ", ".join(f"{v:,}원" for v in sorted(top_values))
+        reason = f"화면에서 같은 크기로 가장 크게 표시된 가격이 여럿({tied})이라 비움 (AI 답 {int(ai_price):,}원)"
+    elif grounding.get("price_is_most_prominent") is False and grounding.get("most_prominent_price") is not None:
+        reason = (
+            f"AI가 고른 가격({int(ai_price):,}원)이 화면에서 가장 크게 표시된 가격"
+            f"({grounding['most_prominent_price']:,}원)과 달라 비움"
+        )
+    else:
+        return extracted
     price_info["unconditional_price"] = None
-    reason = (
-        f"AI가 고른 가격({ai_price:,}원)이 화면에서 가장 크게 표시된 가격"
-        f"({grounding['most_prominent_price']:,}원)과 달라 비움"
-    )
     return {**extracted, "price": price_info, "ambiguous": True, "ambiguity_reason": reason, "confidence": "low"}
 
 

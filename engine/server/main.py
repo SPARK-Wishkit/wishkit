@@ -118,7 +118,7 @@ async def _extract(url: str) -> dict:
 
     # 그라운딩은 AI 원래 답으로 잰다(정책 위반 여부가 로그·회귀 테스트에 남도록). 그다음 위반이면 가격을 비운다.
     grounding = grounding_check(extracted, r.raw_text, r.image_candidates, r.price_candidates)
-    final = withhold_off_policy_price(extracted, grounding)
+    final = withhold_off_policy_price(extracted, grounding, r.price_candidates)
     grounding["price_withheld"] = final is not extracted
     if grounding["price_withheld"]:
         logger.info("가격 정책 위반으로 가격 비움: %s (%s)", url, final["ambiguity_reason"])
