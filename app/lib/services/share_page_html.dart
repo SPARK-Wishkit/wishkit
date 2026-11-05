@@ -180,6 +180,14 @@ String buildSharePageHtml({
       padding: 8px 20px 32px;
     }
     footer .brand { font-size: 14px; color: var(--ink); margin-top: 6px; }
+    /* 앱 아이콘처럼 wish의 i 점 대신 별(앱 WishkitLogo와 같은 비율) */
+    .brand { line-height: 1.1; }
+    .istar { position: relative; display: inline-block; }
+    .istar svg {
+      position: absolute; left: 50%; top: -0.054em;
+      width: 0.32em; height: 0.304em; transform: translateX(-50%);
+      fill: currentColor; overflow: visible;
+    }
     .note {
       margin: 4px 0 14px;
       padding: 12px 14px;
@@ -229,7 +237,7 @@ String buildSharePageHtml({
 <body>
   <div class="page">
     <header>
-      <div class="brand">wishkit</div>
+      <div class="brand" aria-label="wishkit">w<span class="istar">\u0131<svg viewBox="0 0 100 95" aria-hidden="true"><polygon points="50.0,0.0 65.5,31.3 100.0,36.3 75.0,60.7 80.9,95.1 50.0,78.9 19.1,95.1 25.0,60.7 -0.0,36.3 34.5,31.3"/></svg></span>shkit</div>
       <h1>$title</h1>
       <p class="subtitle">$owner 님이 공유한 살까말까 바구니</p>
     </header>
@@ -239,7 +247,7 @@ String buildSharePageHtml({
 $details
     <footer>
       이 페이지는 $expiryLabel까지 볼 수 있어요. 그 뒤에는 자동으로 사라집니다.
-      <div class="brand">wishkit</div>
+      <div class="brand" aria-label="wishkit">w<span class="istar">\u0131<svg viewBox="0 0 100 95" aria-hidden="true"><polygon points="50.0,0.0 65.5,31.3 100.0,36.3 75.0,60.7 80.9,95.1 50.0,78.9 19.1,95.1 25.0,60.7 -0.0,36.3 34.5,31.3"/></svg></span>shkit</div>
     </footer>
   </div>
   <script>

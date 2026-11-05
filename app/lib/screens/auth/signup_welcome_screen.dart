@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../auth/auth_controller.dart';
 import '../../theme/diary_theme.dart';
+import '../../widgets/diary_widgets.dart';
 import 'auth_widgets.dart';
 
 class SignupWelcomeScreen extends StatefulWidget {
@@ -38,7 +39,7 @@ class _SignupWelcomeScreenState extends State<SignupWelcomeScreen> {
       padding: const EdgeInsets.fromLTRB(22, 36, 22, 32),
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text('wishkit', style: DiaryTheme.logo(40)),
+        WishkitLogo(size: 40),
         const SizedBox(height: 20),
         Text(
           '회원가입을 축하합니다',
@@ -47,7 +48,7 @@ class _SignupWelcomeScreenState extends State<SignupWelcomeScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          '잠시 후 위시리스트로 이동해요',
+          '잠시 후 wishkit으로 이동해요',
           textAlign: TextAlign.center,
           style: DiaryTheme.body(13, color: DiaryColors.inkMuted),
         ),

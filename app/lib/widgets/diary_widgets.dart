@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/diary_theme.dart';
@@ -295,6 +297,7 @@ class DiaryButton extends StatelessWidget {
     this.filled = false,
     this.color = DiaryColors.folderBlue,
     this.icon,
+    this.loading = false,
   });
 
   final String label;
@@ -302,6 +305,9 @@ class DiaryButton extends StatelessWidget {
   final bool filled;
   final Color color;
   final IconData? icon;
+
+  /// 진행 중이면 글자 왼쪽에 도는 표시를 보여 준다(아이콘 자리).
+  final bool loading;
 
   bool get _disabled => onPressed == null;
 
@@ -335,7 +341,14 @@ class DiaryButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[
+              if (loading) ...[
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+                ),
+                const SizedBox(width: 8),
+              ] else if (icon != null) ...[
                 Icon(icon, size: 18, color: fg),
                 const SizedBox(width: 6),
               ],
@@ -461,4 +474,79 @@ String relativeTime(DateTime t) {
   if (diff.inHours < 24) return '${diff.inHours}시간 전';
   if (diff.inDays < 7) return '${diff.inDays}일 전';
   return '${t.year}.${t.month}.${t.day}';
+}
+
+/// wishkit 로고: 앱 아이콘처럼 "wish"의 i 점 대신 별.
+///
+/// Righteous 글꼴의 점 없는 ı(U+0131)를 쓰고 그 위에 별을 그린다. 위치는 글꼴 치수(2048 단위:
+/// ascent 2017 · descent 526 · w 너비 1550 · ı 기둥 중심 241.5 · ı 높이 1071)와
+/// [DiaryTheme.logo]의 줄 높이 1.1로 계산해서 글자 크기와 상관없이 같은 자리에 온다.
+/// 별 크기·간격은 앱 아이콘 비율(별 너비 ≈ 0.32em, x높이 위 ≈ 0.1em)에 맞췄다.
+class WishkitLogo extends StatelessWidget {
+  const WishkitLogo({super.key, required this.size, this.color});
+
+  final double size;
+  final Color? color;
+
+  static const _baseline = 1.1 * 2017 / (2017 + 526); // 줄 맨 위에서 기준선까지(em)
+  static const _starCenterX = (1550 + 241.5) / 2048; // w 너비 + ı 기둥 중심(em)
+  static const _starWidth = 0.32; // em
+  static const _starBottomAboveBaseline = 1071 / 2048 + 0.1; // em
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? DiaryColors.ink;
+    final starW = size * _starWidth;
+    final top = size * (_baseline - _starBottomAboveBaseline) - starW * 0.95;
+    return Semantics(
+      label: 'wishkit',
+      excludeSemantics: true,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Text('w\u0131shkit', style: DiaryTheme.logo(size, color: c)),
+          Positioned(
+            left: size * _starCenterX - starW / 2,
+            top: top,
+            child: CustomPaint(
+              size: Size(starW, starW * 0.95),
+              painter: _StarPainter(c),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 꼭짓점 5개 별(위가 뾰족). 높이 = 너비 × 0.95.
+class _StarPainter extends CustomPainter {
+  _StarPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = size.width / 2 / math.cos(math.pi / 10); // 바깥 반지름(가로 폭에 맞춤)
+    final cx = size.width / 2;
+    final cy = r; // 위 꼭짓점이 맨 위
+    final inner = r * 0.5; // 앱 아이콘처럼 통통한 별
+    final path = Path();
+    for (var i = 0; i < 10; i++) {
+      final rad = i.isEven ? r : inner;
+      final a = -math.pi / 2 + i * math.pi / 5;
+      final x = cx + rad * math.cos(a);
+      final y = cy + rad * math.sin(a);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, Paint()..color = color..isAntiAlias = true);
+  }
+
+  @override
+  bool shouldRepaint(_StarPainter old) => old.color != color;
 }

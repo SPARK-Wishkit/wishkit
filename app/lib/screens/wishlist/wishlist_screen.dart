@@ -41,7 +41,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('wishkit', style: DiaryTheme.logo(30)),
+                child: WishkitLogo(size: 30),
               ),
             ),
             SizedBox(
@@ -414,7 +414,7 @@ class _TabsRow extends StatefulWidget {
   });
 
   final AppStore store;
-  /// 선택된 탭의 연필 버튼 → 리스트 편집(비공개·이름 변경·삭제).
+  /// 선택된 탭의 더보기(⋯) 버튼 → 리스트 편집(비공개·이름 변경·삭제).
   final void Function(WishlistTab tab) onEditTab;
   final VoidCallback onAdd;
   final void Function(Product product, WishlistTab tab) onMoveProduct;
@@ -656,7 +656,7 @@ class _FolderTab extends StatelessWidget {
   final int count;
   final VoidCallback onTap;
 
-  /// 선택된 탭에만 연필 버튼으로 보인다(꾹 누르기는 탭 순서 바꾸기라 쓰지 않는다).
+  /// 선택된 탭에만 더보기(⋯) 버튼으로 보인다(꾹 누르기는 탭 순서 바꾸기라 쓰지 않는다).
   final VoidCallback? onEdit;
   final bool highlighted;
 
@@ -728,15 +728,16 @@ class _FolderTab extends StatelessWidget {
                   // 탭 글자보다 넉넉한 누름 영역(약 30×30)을 둔다.
                   Semantics(
                     button: true,
-                    label: '${tab.name} 리스트 편집',
+                    label: '${tab.name} 리스트 설정',
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: onEdit,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
+                        // 편집 창 안의 "이름 변경"(연필)과 겹치지 않게, 탭은 "더보기(⋯)".
                         child: Icon(
-                          Icons.edit_outlined,
-                          size: 16,
+                          Icons.more_horiz,
+                          size: 18,
                           color: fg,
                         ),
                       ),

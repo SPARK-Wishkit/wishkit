@@ -80,14 +80,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return AuthPage(
       children: [
-        Text('wishkit', style: DiaryTheme.logo(42)),
+        WishkitLogo(size: 42),
         const SizedBox(height: 4),
         Container(height: 2, width: 40, color: DiaryColors.ink),
         const SizedBox(height: 10),
         Text(
           isRegister
               ? '이메일 인증 후 계정이 만들어져요'
-              : '계정으로 로그인하고 위시리스트를 이어가요',
+              : '계정으로 로그인하고 wishkit을 이어가요',
           style: DiaryTheme.body(13, color: DiaryColors.inkMuted),
         ),
         if (blocked) ...[

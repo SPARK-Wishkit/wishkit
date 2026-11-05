@@ -71,6 +71,67 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     memoCtrl = TextEditingController(text: product?.memo ?? '');
   }
 
+  /// 친구 상품을 내 wishkit의 어느 폴더에 담을지 고르고 담는다.
+  Future<void> _addToMyWishkit(
+    BuildContext context,
+    AppStore store,
+    Product product,
+  ) async {
+    final folders = store.customTabs;
+    final listId = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+                child: Text(
+                  '내 wishkit 어디에 담을까요?',
+                  style: DiaryTheme.ui(16, weight: FontWeight.w700),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: Text('폴더 없이 담기', style: DiaryTheme.ui(15)),
+                subtitle: Text(
+                  '전체 리스트에만 보여요',
+                  style: DiaryTheme.ui(12, color: DiaryColors.inkSoft),
+                ),
+                onTap: () => Navigator.of(sheetCtx).pop('all'),
+              ),
+              for (final t in folders)
+                ListTile(
+                  leading: Icon(
+                    t.isPublic ? Icons.public : Icons.lock_outline,
+                  ),
+                  title: Text(t.name, style: DiaryTheme.ui(15)),
+                  onTap: () => Navigator.of(sheetCtx).pop(t.id),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (listId == null || !context.mounted) return;
+    final result = await store.addToMyWishkit(product, listId: listId);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.alreadyHad
+              ? '이미 내 wishkit에 있는 상품이에요'
+              : result.product == null
+                  ? '담지 못했어요. 잠시 후 다시 시도해 주세요'
+                  : '내 wishkit에 담았어요',
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     memoCtrl.dispose();
@@ -160,16 +221,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       backgroundColor: DiaryColors.paper,
       appBar: AppBar(
         backgroundColor: DiaryColors.white,
+        // 돌아가기 버튼만 둔다(예전 오른쪽 X는 같은 일을 해서 뺐다).
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => context.go('/'),
-          ),
-        ],
       ),
       body: SafeArea(
         child: Column(
@@ -337,20 +393,29 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         Row(
                           children: [
                             Expanded(
-                              child: DiaryButton(
-                                label: '바구니에 추가',
-                                icon: Icons.shopping_basket_outlined,
-                                onPressed: () async {
-                                  await store.addToBasket(product);
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('살까말까 바구니에 담았어요'),
-                                      ),
-                                    );
-                                  }
-                                },
-                              ),
+                              // 친구 상품은 내 wishkit으로 가져오고, 내 상품은 살까말까 바구니에 담는다.
+                              child: _openedFromSomeoneElse
+                                  ? DiaryButton(
+                                      label: '내 wishkit에 추가',
+                                      icon: Icons.add,
+                                      onPressed: () =>
+                                          _addToMyWishkit(context, store, product),
+                                    )
+                                  : DiaryButton(
+                                      label: '바구니에 추가',
+                                      icon: Icons.shopping_basket_outlined,
+                                      onPressed: () async {
+                                        await store.addToBasket(product);
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content: Text('살까말까 바구니에 담았어요'),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                    ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
