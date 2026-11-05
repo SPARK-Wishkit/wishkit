@@ -688,7 +688,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                     decoration: InputDecoration(
                       labelText: parsed!.needsManualPrice
                           ? '판매가 (직접 입력, 원)'
-                          : '기본 판매가 (쿠폰·옵션 제외, 원)',
+                          : '판매가 (원)',
                       filled: true,
                       fillColor: DiaryColors.white,
                     ),
@@ -724,7 +724,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   ],
                   const SizedBox(height: 6),
                   Text(
-                    '쿠폰은 제외한 기본 판매가예요. 옵션을 선택하면 가격이 달라질 수 있어요.',
+                    '상품 페이지에서 가장 크게 표시된 가격이에요. 쿠폰가·첫구매가처럼 조건이 붙은 가격일 수 있고, 옵션을 선택하면 달라질 수 있어요.',
                     style: DiaryTheme.body(11, color: DiaryColors.inkMuted),
                   ),
                   if (parsed!.missingFields.isNotEmpty) ...[

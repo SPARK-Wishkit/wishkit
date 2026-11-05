@@ -141,4 +141,25 @@ void main() {
       expect(await reasonFor(AwsDataException('ENGINE_ERROR')), ExtractFailureReason.failed);
     });
   });
+
+  test('엔진 골든셋 몰은 주소 대신 몰 이름으로 보인다', () {
+    const cases = {
+      'https://www.musinsa.com/products/1': '무신사',
+      'https://www.wconcept.co.kr/Product/1': 'W CONCEPT',
+      'https://www.29cm.co.kr/products/1': '29CM',
+      'https://www.uniqlo.com/kr/ko/products/1': '유니클로',
+      'https://mobile.a-bly.com/goods/1': '에이블리',
+      'https://zigzag.kr/catalog/products/1': '지그재그',
+      'https://kream.co.kr/products/1': 'KREAM',
+      'https://www.nike.com/kr/t/1': '나이키',
+      'https://web.queenit.kr/product/1': '퀸잇',
+      'https://4910.kr/goods/1': '4910',
+      'https://www.ssfshop.com/1/good': 'SSF샵',
+      'https://posty.kr/goods/1': '포스티',
+    };
+    for (final e in cases.entries) {
+      expect(platformLabelForUrl(e.key), e.value, reason: e.key);
+    }
+    expect(platformLabelForUrl('https://shop.example.com/p/1'), 'shop.example.com');
+  });
 }

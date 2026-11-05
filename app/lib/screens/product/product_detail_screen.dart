@@ -122,7 +122,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           '새로 읽은 가격: ${formatWon(result.newPrice ?? 0)}\n'
           '지금 저장된 가격: ${formatWon(result.previousPrice ?? 0)}\n\n'
           '쇼핑몰 화면에서 가격을 확실히 찾지 못했어요. '
-          '쿠폰·회원가가 아닌지 확인 후 바꿔 주세요.',
+          '쇼핑몰 화면에 크게 표시된 가격과 같은지 확인 후 바꿔 주세요.',
         ),
         actions: [
           TextButton(

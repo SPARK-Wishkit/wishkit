@@ -121,6 +121,14 @@ String platformLabelForUrl(String url) {
     'nike': '나이키',
     'elandmall': '이랜드몰',
     'levi': '리바이스',
+    // 엔진 골든셋 몰(engine/testdata/golden_catalog.json). 빠져 있으면 주소가 그대로 보인다.
+    'queenit': '퀸잇',
+    'a-bly': '에이블리',
+    '4910.kr': '4910',
+    'posty': '포스티',
+    'uniqlo': '유니클로',
+    'kream': 'KREAM',
+    'ssfshop': 'SSF샵',
   };
   for (final entry in labels.entries) {
     if (host.contains(entry.key)) return entry.value;
