@@ -813,10 +813,9 @@ class _PrivacyBanner extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: DiaryTheme.ui(13, weight: FontWeight.w700),
                   ),
-                  Text(
-                    isPublic ? '친구들이 이 리스트를 볼 수 있어요' : '나만 볼 수 있어요',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  // 짧게 + 좁은 화면에선 잘리지 않고 글자만 살짝 줄어든다.
+                  OneLineText(
+                    isPublic ? '친구도 볼 수 있어요' : '나만 볼 수 있어요',
                     style: DiaryTheme.ui(11, color: DiaryColors.inkMuted),
                   ),
                 ],

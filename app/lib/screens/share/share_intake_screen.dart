@@ -720,16 +720,24 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                     ),
                   ],
                   const SizedBox(height: 6),
-                  Text(
-                    '쿠폰을 제외한 기본 판매가예요. 옵션에 따라 가격이 달라질 수 있어요.',
-                    style: DiaryTheme.body(11, color: DiaryColors.inkMuted),
-                  ),
-                  if (parsed!.missingFields.isNotEmpty) ...[
+                  // 제대로 읽었으면 가격 기준 안내, 못 읽었으면 직접 입력 안내.
+                  if (parsed!.extractFailureReason != null ||
+                      parsed!.needsManualPrice)
+                    Text(
+                      '상품 정보를 읽지 못했어요. 상품명과 판매가를 직접 입력해 주세요.',
+                      style: DiaryTheme.body(12, color: DiaryColors.pin),
+                    )
+                  else
+                    Text(
+                      '쿠폰을 제외한 기본 판매가예요. 옵션에 따라 가격이 달라질 수 있어요.',
+                      style: DiaryTheme.body(11, color: DiaryColors.inkMuted),
+                    ),
+                  if (parsed!.missingFields.isNotEmpty &&
+                      parsed!.extractFailureReason == null &&
+                      !parsed!.needsManualPrice) ...[
                     const SizedBox(height: 8),
                     Text(
-                      parsed!.needsManualPrice
-                          ? '가격을 직접 입력하면 저장할 수 있어요'
-                          : '보완 필요: ${parsed!.missingFields.join(', ')}',
+                      '보완 필요: ${parsed!.missingFields.join(', ')}',
                       style: DiaryTheme.body(12, color: DiaryColors.pin),
                     ),
                   ],
