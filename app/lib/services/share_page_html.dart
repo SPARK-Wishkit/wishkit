@@ -184,7 +184,7 @@ String buildSharePageHtml({
     .brand { line-height: 1.1; }
     .istar { position: relative; display: inline-block; }
     .istar svg {
-      position: absolute; left: 50%; top: -0.054em;
+      position: absolute; left: 50%; top: -0.005em;
       width: 0.32em; height: 0.304em; transform: translateX(-50%);
       fill: currentColor; overflow: visible;
     }

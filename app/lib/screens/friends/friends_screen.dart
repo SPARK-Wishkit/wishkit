@@ -165,7 +165,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             ),
             const SizedBox(height: 4),
             _UnderlineTabs(
-              labels: const ['팔로잉', '팔로워', '친구의 wishkit', '친구 살까말까'],
+              labels: const ['팔로잉', '팔로워', 'wishkit', '살까말까'],
               selected: tab,
               onSelect: store.selectFriendsTab,
             ),
@@ -430,18 +430,21 @@ class _FriendWishlistsPane extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 누구의 무슨 리스트인지 한눈에: "ella의 shirts"
+                // 누구의 무슨 리스트인지 한눈에: "ella의 shirts wishkit" (이름·리스트는 굵게)
                 Text.rich(
                   TextSpan(
+                    style: DiaryTheme.body(15, color: DiaryColors.inkMuted),
                     children: [
                       TextSpan(
-                        text: '${w.friendName}의 ',
-                        style: DiaryTheme.body(15, color: DiaryColors.inkMuted),
+                        text: w.friendName,
+                        style: DiaryTheme.body(15, weight: FontWeight.w800),
                       ),
+                      const TextSpan(text: '의 '),
                       TextSpan(
                         text: w.listName,
-                        style: DiaryTheme.body(15, weight: FontWeight.w700),
+                        style: DiaryTheme.body(15, weight: FontWeight.w800),
                       ),
+                      const TextSpan(text: ' wishkit'),
                     ],
                   ),
                   maxLines: 1,

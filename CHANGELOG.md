@@ -11,18 +11,18 @@
 - **로고의 i 점이 앱 아이콘처럼 별**이에요(wishkit 화면, 로그인·가입 화면, 앱 정보, 공유 페이지, 공유 미리보기 이미지).
 - 화면에 보이는 "wishlist/위시리스트"를 **"wishkit"**으로 바꿨어요(내 wishkit, 친구 탭, 안내 문구 등).
 - 살까말까 공유 선택창에 "살까말까를 어떻게 보낼까요?" 제목과 두 가지 안내를 정리했어요. 앱 친구에게 보내기: "wishkit 친구가 댓글로 살지 말지 같이 고민해 줘요" / 링크로 공유: "앱이 없는 친구에게도 카카오톡·인스타그램 등으로 보낼 수 있어요".
-- 로고 별이 i 점 자리에서 어긋나던 걸 고쳤어요. 휴대폰 글자 크기 설정에 따라 글자만 커지고 별은 그대로였어요 — 이제 실제로 그려진 글자에서 i 위치를 재서 놓아요.
+- 로고 별이 i 점 자리에서 어긋나던 걸 고쳤어요. 휴대폰 글자 크기 설정에 따라 글자만 커지고 별은 그대로였어요 — 이제 실제로 그려진 글자에서 i 위치를 재서 놓아요. 별 높이도 i 점 자리에 맞게 조금 내렸어요(앱·공유 페이지·미리보기 이미지 모두).
 - 상품 읽기에 **실패했을 때**는 가격 안내 대신 "상품 정보를 읽지 못했어요. 상품명과 판매가를 직접 입력해 주세요."가 떠요. 제대로 읽었을 때만 쿠폰 안내가 보여요.
 - SNS 미리보기 이미지가 별 로고로 안 바뀌던 걸 고쳤어요. 카카오톡 등이 같은 주소의 이미지를 오래 기억해서, 이미지 파일 이름을 바꿨어요(새로 공유한 링크부터).
 - wishkit 화면 공개 리스트 안내가 잘리던 걸 "친구도 볼 수 있어요"로 줄이고, 좁은 화면에선 잘리지 않고 글자만 살짝 작아지게 했어요.
-- 내 친구 탭 이름을 **"친구의 wishkit" / "친구 살까말까"**로 바꾸고, 친구 리스트 카드 제목을 **"ella의 shirts"**처럼 누구의 무슨 리스트인지 한 줄로 보여줘요(아래에 상품 개수). 친구 리스트 화면 제목도 같아요. 살까말까 피드에는 내가 보낸 것도 같이 보여서 "친구가 보낸"이 아니라 "친구 살까말까"로 했어요.
+- 내 친구 탭의 친구 리스트 카드 제목을 **"ella의 shirts wishkit"**처럼 누구의 무슨 리스트인지 한 줄로 보여줘요(친구 이름·리스트 이름은 굵게, 아래에 상품 개수). 친구 리스트 화면 제목도 같아요. 탭 이름은 그대로 "wishkit", "살까말까".
 - wishkit 화면의 선택된 탭 버튼을 연필 대신 **더보기(⋯)**로 바꿨어요. 편집 창 안의 "이름 변경"(연필)과 겹치지 않아요.
 
 🔧 **기술 설명**
 - `widgets/add_folder_dialog.dart` `showAddFolderDialog()` — 마이페이지 폴더 추가와 파싱 화면 리스트 추가가 같이 씀(만든 폴더를 돌려줌).
 - `AppStore.addToMyWishkit(product, listId:)` — 같은 상품 주소가 있으면 그대로 돌려줌, 없으면 `addParsedProduct`(메모 제외). 상품 화면은 `_openedFromSomeoneElse`일 때 버튼을 바꿈.
 - 파싱 화면: `selectedListId` 기본 'all', 칩 재선택 해제, `ActionChip` 리스트 추가, `ParsingProgress` 삭제 → `DiaryButton(loading:)`(아이콘 자리에 16px 진행 표시).
-- `WishkitLogo`(diary_widgets): Righteous 점 없는 ı + `CustomPaint` 별. 위치는 글꼴 치수(2048 단위)와 `DiaryTheme.logo` 줄 높이 1.1로 계산, 별 너비 0.32em·안쪽 반지름 0.5. 공유 페이지는 같은 비율의 인라인 SVG(`.istar`), `assets/share/og-wishkit.png`도 별 로고로 다시 만듦.
+- `WishkitLogo`(diary_widgets): Righteous 점 없는 ı + `CustomPaint` 별. 위치는 글꼴 치수(2048 단위)와 `DiaryTheme.logo` 줄 높이 1.1로 계산, 별 너비 0.32em·안쪽 반지름 0.5·ı 위 간격 0.05em. 공유 페이지는 같은 비율의 인라인 SVG(`.istar`), `assets/share/og-wishkit.png`도 별 로고로 다시 만듦.
 - 정리: 화면 문구의 wishlist/위시리스트 → wishkit(앱 정보의 "여러 쇼핑몰에 흩어진 위시리스트"는 일반 개념이라 유지). 코드 이름·주소(`/friend-wishlist` 등)는 그대로.
 - 참고: 친구 투표 기능은 아직 없어서 공유 안내에는 "댓글"만 적음.
 - `WishkitLogo` → StatefulWidget: `TextPainter`(같은 스타일·`MediaQuery.textScalerOf`)로 ı 글자 칸과 기준선을 재서 별 배치, `PaintingBinding.systemFonts` 변경 시 다시 잼. 공유 미리보기 업로드 이름 `og-wishkit-star.png`(캐시 무효화). 파싱 안내는 `extractFailureReason != null || needsManualPrice`면 실패 문구.

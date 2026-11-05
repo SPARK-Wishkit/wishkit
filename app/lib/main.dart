@@ -210,8 +210,8 @@ GoRouter _buildRouter(AuthController auth, AppStore store) {
             );
           }
           return SharedWishlistScreen(
-            // 누구의 무슨 리스트인지: "ella의 shirts"
-            title: '${list.friendName}의 ${list.listName}',
+            // 누구의 무슨 리스트인지: "ella의 shirts wishkit"
+            title: '${list.friendName}의 ${list.listName} wishkit',
             subtitle: '${list.friendName} 님의 공개 wishkit · 상품 ${list.items.length}개',
             products: list.items,
             accentColor: DiaryColors.folderPink,

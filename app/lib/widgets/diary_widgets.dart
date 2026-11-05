@@ -481,7 +481,7 @@ String relativeTime(DateTime t) {
 /// Righteous 글꼴의 점 없는 ı(U+0131)를 쓰고, **실제로 그려진 글자**에서 ı의 가로 위치와
 /// 기준선을 재서 그 위에 별을 놓는다 — 휴대폰 글자 크기 설정(최대 1.2배)이나 글꼴이 늦게
 /// 불러와져도 별이 항상 i 점 자리에 온다. 별 크기·간격은 앱 아이콘 비율
-/// (별 너비 ≈ 0.32em, ı 꼭대기(x높이) 위 ≈ 0.1em)에 맞췄다.
+/// (별 너비 ≈ 0.32em, ı 꼭대기(x높이) 위 ≈ 0.05em)에 맞췄다.
 class WishkitLogo extends StatefulWidget {
   const WishkitLogo({super.key, required this.size, this.color});
 
@@ -496,7 +496,7 @@ class _WishkitLogoState extends State<WishkitLogo> {
   static const _text = 'w\u0131shkit';
   static const _starWidth = 0.32; // em
   static const _dotlessIHeight = 1071 / 2048; // ı 꼭대기 = 기준선 위 x높이(em)
-  static const _gapAboveI = 0.1; // em
+  static const _gapAboveI = 0.05; // em — 2026-11-05: 0.1은 i 점보다 높아 보여서 내림
 
   @override
   void initState() {
