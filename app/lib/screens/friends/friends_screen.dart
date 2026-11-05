@@ -430,7 +430,7 @@ class _FriendWishlistsPane extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 누구의 무슨 리스트인지 한눈에: "ella의 shirts wishkit" (이름·리스트는 굵게)
+                // 누구의 무슨 폴더인지 한눈에: "ella의 shirts" (이름·폴더 이름은 굵게)
                 Text.rich(
                   TextSpan(
                     style: DiaryTheme.body(15, color: DiaryColors.inkMuted),
@@ -444,7 +444,6 @@ class _FriendWishlistsPane extends StatelessWidget {
                         text: w.listName,
                         style: DiaryTheme.body(15, weight: FontWeight.w800),
                       ),
-                      const TextSpan(text: ' wishkit'),
                     ],
                   ),
                   maxLines: 1,
