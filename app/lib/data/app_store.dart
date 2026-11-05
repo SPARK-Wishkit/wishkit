@@ -780,10 +780,10 @@ class AppStore extends ChangeNotifier {
     Product source, {
     String listId = 'all',
   }) async {
-    final url = source.productUrl.trim();
+    final url = (source.productUrl ?? '').trim();
     if (url.isNotEmpty) {
       final existing =
-          products.where((p) => p.productUrl.trim() == url).firstOrNull;
+          products.where((p) => (p.productUrl ?? '').trim() == url).firstOrNull;
       if (existing != null) return (product: existing, alreadyHad: true);
     }
     final added = await addParsedProduct(
@@ -792,7 +792,7 @@ class AppStore extends ChangeNotifier {
         price: source.price,
         platform: source.platform,
         image: source.image,
-        productUrl: source.productUrl,
+        productUrl: source.productUrl ?? '',
         originalPrice: source.originalPrice,
         discount: source.discount,
       ),
