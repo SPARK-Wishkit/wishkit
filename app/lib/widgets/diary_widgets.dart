@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../theme/diary_theme.dart';
@@ -478,116 +476,45 @@ String relativeTime(DateTime t) {
 
 /// wishkit 로고: 앱 아이콘처럼 "wish"의 i 점 대신 별.
 ///
-/// Righteous 글꼴의 점 없는 ı(U+0131)를 쓰고, **실제로 그려진 글자**에서 ı의 가로 위치와
-/// 기준선을 재서 그 위에 별을 놓는다 — 휴대폰 글자 크기 설정(최대 1.2배)이나 글꼴이 늦게
-/// 불러와져도 별이 항상 i 점 자리에 온다. 별 크기·간격은 앱 아이콘 비율
-/// (별 너비 ≈ 0.32em, ı 꼭대기(x높이) 위 ≈ 0.05em)에 맞췄다.
-class WishkitLogo extends StatefulWidget {
+/// 공유 미리보기 이미지(og-wishkit-star.png)와 **같은 그림**을 쓴다(assets/brand/wishkit-logo.png).
+/// 글꼴 위에 별을 따로 그리면 휴대폰마다 글꼴을 그리는 방식이 조금씩 달라 별 간격이 어긋나서,
+/// 한 번 그려 둔 그림을 크기만 맞춰 보여 준다. 그림은 Righteous 글꼴 기준
+/// 잉크 높이 0.888em · 너비 3.22em(별 너비 0.32em, ı 꼭대기 위 0.05em)이다.
+/// [size]는 예전 텍스트 로고의 글자 크기와 같은 뜻이고, 휴대폰 글자 크기 설정도 따른다.
+class WishkitLogo extends StatelessWidget {
   const WishkitLogo({super.key, required this.size, this.color});
 
   final double size;
   final Color? color;
 
-  @override
-  State<WishkitLogo> createState() => _WishkitLogoState();
-}
-
-class _WishkitLogoState extends State<WishkitLogo> {
-  static const _text = 'w\u0131shkit';
-  static const _starWidth = 0.32; // em
-  static const _dotlessIHeight = 1071 / 2048; // ı 꼭대기 = 기준선 위 x높이(em)
-  static const _gapAboveI = 0.05; // em — 2026-11-05: 0.1은 i 점보다 높아 보여서 내림
-
-  @override
-  void initState() {
-    super.initState();
-    // 글꼴(Righteous)을 나중에 불러오면 글자 모양이 바뀌므로 다시 잰다.
-    PaintingBinding.instance.systemFonts.addListener(_onFontsChanged);
-  }
-
-  @override
-  void dispose() {
-    PaintingBinding.instance.systemFonts.removeListener(_onFontsChanged);
-    super.dispose();
-  }
-
-  void _onFontsChanged() {
-    if (mounted) setState(() {});
-  }
+  static const _inkHeight = 0.888; // em
+  static const _inkWidth = 3.22; // em
+  static const _lineHeight = 1.1; // 예전 텍스트 로고(DiaryTheme.logo)의 줄 높이
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.color ?? DiaryColors.ink;
-    final style = DiaryTheme.logo(widget.size, color: c);
-    final scaler = MediaQuery.textScalerOf(context);
-    final em = scaler.scale(widget.size); // 실제로 그려지는 글자 크기
-    final tp = TextPainter(
-      text: TextSpan(text: _text, style: style),
-      textDirection: TextDirection.ltr,
-      textScaler: scaler,
-      maxLines: 1,
-    )..layout();
-    final boxes = tp.getBoxesForSelection(
-      const TextSelection(baseOffset: 1, extentOffset: 2), // ı
-    );
-    final baseline = tp.computeDistanceToActualBaseline(TextBaseline.alphabetic);
-    tp.dispose();
-    final starW = em * _starWidth;
-    final starH = starW * 0.95;
-    // ı 글자 칸의 가운데 = 기둥 가운데(Righteous의 ı는 좌우 여백이 같다).
-    final centerX = boxes.isEmpty
-        ? em * (1550 + 241.5) / 2048
-        : (boxes.first.left + boxes.first.right) / 2;
-    final top = baseline - em * (_dotlessIHeight + _gapAboveI) - starH;
+    final em = MediaQuery.textScalerOf(context).scale(size);
     return Semantics(
       label: 'wishkit',
+      image: true,
       excludeSemantics: true,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Text(_text, style: style, maxLines: 1, softWrap: false),
-          Positioned(
-            left: centerX - starW / 2,
-            top: top,
-            child: CustomPaint(
-              size: Size(starW, starH),
-              painter: _StarPainter(c),
-            ),
+      // 예전 텍스트 로고와 같은 자리·높이를 차지하게(주변 배치가 바뀌지 않게).
+      child: SizedBox(
+        height: em * _lineHeight,
+        width: em * _inkWidth,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Image.asset(
+            'assets/brand/wishkit-logo.png',
+            height: em * _inkHeight,
+            width: em * _inkWidth,
+            fit: BoxFit.contain,
+            color: color ?? DiaryColors.ink,
+            colorBlendMode: BlendMode.srcIn,
+            filterQuality: FilterQuality.medium,
           ),
-        ],
+        ),
       ),
     );
   }
-}
-
-/// 꼭짓점 5개 별(위가 뾰족). 높이 = 너비 × 0.95.
-class _StarPainter extends CustomPainter {
-  _StarPainter(this.color);
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final r = size.width / 2 / math.cos(math.pi / 10); // 바깥 반지름(가로 폭에 맞춤)
-    final cx = size.width / 2;
-    final cy = r; // 위 꼭짓점이 맨 위
-    final inner = r * 0.5; // 앱 아이콘처럼 통통한 별
-    final path = Path();
-    for (var i = 0; i < 10; i++) {
-      final rad = i.isEven ? r : inner;
-      final a = -math.pi / 2 + i * math.pi / 5;
-      final x = cx + rad * math.cos(a);
-      final y = cy + rad * math.sin(a);
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    path.close();
-    canvas.drawPath(path, Paint()..color = color..isAntiAlias = true);
-  }
-
-  @override
-  bool shouldRepaint(_StarPainter old) => old.color != color;
 }
