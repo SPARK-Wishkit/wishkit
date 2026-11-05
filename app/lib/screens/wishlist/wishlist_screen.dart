@@ -236,7 +236,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                     color: DiaryColors.ink,
                   ),
                   title: Text(
-                    '비공개 리스트',
+                    '비공개 폴더',
                     style: DiaryTheme.ui(15, weight: FontWeight.w600),
                   ),
                   subtitle: Text(
@@ -301,7 +301,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
           controller: controller,
           style: DiaryTheme.ui(15),
           decoration: InputDecoration(
-            hintText: '리스트 이름',
+            hintText: '폴더 이름',
             hintStyle: DiaryTheme.ui(14, color: DiaryColors.inkMuted),
           ),
         ),
@@ -339,7 +339,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
         builder: (ctx, setLocal) => AlertDialog(
           backgroundColor: DiaryColors.paper,
           title: Text(
-            '새 리스트',
+            '새 폴더',
             style: DiaryTheme.ui(17, weight: FontWeight.w700),
           ),
           content: Column(
@@ -355,7 +355,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text('공개 리스트', style: DiaryTheme.ui(14)),
+                title: Text('공개 폴더', style: DiaryTheme.ui(14)),
                 value: isPublic,
                 onChanged: (v) => setLocal(() => isPublic = v),
               ),
@@ -728,7 +728,7 @@ class _FolderTab extends StatelessWidget {
                   // 탭 글자보다 넉넉한 누름 영역(약 30×30)을 둔다.
                   Semantics(
                     button: true,
-                    label: '${tab.name} 리스트 설정',
+                    label: '${tab.name} 폴더 설정',
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: onEdit,
@@ -808,7 +808,7 @@ class _PrivacyBanner extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isPublic ? '공개 리스트' : '비공개 리스트',
+                    isPublic ? '공개 폴더' : '비공개 폴더',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: DiaryTheme.ui(13, weight: FontWeight.w700),

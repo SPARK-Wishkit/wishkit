@@ -743,7 +743,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   ],
                   const SizedBox(height: 14),
                   Text(
-                    '어느 리스트로 보낼까요?',
+                    '어느 폴더로 보낼까요?',
                     style: DiaryTheme.body(14, weight: FontWeight.w700),
                   ),
                   const SizedBox(height: 8),
@@ -780,7 +780,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                           color: DiaryColors.inkMuted,
                         ),
                         label: Text(
-                          '리스트 추가',
+                          '폴더 추가',
                           style: DiaryTheme.ui(
                             14,
                             weight: FontWeight.w600,
@@ -803,7 +803,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    "리스트를 고르지 않으면 '전체'에만 저장돼요.",
+                    "폴더를 고르지 않으면 '전체' 폴더에만 저장돼요.",
                     style: DiaryTheme.body(11, color: DiaryColors.inkMuted),
                   ),
                   const SizedBox(height: 14),

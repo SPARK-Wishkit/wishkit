@@ -232,7 +232,7 @@ class _FollowingList extends StatelessWidget {
             name: f.name,
             handle: f.username,
             avatarUrl: f.avatar,
-            subtitle: 'wishkit ${f.wishlistCount}  ·  아이템 ${f.itemCount}',
+            subtitle: '공개 폴더 ${f.wishlistCount}  ·  아이템 ${f.itemCount}',
             trailing: _FollowButton(
               isFollowing: true,
               onPressed: () => _toggle(context, f),
@@ -251,7 +251,7 @@ class _FollowingList extends StatelessWidget {
               name: f.name,
               handle: f.username,
               avatarUrl: f.avatar,
-              subtitle: 'wishkit ${f.wishlistCount}  ·  아이템 ${f.itemCount}',
+              subtitle: '공개 폴더 ${f.wishlistCount}  ·  아이템 ${f.itemCount}',
               trailing: _FollowButton(
                 isFollowing: false,
                 onPressed: () => _toggle(context, f),

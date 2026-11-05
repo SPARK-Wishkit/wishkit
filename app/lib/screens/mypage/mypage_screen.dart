@@ -259,7 +259,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          '여러 쇼핑몰에 흩어진 위시리스트를 한곳에서 관리합니다.\n'
+                          '여러 쇼핑몰에 흩어진 찜한 상품을 한곳에서 관리합니다.\n'
                           '구매가 고민되는 상품은 친구에게 의견을 물을 수 있습니다.',
                           style: DiaryTheme.body(14).copyWith(height: 1.5),
                         ),

@@ -97,7 +97,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 leading: const Icon(Icons.inventory_2_outlined),
                 title: Text('폴더 없이 담기', style: DiaryTheme.ui(15)),
                 subtitle: Text(
-                  '전체 리스트에만 보여요',
+                  "'전체' 폴더에만 보여요",
                   style: DiaryTheme.ui(12, color: DiaryColors.inkSoft),
                 ),
                 onTap: () => Navigator.of(sheetCtx).pop('all'),
