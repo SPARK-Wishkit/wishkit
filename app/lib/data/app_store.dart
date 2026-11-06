@@ -650,10 +650,11 @@ class AppStore extends ChangeNotifier {
       isPublic: product.isPublic,
       tagImageUrl: product.tagImageUrl,
     );
+    // 판매가나 정가가 바뀌었을 때만 "바뀜". 할인율은 두 값에서 계산되는 값이라, 저장된 할인율이
+    // 반올림 차이(예: 31% vs 30%)로만 다른 건 바뀐 게 아니다 — 예전엔 이 때문에
+    // "가격이 바뀌었어요: 36,000원 → 36,000원"이 떴다.
     final changed =
-        product.price != newPrice ||
-        product.originalPrice != original ||
-        product.discount != discount;
+        product.price != newPrice || product.originalPrice != original;
 
     final previousProducts = products;
     final previousBasket = basket;
@@ -1710,6 +1711,10 @@ class PriceRefreshResult {
   final PriceRefreshStatus status;
   final int? previousPrice;
   final int? newPrice;
+
+  /// 판매가 자체가 바뀌었는지(정가만 바뀐 [PriceRefreshStatus.updated]와 구분).
+  bool get priceChanged =>
+      previousPrice != null && newPrice != null && previousPrice != newPrice;
 
   /// [PriceRefreshStatus.needsConfirm]일 때 [AppStore.applyRefreshedPrice]에 넘길 값.
   final ParsedProductInfo? info;

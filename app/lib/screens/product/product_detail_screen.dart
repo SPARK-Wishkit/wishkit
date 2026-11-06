@@ -159,9 +159,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
     if (!mounted) return;
     final message = switch (result.status) {
-      PriceRefreshStatus.updated =>
+      // 판매가가 그대로면 "→" 문구를 쓰지 않는다(정가·할인 표시만 바뀐 경우).
+      PriceRefreshStatus.updated when result.priceChanged =>
         '가격이 바뀌었어요: ${formatWon(result.previousPrice ?? 0)} → '
             '${formatWon(result.newPrice ?? 0)}',
+      PriceRefreshStatus.updated =>
+        '판매가는 ${formatWon(result.newPrice ?? 0)} 그대로예요. 정가·할인 표시만 바꿨어요',
       PriceRefreshStatus.unchanged => '가격 변동이 없어요',
       PriceRefreshStatus.tooSoon => '방금 확인했어요. 잠시 후 다시 시도해 주세요',
       PriceRefreshStatus.busy => '가격을 확인하는 중이에요',
