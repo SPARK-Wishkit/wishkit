@@ -165,7 +165,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             ),
             const SizedBox(height: 4),
             _UnderlineTabs(
-              labels: const ['팔로잉', '팔로워', 'wishlist', '살까말까'],
+              labels: const ['팔로잉', '팔로워', 'wishkit', '살까말까'],
               selected: tab,
               onSelect: store.selectFriendsTab,
             ),
@@ -232,7 +232,7 @@ class _FollowingList extends StatelessWidget {
             name: f.name,
             handle: f.username,
             avatarUrl: f.avatar,
-            subtitle: '위시리스트 ${f.wishlistCount}  ·  아이템 ${f.itemCount}',
+            subtitle: '공개 폴더 ${f.wishlistCount}  ·  아이템 ${f.itemCount}',
             trailing: _FollowButton(
               isFollowing: true,
               onPressed: () => _toggle(context, f),
@@ -251,7 +251,7 @@ class _FollowingList extends StatelessWidget {
               name: f.name,
               handle: f.username,
               avatarUrl: f.avatar,
-              subtitle: '위시리스트 ${f.wishlistCount}  ·  아이템 ${f.itemCount}',
+              subtitle: '공개 폴더 ${f.wishlistCount}  ·  아이템 ${f.itemCount}',
               trailing: _FollowButton(
                 isFollowing: false,
                 onPressed: () => _toggle(context, f),
@@ -409,7 +409,7 @@ class _FriendWishlistsPane extends StatelessWidget {
     if (followingEmpty) {
       return Center(
         child: Text(
-          '팔로잉한 친구의 wishlist가 여기에 보여요',
+          '팔로잉한 친구의 wishkit이 여기에 보여요',
           textAlign: TextAlign.center,
           style: DiaryTheme.body(14, color: DiaryColors.inkMuted),
         ),
@@ -418,7 +418,7 @@ class _FriendWishlistsPane extends StatelessWidget {
     if (wishlists.isEmpty) {
       return Center(
         child: Text(
-          '공개된 친구 위시리스트가 없어요',
+          '공개된 친구 wishkit이 없어요',
           style: DiaryTheme.body(14, color: DiaryColors.inkMuted),
         ),
       );
@@ -430,13 +430,28 @@ class _FriendWishlistsPane extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  w.listName,
-                  style: DiaryTheme.body(15, weight: FontWeight.w700),
+                // 누구의 무슨 폴더인지 한눈에: "ella의 shirts" (이름·폴더 이름은 굵게)
+                Text.rich(
+                  TextSpan(
+                    style: DiaryTheme.body(15, color: DiaryColors.inkMuted),
+                    children: [
+                      TextSpan(
+                        text: w.friendName,
+                        style: DiaryTheme.body(15, weight: FontWeight.w800),
+                      ),
+                      const TextSpan(text: '의 '),
+                      TextSpan(
+                        text: w.listName,
+                        style: DiaryTheme.body(15, weight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  w.friendName,
-                  style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
+                  '상품 ${w.items.length}개',
+                  style: DiaryTheme.body(12, color: DiaryColors.inkSoft),
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
@@ -494,7 +509,7 @@ class _FriendWishlistsPane extends StatelessWidget {
                   width: double.infinity,
                   child: OutlinedButton(
                     onPressed: () => context.push('/friend-wishlist/${w.id}'),
-                    child: const Text('위시리스트 전체보기'),
+                    child: const Text('wishkit 전체보기'),
                   ),
                 ),
               ],

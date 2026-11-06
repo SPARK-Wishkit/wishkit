@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -13,6 +12,7 @@ import '../../services/aws/gql_runner.dart';
 import '../../services/parsing_bridge.dart';
 import '../../services/share_input.dart';
 import '../../theme/diary_theme.dart';
+import '../../widgets/add_folder_dialog.dart';
 import '../../widgets/diary_widgets.dart';
 
 /// Shown when another app shares a product URL into this app.
@@ -56,9 +56,8 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
   void initState() {
     super.initState();
     final store = context.read<AppStore>();
-    selectedListId = store.tabs
-        .firstWhere((t) => t.id != 'all', orElse: () => store.tabs.first)
-        .id;
+    // 리스트를 고르지 않으면 '전체'에만 저장된다(폴더 칩을 누르면 그 폴더로).
+    selectedListId = 'all';
     final initial = widget.sharedUrl ?? store.pendingShareUrl;
     if (initial != null) {
       urlCtrl.text = ShareInput.normalize(initial);
@@ -494,7 +493,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
               children: [
                 // 한 줄로 — 좁은 화면에서는 줄바꿈 대신 글자를 살짝 줄인다.
                 OneLineText(
-                  '다른 앱에서 공유한 링크를 위시리스트 카드로 정리해요',
+                  '다른 앱에서 공유한 링크를 wishkit 카드로 정리해요',
                   style: DiaryTheme.body(13, color: DiaryColors.inkMuted),
                 ),
                 const SizedBox(height: 14),
@@ -515,9 +514,11 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
+                // 읽는 동안은 버튼 글자 왼쪽에 도는 표시.
                 DiaryButton(
                   label: loading ? '상품 페이지를 읽는 중...' : '상품 읽기',
                   filled: true,
+                  loading: loading,
                   onPressed: loading || identifying ? () {} : _parse,
                 ),
                 const SizedBox(height: 8),
@@ -526,13 +527,9 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                       ? '태그를 읽고 판매 페이지를 찾는 중... (최대 30초)'
                       : '태그 사진으로 찾기',
                   icon: Icons.photo_camera_outlined,
+                  loading: identifying,
                   onPressed: loading || identifying ? null : _pickTagPhoto,
                 ),
-                // 읽는 동안 멈춘 것처럼 보이지 않게: 도는 표시 + 바뀌는 안내 문구.
-                if (loading || identifying) ...[
-                  const SizedBox(height: 12),
-                  const ParsingProgress(messages: ['정보를 불러오고 있어요']),
-                ],
                 if (tagResult != null &&
                     tagResult!.status != TagIdentifyStatus.notATag) ...[
                   const SizedBox(height: 10),
@@ -723,22 +720,30 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                     ),
                   ],
                   const SizedBox(height: 6),
-                  Text(
-                    '쿠폰은 제외한 기본 판매가예요. 옵션을 선택하면 가격이 달라질 수 있어요.',
-                    style: DiaryTheme.body(11, color: DiaryColors.inkMuted),
-                  ),
-                  if (parsed!.missingFields.isNotEmpty) ...[
+                  // 제대로 읽었으면 가격 기준 안내, 못 읽었으면 직접 입력 안내.
+                  if (parsed!.extractFailureReason != null ||
+                      parsed!.needsManualPrice)
+                    Text(
+                      '상품 정보를 읽지 못했어요. 상품명과 판매가를 직접 입력해 주세요.',
+                      style: DiaryTheme.body(12, color: DiaryColors.pin),
+                    )
+                  else
+                    Text(
+                      '쿠폰을 제외한 기본 판매가예요. 옵션에 따라 가격이 달라질 수 있어요.',
+                      style: DiaryTheme.body(11, color: DiaryColors.inkMuted),
+                    ),
+                  if (parsed!.missingFields.isNotEmpty &&
+                      parsed!.extractFailureReason == null &&
+                      !parsed!.needsManualPrice) ...[
                     const SizedBox(height: 8),
                     Text(
-                      parsed!.needsManualPrice
-                          ? '가격을 직접 입력하면 저장할 수 있어요'
-                          : '보완 필요: ${parsed!.missingFields.join(', ')}',
+                      '보완 필요: ${parsed!.missingFields.join(', ')}',
                       style: DiaryTheme.body(12, color: DiaryColors.pin),
                     ),
                   ],
                   const SizedBox(height: 14),
                   Text(
-                    '어느 리스트로 보낼까요?',
+                    '어느 폴더로 보낼까요?',
                     style: DiaryTheme.body(14, weight: FontWeight.w700),
                   ),
                   const SizedBox(height: 8),
@@ -761,10 +766,45 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                           showCheckmark: false,
                           selected: selectedListId == tab.id,
                           selectedColor: DiaryColors.ink,
-                          onSelected: (_) =>
-                              setState(() => selectedListId = tab.id),
+                          // 다시 누르면 선택을 풀고 '전체'에만 저장.
+                          onSelected: (_) => setState(
+                            () => selectedListId =
+                                selectedListId == tab.id ? 'all' : tab.id,
+                          ),
                         ),
+                      // 마이페이지와 같은 "폴더 추가" — 만들면 바로 그 폴더를 고른다.
+                      ActionChip(
+                        avatar: const Icon(
+                          Icons.add,
+                          size: 16,
+                          color: DiaryColors.inkMuted,
+                        ),
+                        label: Text(
+                          '폴더 추가',
+                          style: DiaryTheme.ui(
+                            14,
+                            weight: FontWeight.w600,
+                            color: DiaryColors.inkMuted,
+                          ),
+                        ),
+                        side: const BorderSide(color: DiaryColors.lineStrong),
+                        backgroundColor: DiaryColors.paper,
+                        onPressed: () async {
+                          final created = await showAddFolderDialog(
+                            context,
+                            store,
+                          );
+                          if (created != null && mounted) {
+                            setState(() => selectedListId = created.id);
+                          }
+                        },
+                      ),
                     ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "폴더를 고르지 않으면 '전체' 폴더에만 저장돼요.",
+                    style: DiaryTheme.body(11, color: DiaryColors.inkMuted),
                   ),
                   const SizedBox(height: 14),
                   Text(
@@ -784,7 +824,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   ),
                   const SizedBox(height: 16),
                   DiaryButton(
-                    label: saving ? '저장하는 중...' : '이 리스트에 저장',
+                    label: saving ? '저장하는 중...' : '저장하기',
                     filled: true,
                     onPressed: saving ? null : _save,
                   ),
@@ -793,86 +833,6 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-
-/// 상품·태그를 읽는 동안 보여 주는 진행 표시: 도는 원 + 몇 초마다 바뀌는 안내 문구 + 걸린 시간.
-class ParsingProgress extends StatefulWidget {
-  const ParsingProgress({
-    super.key,
-    required this.messages,
-    this.interval = const Duration(milliseconds: 2500),
-  });
-
-  final List<String> messages;
-  final Duration interval;
-
-  @override
-  State<ParsingProgress> createState() => _ParsingProgressState();
-}
-
-class _ParsingProgressState extends State<ParsingProgress> {
-  Timer? _timer;
-  final _watch = Stopwatch()..start();
-
-  @override
-  void initState() {
-    super.initState();
-    // 1초마다 다시 그려 걸린 시간을 갱신하고, [interval]마다 문구를 바꾼다.
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final msgs = widget.messages;
-    final step = _watch.elapsedMilliseconds ~/ widget.interval.inMilliseconds;
-    final message = msgs.isEmpty ? '불러오는 중이에요' : msgs[step % msgs.length];
-    final seconds = _watch.elapsed.inSeconds;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: DiaryColors.band,
-        borderRadius: BorderRadius.circular(DiaryTheme.radius),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.4,
-              color: DiaryColors.ink,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              child: Text(
-                '$message...',
-                key: ValueKey(message),
-                style: DiaryTheme.ui(14, weight: FontWeight.w600),
-              ),
-            ),
-          ),
-          if (seconds >= 3)
-            Text(
-              '$seconds초',
-              style: DiaryTheme.ui(12, color: DiaryColors.inkSoft),
-            ),
-        ],
       ),
     );
   }

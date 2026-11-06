@@ -21,20 +21,27 @@ Future<ShareMethod?> pickShareMethod(BuildContext context) {
     builder: (sheetCtx) => SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+            child: Text(
+              '살까말까를 어떻게 보낼까요?',
+              style: DiaryTheme.ui(16, weight: FontWeight.w700),
+            ),
+          ),
           for (final (method, icon, title, subtitle) in const [
             (
               ShareMethod.friends,
               Icons.people_alt_outlined,
               '앱 친구에게 보내기',
-              '친구가 댓글로 같이 고민해 줘요',
+              'wishkit 친구가 댓글로 살지 말지 같이 고민해 줘요',
             ),
             (
               ShareMethod.link,
               Icons.link,
               '링크로 공유',
-              '카카오톡·인스타그램 등으로 앱이 없는 친구에게도 보내요 (28일 동안 열려요)',
+              '앱이 없는 친구에게도 카카오톡·인스타그램 등으로 보낼 수 있어요 (링크는 28일 동안 열려요)',
             ),
           ])
             ListTile(

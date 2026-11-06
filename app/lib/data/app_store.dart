@@ -774,6 +774,33 @@ class AppStore extends ChangeNotifier {
     });
   }
 
+  /// 친구 위시리스트·받은 바구니의 상품을 내 wishkit에 복사해 담는다(친구의 메모는 가져오지 않는다).
+  /// 같은 상품 주소가 이미 내 wishkit에 있으면 새로 만들지 않고 그 상품을 돌려준다([alreadyHad]=true).
+  Future<({Product? product, bool alreadyHad})> addToMyWishkit(
+    Product source, {
+    String listId = 'all',
+  }) async {
+    final url = (source.productUrl ?? '').trim();
+    if (url.isNotEmpty) {
+      final existing =
+          products.where((p) => (p.productUrl ?? '').trim() == url).firstOrNull;
+      if (existing != null) return (product: existing, alreadyHad: true);
+    }
+    final added = await addParsedProduct(
+      ParsedProductInfo(
+        name: source.name,
+        price: source.price,
+        platform: source.platform,
+        image: source.image,
+        productUrl: source.productUrl ?? '',
+        originalPrice: source.originalPrice,
+        discount: source.discount,
+      ),
+      listId: listId,
+    );
+    return (product: added, alreadyHad: false);
+  }
+
   void setPendingShareUrl(String? url) {
     pendingShareUrl = url;
     notifyListeners();

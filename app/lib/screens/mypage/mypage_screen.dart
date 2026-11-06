@@ -9,6 +9,7 @@ import '../../auth/auth_validators.dart';
 import '../../data/app_store.dart';
 import '../../theme/avatar_presets.dart';
 import '../../theme/diary_theme.dart';
+import '../../widgets/add_folder_dialog.dart';
 import '../../widgets/diary_widgets.dart';
 
 class MyPageScreen extends StatefulWidget {
@@ -96,8 +97,9 @@ class _MyPageScreenState extends State<MyPageScreen> {
               ),
             ),
             // ── Profile (bigger, dark text) ───────────────────
+            // 제목("마이페이지")과 프로필 사이를 띄운다.
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
               child: Row(
                 children: [
                   CircleAvatar(
@@ -116,6 +118,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: DiaryTheme.display(23),
                         ),
+                        const SizedBox(height: 5),
                         Text(
                           user.handle,
                           maxLines: 1,
@@ -142,7 +145,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
               child: Row(
                 children: [
                   _Stat(
@@ -164,7 +167,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
               child: Text(
-                '내 wishlist',
+                '내 wishkit',
                 style: DiaryTheme.ui(17, weight: FontWeight.w800),
               ),
             ),
@@ -202,48 +205,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                     width: chipWidth,
                     label: '폴더 추가',
                     icon: Icons.add,
-                    onTap: () async {
-                          final ctrl = TextEditingController();
-                          var submitting = false;
-                          await showDialog<void>(
-                            context: context,
-                            builder: (dialogCtx) => StatefulBuilder(
-                              builder: (dialogCtx, setLocal) => AlertDialog(
-                                title: const Text('폴더 추가'),
-                                content: TextField(controller: ctrl),
-                                actions: [
-                                  TextButton(
-                                    onPressed: submitting
-                                        ? null
-                                        : () => Navigator.pop(dialogCtx),
-                                    child: const Text('취소'),
-                                  ),
-                                  TextButton(
-                                    onPressed: submitting
-                                        ? null
-                                        : () async {
-                                            final name = ctrl.text.trim();
-                                            if (name.isEmpty) return;
-                                            setLocal(() => submitting = true);
-                                            final created = await store.addTab(
-                                              name,
-                                            );
-                                            if (!dialogCtx.mounted) return;
-                                            if (created) {
-                                              Navigator.pop(dialogCtx);
-                                              return;
-                                            }
-                                            setLocal(() => submitting = false);
-                                          },
-                                    child: Text(
-                                      submitting ? '추가하는 중...' : '추가',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                    onTap: () => showAddFolderDialog(context, store),
                   ),
                 ],
                   );
@@ -286,7 +248,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 showDialog<void>(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    title: Text('wishkit', style: DiaryTheme.logo(26)),
+                    title: WishkitLogo(size: 26),
                     content: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,7 +259,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          '여러 쇼핑몰에 흩어진 위시리스트를 한곳에서 관리합니다.\n'
+                          '여러 쇼핑몰에 흩어진 찜한 상품을 한곳에서 관리합니다.\n'
                           '구매가 고민되는 상품은 친구에게 의견을 물을 수 있습니다.',
                           style: DiaryTheme.body(14).copyWith(height: 1.5),
                         ),
@@ -415,7 +377,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '탈퇴하면 계정과 위시리스트가 삭제되고 되돌릴 수 없어요.',
+                      '탈퇴하면 계정과 wishkit이 삭제되고 되돌릴 수 없어요.',
                       style: DiaryTheme.body(13, color: DiaryColors.inkMuted),
                     ),
                     const SizedBox(height: 12),
@@ -889,9 +851,8 @@ class _FolderChip extends StatelessWidget {
       color: DiaryColors.paper,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(DiaryTheme.radius),
-        side: _isAdd
-            ? BorderSide.none
-            : const BorderSide(color: DiaryColors.lineStrong),
+        // 폴더 추가도 다른 폴더처럼 테두리를 둔다.
+        side: const BorderSide(color: DiaryColors.lineStrong),
       ),
       child: InkWell(
         onTap: onTap,

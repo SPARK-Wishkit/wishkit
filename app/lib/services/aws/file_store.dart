@@ -185,7 +185,9 @@ class AwsFileStore {
     if (pngBytes.isEmpty) throw Exception('미리보기 이미지가 비어 있어요.');
     final path = await _t.upload(
       folder: 'share-pages',
-      relativePath: 'og-wishkit.png',
+      // 카카오톡 등은 미리보기 이미지를 주소별로 오래 기억한다 — 이미지를 바꾸면 이름도 바꿔야
+      // 새 이미지가 뜬다(2026-11-05: 별 로고로 바꾸며 og-wishkit.png → og-wishkit-star.png).
+      relativePath: 'og-wishkit-star.png',
       file: null,
       bytes: pngBytes,
       contentType: 'image/png',

@@ -222,7 +222,7 @@ class SalkamalkaScreen extends StatelessWidget {
           style: DiaryTheme.ui(17, weight: FontWeight.w700),
         ),
         content: Text(
-          '살까말까 바구니에서만 빠지고, 위시리스트에는 그대로 남습니다.',
+          '살까말까 바구니에서만 빠지고, wishkit에는 그대로 남습니다.',
           style: DiaryTheme.body(14, color: DiaryColors.inkMuted),
         ),
         actions: [

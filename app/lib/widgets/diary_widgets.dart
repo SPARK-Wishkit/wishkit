@@ -295,6 +295,7 @@ class DiaryButton extends StatelessWidget {
     this.filled = false,
     this.color = DiaryColors.folderBlue,
     this.icon,
+    this.loading = false,
   });
 
   final String label;
@@ -302,6 +303,9 @@ class DiaryButton extends StatelessWidget {
   final bool filled;
   final Color color;
   final IconData? icon;
+
+  /// 진행 중이면 글자 왼쪽에 도는 표시를 보여 준다(아이콘 자리).
+  final bool loading;
 
   bool get _disabled => onPressed == null;
 
@@ -335,7 +339,14 @@ class DiaryButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[
+              if (loading) ...[
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+                ),
+                const SizedBox(width: 8),
+              ] else if (icon != null) ...[
                 Icon(icon, size: 18, color: fg),
                 const SizedBox(width: 6),
               ],
@@ -461,4 +472,49 @@ String relativeTime(DateTime t) {
   if (diff.inHours < 24) return '${diff.inHours}시간 전';
   if (diff.inDays < 7) return '${diff.inDays}일 전';
   return '${t.year}.${t.month}.${t.day}';
+}
+
+/// wishkit 로고: 앱 아이콘처럼 "wish"의 i 점 대신 별.
+///
+/// 공유 미리보기 이미지(og-wishkit-star.png)와 **같은 그림**을 쓴다(assets/brand/wishkit-logo.png).
+/// 글꼴 위에 별을 따로 그리면 휴대폰마다 글꼴을 그리는 방식이 조금씩 달라 별 간격이 어긋나서,
+/// 한 번 그려 둔 그림을 크기만 맞춰 보여 준다. 그림은 Righteous 글꼴 기준
+/// 잉크 높이 0.888em · 너비 3.22em(별 너비 0.32em, ı 꼭대기 위 0.05em)이다.
+/// [size]는 예전 텍스트 로고의 글자 크기와 같은 뜻이고, 휴대폰 글자 크기 설정도 따른다.
+class WishkitLogo extends StatelessWidget {
+  const WishkitLogo({super.key, required this.size, this.color});
+
+  final double size;
+  final Color? color;
+
+  static const _inkHeight = 0.888; // em
+  static const _inkWidth = 3.22; // em
+  static const _lineHeight = 1.1; // 예전 텍스트 로고(DiaryTheme.logo)의 줄 높이
+
+  @override
+  Widget build(BuildContext context) {
+    final em = MediaQuery.textScalerOf(context).scale(size);
+    return Semantics(
+      label: 'wishkit',
+      image: true,
+      excludeSemantics: true,
+      // 예전 텍스트 로고와 같은 자리·높이를 차지하게(주변 배치가 바뀌지 않게).
+      child: SizedBox(
+        height: em * _lineHeight,
+        width: em * _inkWidth,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Image.asset(
+            'assets/brand/wishkit-logo.png',
+            height: em * _inkHeight,
+            width: em * _inkWidth,
+            fit: BoxFit.contain,
+            color: color ?? DiaryColors.ink,
+            colorBlendMode: BlendMode.srcIn,
+            filterQuality: FilterQuality.medium,
+          ),
+        ),
+      ),
+    );
+  }
 }

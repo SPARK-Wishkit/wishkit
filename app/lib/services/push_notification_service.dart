@@ -99,7 +99,7 @@ class PushNotificationService {
       AppNotificationType.follow => '새 팔로우',
       AppNotificationType.basket => '살까말까',
       AppNotificationType.review => '친구 리뷰',
-      AppNotificationType.list => '리스트 공개',
+      AppNotificationType.list => '폴더 공개',
       AppNotificationType.comment => '살까말까 댓글',
     };
   }

@@ -126,7 +126,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
 
     return AuthPage(
       children: [
-        Text('wishkit', style: DiaryTheme.logo(36)),
+        WishkitLogo(size: 36),
         const SizedBox(height: 8),
         Text('계정 찾기', style: DiaryTheme.body(18, weight: FontWeight.w700)),
         const SizedBox(height: 16),

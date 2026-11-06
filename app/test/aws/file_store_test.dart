@@ -90,9 +90,9 @@ void main() {
     );
     final a = await shareStore.uploadShareOgImage([1, 2, 3]);
     final b = await shareStore.uploadShareOgImage([4, 5]);
-    expect(a, 'https://share.example.net/ap-northeast-2%3Ame-id/og-wishkit.png');
+    expect(a, 'https://share.example.net/ap-northeast-2%3Ame-id/og-wishkit-star.png');
     expect(b, a);
-    final saved = s3.files['share-pages/ap-northeast-2:me-id/og-wishkit.png']!;
+    final saved = s3.files['share-pages/ap-northeast-2:me-id/og-wishkit-star.png']!;
     expect(saved.$1, [4, 5]);
     expect(saved.$2, 'image/png');
   });

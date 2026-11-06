@@ -41,7 +41,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('wishkit', style: DiaryTheme.logo(30)),
+                child: WishkitLogo(size: 30),
               ),
             ),
             SizedBox(
@@ -236,7 +236,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
                     color: DiaryColors.ink,
                   ),
                   title: Text(
-                    '비공개 리스트',
+                    '비공개 폴더',
                     style: DiaryTheme.ui(15, weight: FontWeight.w600),
                   ),
                   subtitle: Text(
@@ -301,7 +301,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
           controller: controller,
           style: DiaryTheme.ui(15),
           decoration: InputDecoration(
-            hintText: '리스트 이름',
+            hintText: '폴더 이름',
             hintStyle: DiaryTheme.ui(14, color: DiaryColors.inkMuted),
           ),
         ),
@@ -339,7 +339,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
         builder: (ctx, setLocal) => AlertDialog(
           backgroundColor: DiaryColors.paper,
           title: Text(
-            '새 리스트',
+            '새 폴더',
             style: DiaryTheme.ui(17, weight: FontWeight.w700),
           ),
           content: Column(
@@ -355,7 +355,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text('공개 리스트', style: DiaryTheme.ui(14)),
+                title: Text('공개 폴더', style: DiaryTheme.ui(14)),
                 value: isPublic,
                 onChanged: (v) => setLocal(() => isPublic = v),
               ),
@@ -414,7 +414,7 @@ class _TabsRow extends StatefulWidget {
   });
 
   final AppStore store;
-  /// 선택된 탭의 연필 버튼 → 리스트 편집(비공개·이름 변경·삭제).
+  /// 선택된 탭의 더보기(⋯) 버튼 → 리스트 편집(비공개·이름 변경·삭제).
   final void Function(WishlistTab tab) onEditTab;
   final VoidCallback onAdd;
   final void Function(Product product, WishlistTab tab) onMoveProduct;
@@ -656,7 +656,7 @@ class _FolderTab extends StatelessWidget {
   final int count;
   final VoidCallback onTap;
 
-  /// 선택된 탭에만 연필 버튼으로 보인다(꾹 누르기는 탭 순서 바꾸기라 쓰지 않는다).
+  /// 선택된 탭에만 더보기(⋯) 버튼으로 보인다(꾹 누르기는 탭 순서 바꾸기라 쓰지 않는다).
   final VoidCallback? onEdit;
   final bool highlighted;
 
@@ -728,15 +728,16 @@ class _FolderTab extends StatelessWidget {
                   // 탭 글자보다 넉넉한 누름 영역(약 30×30)을 둔다.
                   Semantics(
                     button: true,
-                    label: '${tab.name} 리스트 편집',
+                    label: '${tab.name} 폴더 설정',
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: onEdit,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
+                        // 편집 창 안의 "이름 변경"(연필)과 겹치지 않게, 탭은 "더보기(⋯)".
                         child: Icon(
-                          Icons.edit_outlined,
-                          size: 16,
+                          Icons.more_horiz,
+                          size: 18,
                           color: fg,
                         ),
                       ),
@@ -807,15 +808,14 @@ class _PrivacyBanner extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isPublic ? '공개 리스트' : '비공개 리스트',
+                    isPublic ? '공개 폴더' : '비공개 폴더',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: DiaryTheme.ui(13, weight: FontWeight.w700),
                   ),
-                  Text(
-                    isPublic ? '친구들이 이 리스트를 볼 수 있어요' : '나만 볼 수 있어요',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  // 짧게 + 좁은 화면에선 잘리지 않고 글자만 살짝 줄어든다.
+                  OneLineText(
+                    isPublic ? '친구도 볼 수 있어요' : '나만 볼 수 있어요',
                     style: DiaryTheme.ui(11, color: DiaryColors.inkMuted),
                   ),
                 ],

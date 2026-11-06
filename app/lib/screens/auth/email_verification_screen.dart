@@ -96,7 +96,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
     return AuthPage(
       children: [
-        Text('wishkit', style: DiaryTheme.logo(36)),
+        WishkitLogo(size: 36),
         const SizedBox(height: 8),
         Text('이메일 인증', style: DiaryTheme.body(18, weight: FontWeight.w700)),
         const SizedBox(height: 12),

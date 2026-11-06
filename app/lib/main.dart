@@ -206,12 +206,13 @@ GoRouter _buildRouter(AuthController auth, AppStore store) {
                   onPressed: () => context.pop(),
                 ),
               ),
-              body: const Center(child: Text('위시리스트를 찾을 수 없어요')),
+              body: const Center(child: Text('이 wishkit을 찾을 수 없어요')),
             );
           }
           return SharedWishlistScreen(
-            title: list.listName,
-            subtitle: '${list.friendName} 님의 공개 위시리스트',
+            // 누구의 무슨 폴더인지: "ella의 shirts"
+            title: '${list.friendName}의 ${list.listName}',
+            subtitle: '${list.friendName} 님의 공개 wishkit · 상품 ${list.items.length}개',
             products: list.items,
             accentColor: DiaryColors.folderPink,
             wishlistId: list.id,
