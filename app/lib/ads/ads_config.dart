@@ -69,7 +69,7 @@ abstract final class AdsConfig {
       Platform.isIOS ? _interstitialIos : _interstitialAndroid;
 
   /// 태그 찾기를 시작할 때 광고를 띄울 확률(항상 띄우지 않는다).
-  static const tagAdChance = 0.35;
+  static const tagAdChance = 0.67; // 약 3번에 2번
 
   /// 광고를 한 번 띄운 뒤 다음 광고까지 최소 간격(연달아 뜨지 않게).
   static const tagAdCooldown = Duration(minutes: 3);

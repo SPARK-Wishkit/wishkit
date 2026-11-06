@@ -16,12 +16,12 @@
 ## 2026-11-05 - 태그 찾기 때만 가끔 전면 광고(동영상)
 
 🌟 **쉬운 설명**
-- 오프라인 태그 사진으로 찾을 때만, **가끔(약 3번에 1번)** 전면 광고가 떠요. 동영상 광고도 나올 수 있어요.
+- 오프라인 태그 사진으로 찾을 때만, **약 3번에 2번** 전면 광고가 떠요. 동영상 광고도 나올 수 있어요.
 - 광고는 사진을 고르고 **찾기가 시작될 때** 떠요. 광고를 보는 동안 뒤에서 상품을 계속 찾고, 광고를 닫으면 결과가 보여요. 결과를 보는 중이나 입력 중에는 절대 안 떠요.
 - 한 번 뜨면 3분 동안은 다시 안 떠요. 광고가 준비 안 됐으면 그냥 건너뛰어서 기다릴 일이 없어요.
 
 🔧 **기술 설명**
-- `ads/tag_interstitial.dart` `TagInterstitial`: 공유 담기 화면 진입 시 `InterstitialAd.load`로 미리 불러 두고, `_identifyFromTag` 시작 시 `maybeShow()` — 준비된 광고가 있고, 마지막 노출 뒤 `AdsConfig.tagAdCooldown`(3분)이 지났고, `AdsConfig.tagAdChance`(0.35) 추첨에 걸릴 때만 `show()`. 닫히거나 실패하면 dispose 후 다음 광고 미리 불러오기. 찾기는 광고를 기다리지 않는다.
+- `ads/tag_interstitial.dart` `TagInterstitial`: 공유 담기 화면 진입 시 `InterstitialAd.load`로 미리 불러 두고, `_identifyFromTag` 시작 시 `maybeShow()` — 준비된 광고가 있고, 마지막 노출 뒤 `AdsConfig.tagAdCooldown`(3분)이 지났고, `AdsConfig.tagAdChance`(0.67) 추첨에 걸릴 때만 `show()`. 닫히거나 실패하면 dispose 후 다음 광고 미리 불러오기. 찾기는 광고를 기다리지 않는다.
 - AdMob 권장 사항 반영: 자연스러운 대기 구간(사용자가 시작한 10~25초 찾기)에만, 미리 불러 둔 광고만, 노출 빈도 제한. 앱 시작·종료·결과 화면·입력 중에는 띄우지 않음.
 - 보완: 사진 선택 창이 닫힌 뒤(600ms) 띄우도록(iOS에서 창이 닫히는 중엔 띄우기가 조용히 실패), 건너뛴 이유를 `[ads]` 로그로 남김. 테스트용 `--dart-define=ADS_TAG_ALWAYS=true`(확률·간격 무시, 출시 빌드엔 넣지 않음).
 - `AdsConfig.interstitialUnitId`: 기본값은 구글 공식 **동영상 전면 광고 테스트 ID**. 출시 빌드는 `--dart-define=ADMOB_INTERSTITIAL_ANDROID=…`/`ADMOB_INTERSTITIAL_IOS=…`로 실제 ID(AdMob에서 전면 광고 단위, 동영상 허용).
