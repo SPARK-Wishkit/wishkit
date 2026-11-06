@@ -41,4 +41,32 @@ abstract final class AdsConfig {
 
   static String get nativeUnitId =>
       Platform.isIOS ? _nativeIos : _nativeAndroid;
+
+  // ── 태그 찾기 전면 광고(동영상 포함) ─────────────────────────────
+  //
+  // 구글 공식 테스트용 "동영상 전면 광고" 단위 ID. 출시 빌드에서는 실제 ID를 넣는다:
+  //   --dart-define=ADMOB_INTERSTITIAL_ANDROID=ca-app-pub-XXXX/YYYY
+  //   --dart-define=ADMOB_INTERSTITIAL_IOS=ca-app-pub-XXXX/ZZZZ
+  // AdMob에서 "전면 광고" 단위를 만들고 광고 유형에 동영상을 켜 두면 동영상이 나온다.
+  static const _testInterstitialAndroid =
+      'ca-app-pub-3940256099942544/8691691433';
+  static const _testInterstitialIos = 'ca-app-pub-3940256099942544/5135589807';
+
+  static const _interstitialAndroid = String.fromEnvironment(
+    'ADMOB_INTERSTITIAL_ANDROID',
+    defaultValue: _testInterstitialAndroid,
+  );
+  static const _interstitialIos = String.fromEnvironment(
+    'ADMOB_INTERSTITIAL_IOS',
+    defaultValue: _testInterstitialIos,
+  );
+
+  static String get interstitialUnitId =>
+      Platform.isIOS ? _interstitialIos : _interstitialAndroid;
+
+  /// 태그 찾기를 시작할 때 광고를 띄울 확률(항상 띄우지 않는다).
+  static const tagAdChance = 0.35;
+
+  /// 광고를 한 번 띄운 뒤 다음 광고까지 최소 간격(연달아 뜨지 않게).
+  static const tagAdCooldown = Duration(minutes: 3);
 }
