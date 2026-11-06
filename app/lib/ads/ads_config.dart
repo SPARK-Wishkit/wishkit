@@ -41,4 +41,25 @@ abstract final class AdsConfig {
 
   static String get nativeUnitId =>
       Platform.isIOS ? _nativeIos : _nativeAndroid;
+
+  // ── 태그 찾기 중 큰 배너(화면 높이 최대 70%, 동영상 포함) ─────────────
+  //
+  // 화면을 덮는 전면 광고 대신, 태그 찾기를 기다리는 동안 버튼 아래에 큰 배너(인라인 적응형,
+  // 최대 화면 높이의 70%)를 보여 준다. 이미지·동영상 광고가 모두 나온다. 아래는 구글 공식 **테스트** 배너 단위 ID.
+  // 출시 빌드에서는 AdMob에서 "배너" 광고 단위를 만들고 실제 ID를 넣는다:
+  //   --dart-define=ADMOB_BANNER_ANDROID=ca-app-pub-XXXX/YYYY
+  //   --dart-define=ADMOB_BANNER_IOS=ca-app-pub-XXXX/ZZZZ
+  static const _testBannerAndroid = 'ca-app-pub-3940256099942544/6300978111';
+  static const _testBannerIos = 'ca-app-pub-3940256099942544/2934735716';
+
+  static const _bannerAndroid = String.fromEnvironment(
+    'ADMOB_BANNER_ANDROID',
+    defaultValue: _testBannerAndroid,
+  );
+  static const _bannerIos = String.fromEnvironment(
+    'ADMOB_BANNER_IOS',
+    defaultValue: _testBannerIos,
+  );
+
+  static String get bannerUnitId => Platform.isIOS ? _bannerIos : _bannerAndroid;
 }

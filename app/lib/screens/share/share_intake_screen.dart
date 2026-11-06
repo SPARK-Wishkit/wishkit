@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../ads/tag_search_banner.dart';
 import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../services/aws/gql_runner.dart';
@@ -530,6 +531,12 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   loading: identifying,
                   onPressed: loading || identifying ? null : _pickTagPhoto,
                 ),
+                // 태그 찾기를 기다리는 동안만 큰 광고(최대 화면 높이의 70%). 버튼 아래에만 두고
+                // 겹치지 않게, 버튼과 충분히 띄운다(실수 클릭 방지).
+                if (identifying) ...[
+                  const SizedBox(height: 28),
+                  const TagSearchBannerAd(),
+                ],
                 if (tagResult != null &&
                     tagResult!.status != TagIdentifyStatus.notATag) ...[
                   const SizedBox(height: 10),

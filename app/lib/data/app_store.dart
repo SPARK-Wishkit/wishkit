@@ -603,7 +603,9 @@ class AppStore extends ChangeNotifier {
         );
       }
       const trusted = {'high', 'medium'};
-      if (!trusted.contains(info.priceConfidence)) {
+      // 판매가가 그대로면 확신이 낮아도 물어볼 필요가 없다("36,000원이 맞나요? 지금 36,000원").
+      if (!trusted.contains(info.priceConfidence) &&
+          info.price != product.price) {
         return PriceRefreshResult(
           PriceRefreshStatus.needsConfirm,
           previousPrice: product.price,
@@ -650,10 +652,12 @@ class AppStore extends ChangeNotifier {
       isPublic: product.isPublic,
       tagImageUrl: product.tagImageUrl,
     );
+    // 저장할지: 판매가나 정가가 다르면 조용히 맞춰 둔다(할인율은 두 값에서 계산되는 값이라 비교 안 함).
     final changed =
-        product.price != newPrice ||
-        product.originalPrice != original ||
-        product.discount != discount;
+        product.price != newPrice || product.originalPrice != original;
+    // 사용자에게 "바뀜"으로 알릴지: **판매가만** 기준. 사는 사람에게 중요한 건 판매가라서,
+    // 정가·할인 표시만 바뀐 건 "변동 없음"으로 둔다(예전엔 "36,000원 → 36,000원"이 떴다).
+    final priceChanged = product.price != newPrice;
 
     final previousProducts = products;
     final previousBasket = basket;
@@ -683,7 +687,7 @@ class AppStore extends ChangeNotifier {
     await _persistPriceChecks();
     notifyListeners();
     return PriceRefreshResult(
-      changed ? PriceRefreshStatus.updated : PriceRefreshStatus.unchanged,
+      priceChanged ? PriceRefreshStatus.updated : PriceRefreshStatus.unchanged,
       previousPrice: product.price,
       newPrice: newPrice,
     );
@@ -1710,6 +1714,7 @@ class PriceRefreshResult {
   final PriceRefreshStatus status;
   final int? previousPrice;
   final int? newPrice;
+
 
   /// [PriceRefreshStatus.needsConfirm]일 때 [AppStore.applyRefreshedPrice]에 넘길 값.
   final ParsedProductInfo? info;

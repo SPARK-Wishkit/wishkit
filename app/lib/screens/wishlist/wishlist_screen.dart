@@ -945,14 +945,17 @@ class WishlistProductCard extends StatelessWidget {
                         ).copyWith(height: ListCardMetrics.lineHeight),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        product.name,
-                        maxLines: ListCardMetrics.nameMaxLines,
-                        overflow: TextOverflow.ellipsis,
-                        style: DiaryTheme.product(
-                          ListCardMetrics.nameSize,
-                          weight: FontWeight.w700,
-                        ).copyWith(height: ListCardMetrics.lineHeight),
+                      // Flexible: 글자 렌더링이 계산보다 1~2px 커져도 상품명 칸이 줄어들어 overflow 안 남.
+                      Flexible(
+                        child: Text(
+                          product.name,
+                          maxLines: ListCardMetrics.nameMaxLines,
+                          overflow: TextOverflow.ellipsis,
+                          style: DiaryTheme.product(
+                            ListCardMetrics.nameSize,
+                            weight: FontWeight.w700,
+                          ).copyWith(height: ListCardMetrics.lineHeight),
+                        ),
                       ),
                       const SizedBox(height: 4),
                       // 할인율 · 판매가 · 정가를 한 줄에. 좁으면 정가만 줄여서 잘라낸다.

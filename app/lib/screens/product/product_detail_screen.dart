@@ -159,6 +159,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
     if (!mounted) return;
     final message = switch (result.status) {
+      // updated = 판매가가 바뀐 경우만(정가·할인 표시만 바뀌면 unchanged).
       PriceRefreshStatus.updated =>
         '가격이 바뀌었어요: ${formatWon(result.previousPrice ?? 0)} → '
             '${formatWon(result.newPrice ?? 0)}',
