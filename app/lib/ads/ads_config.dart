@@ -39,6 +39,10 @@ abstract final class AdsConfig {
   /// 목록에 실제로 적용할 간격. 광고를 못 쓰는 곳에서는 0(광고 없음).
   static int get feedEvery => supported ? every : 0;
 
+  /// 테스트용: `--dart-define=ADS_TAG_ALWAYS=true`로 실행하면 태그 찾기 광고를 확률·간격 없이
+  /// 매번 띄운다(광고가 준비돼 있을 때). 출시 빌드에는 절대 넣지 않는다.
+  static const forceTagAds = bool.fromEnvironment('ADS_TAG_ALWAYS');
+
   static String get nativeUnitId =>
       Platform.isIOS ? _nativeIos : _nativeAndroid;
 

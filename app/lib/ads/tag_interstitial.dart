@@ -35,6 +35,7 @@ class TagInterstitial {
         onAdLoaded: (ad) {
           _loading = false;
           _ad = ad;
+          debugPrint('[ads] 태그 전면 광고 준비됨');
         },
         onAdFailedToLoad: (error) {
           _loading = false;
@@ -45,18 +46,29 @@ class TagInterstitial {
   }
 
   /// 태그 찾기를 시작할 때 부른다. 조건이 맞으면 광고를 띄우고 true, 아니면 false.
-  /// 기다리지 않는다(광고는 띄우기만 하고 바로 돌아온다).
-  bool maybeShow() {
+  /// 사진 선택 창이 완전히 닫힌 뒤에 띄운다(닫히는 중에 띄우면 iOS에서 조용히 실패한다).
+  /// 찾기는 광고를 기다리지 않는다.
+  Future<bool> maybeShow() async {
+    await Future<void>.delayed(const Duration(milliseconds: 600));
     final ad = _ad;
-    if (!AdsConfig.supported || ad == null) {
+    if (!AdsConfig.supported) return false;
+    if (ad == null) {
+      debugPrint('[ads] 건너뜀: 광고가 아직 준비 안 됨(${_loading ? '불러오는 중' : '불러오기 시작'})');
       preload();
       return false;
     }
-    final last = _lastShown;
-    if (last != null && DateTime.now().difference(last) < AdsConfig.tagAdCooldown) {
-      return false;
+    if (!AdsConfig.forceTagAds) {
+      final last = _lastShown;
+      if (last != null &&
+          DateTime.now().difference(last) < AdsConfig.tagAdCooldown) {
+        debugPrint('[ads] 건너뜀: 마지막 광고 후 ${AdsConfig.tagAdCooldown.inMinutes}분이 안 지남');
+        return false;
+      }
+      if (_random.nextDouble() >= AdsConfig.tagAdChance) {
+        debugPrint('[ads] 건너뜀: 이번엔 확률(${AdsConfig.tagAdChance})에 안 걸림');
+        return false;
+      }
     }
-    if (_random.nextDouble() >= AdsConfig.tagAdChance) return false;
 
     _ad = null;
     _lastShown = DateTime.now();
@@ -66,11 +78,13 @@ class TagInterstitial {
         preload(); // 다음 기회를 위해 미리 불러 둔다
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
+        debugPrint('[ads] 광고 띄우기 실패: ${error.message}');
         ad.dispose();
         preload();
       },
     );
-    ad.show();
+    debugPrint('[ads] 태그 전면 광고 띄움');
+    await ad.show();
     return true;
   }
 }

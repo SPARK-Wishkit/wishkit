@@ -23,6 +23,7 @@
 🔧 **기술 설명**
 - `ads/tag_interstitial.dart` `TagInterstitial`: 공유 담기 화면 진입 시 `InterstitialAd.load`로 미리 불러 두고, `_identifyFromTag` 시작 시 `maybeShow()` — 준비된 광고가 있고, 마지막 노출 뒤 `AdsConfig.tagAdCooldown`(3분)이 지났고, `AdsConfig.tagAdChance`(0.35) 추첨에 걸릴 때만 `show()`. 닫히거나 실패하면 dispose 후 다음 광고 미리 불러오기. 찾기는 광고를 기다리지 않는다.
 - AdMob 권장 사항 반영: 자연스러운 대기 구간(사용자가 시작한 10~25초 찾기)에만, 미리 불러 둔 광고만, 노출 빈도 제한. 앱 시작·종료·결과 화면·입력 중에는 띄우지 않음.
+- 보완: 사진 선택 창이 닫힌 뒤(600ms) 띄우도록(iOS에서 창이 닫히는 중엔 띄우기가 조용히 실패), 건너뛴 이유를 `[ads]` 로그로 남김. 테스트용 `--dart-define=ADS_TAG_ALWAYS=true`(확률·간격 무시, 출시 빌드엔 넣지 않음).
 - `AdsConfig.interstitialUnitId`: 기본값은 구글 공식 **동영상 전면 광고 테스트 ID**. 출시 빌드는 `--dart-define=ADMOB_INTERSTITIAL_ANDROID=…`/`ADMOB_INTERSTITIAL_IOS=…`로 실제 ID(AdMob에서 전면 광고 단위, 동영상 허용).
 
 ---
