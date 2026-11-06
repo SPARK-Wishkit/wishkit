@@ -1,5 +1,19 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-06 - 태그 찾기 광고: 전면 광고 → 버튼 아래 큰 배너
+
+🌟 **쉬운 설명**
+- 화면을 가득 덮던 전면 광고 대신, **태그 찾기를 기다리는 동안 버튼 아래에 큰 광고**(최대 화면 높이의 70%)가 보여요. 동영상 광고도 나와요. 입력칸·버튼은 가리지 않아요(정책상 겹치면 안 됨).
+- 화면을 덮지 않아서 기다리면서 같이 보고, 찾기가 끝나면 광고 칸이 사라지고 결과가 나와요. 닫을 필요가 없어요.
+- 실수로 누르지 않게 버튼과 띄워 두고, 위에 "광고" 표시를 달았어요. 광고를 못 불러오면 빈칸 없이 그냥 안 보여요.
+
+🔧 **기술 설명**
+- `ads/tag_search_banner.dart` `TagSearchBannerAd`: 인라인 적응형 배너 `AdSize.getInlineAdaptiveBannerAdSize(화면 폭-40, 화면 높이×0.7)`를 위젯이 나타날 때 불러오고, 받은 실제 크기(`getPlatformAdSize`)로 칸을 잡고, 사라질 때 dispose. 공유 담기 화면에서 `identifying` 동안만 버튼 아래 28 띄워서 표시.
+- 전면 광고(`ads/tag_interstitial.dart`), 확률·간격 설정, `ADS_TAG_ALWAYS` 테스트 스위치 삭제.
+- `AdsConfig.bannerUnitId`: 기본값은 구글 공식 배너 테스트 ID. 출시 빌드는 `--dart-define=ADMOB_BANNER_ANDROID=…`/`ADMOB_BANNER_IOS=…`(AdMob에서 배너 단위 생성).
+
+---
+
 ## 2026-11-05 - 가격 새로고침: 안 바뀌었는데 "36,000원 → 36,000원" 뜨던 것
 
 🌟 **쉬운 설명**
