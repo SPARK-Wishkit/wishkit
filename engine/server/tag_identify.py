@@ -2,6 +2,11 @@
 태그 사진 → 상품 페이지 찾기 (POST /identify-tag).
 
 흐름:
+  0. QR 먼저   — (2026-11-08) 태그 읽기와 동시에 사진 속 QR·바코드를 실제 디코더로 읽는다(qr_codes.py).
+                  QR 주소를 안전하게 따라가서(사설망 차단) 상품 페이지면 렌더링해 품번을 확인하고, 확인되면
+                  검색 없이 바로 found(match.via='qr'). 브랜드 메인으로 가면 그 도메인을 공식몰 도메인으로
+                  검색 단계에 넘긴다. GS1 QR의 GTIN과 1차원 바코드는 태그 바코드로 쓴다(OCR보다 정확).
+                  QR로 확인 못 하면 아래 1~4(품번·브랜드 검색)로 넘어간다.
   1. 태그 읽기  — Gemini 비전으로 사진 속 태그에서 브랜드·품번·바코드·상품명·색상·태그 가격과, 태그에
                   같이 적힌 다른 코드들을 읽는다. 바코드는 검증 숫자가 안 맞으면 버린다(tag_codes.py).
   2. 검색       — Gemini + Google 검색 그라운딩으로 "브랜드 품번"(예: "1993STUDIO 93251TTL1202")을
@@ -34,6 +39,7 @@ test_tag_identify.py에서 가짜로 바꿔 끼워 테스트한다. 실제 연�
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -44,6 +50,7 @@ from dataclasses import dataclass, field
 import config
 from compare import normalize_price_text
 from providers import ProviderResult, generate, to_gemini_schema
+from qr_codes import DecodedCodes, QrResolution
 from tag_codes import (
     MIN_CODE_LEN,
     clean_barcode,
@@ -310,11 +317,16 @@ def _clean_url(url: str) -> str:
     return url.rstrip(_URL_TRAILING_JUNK)
 
 
-def parse_search_output(text: str, sources: list[dict]) -> tuple[str | None, list[Candidate]]:
+def parse_search_output(
+    text: str, sources: list[dict], official_hint: str | None = None
+) -> tuple[str | None, list[Candidate]]:
     """검색 응답 텍스트 + 그라운딩 출처에서 (공식 도메인, 후보 목록)을 만든다.
-    공식몰 후보가 먼저, 그다음 쇼핑몰. 블로그·모르는 사이트는 뺀다."""
+    공식몰 후보가 먼저, 그다음 쇼핑몰. 블로그·모르는 사이트는 뺀다.
+
+    official_hint: 태그 QR이 가리킨 브랜드 사이트 도메인. 모델이 답한 OFFICIAL_DOMAIN보다 믿을 만해서
+    (브랜드가 태그에 직접 인쇄한 주소) 있으면 이 값을 쓴다."""
     m = _DOMAIN_LINE_RE.search(text or "")
-    official = _clean_domain(m.group(1) if m else None)
+    official = _clean_domain(official_hint) or _clean_domain(m.group(1) if m else None)
     if official and any(_domain_matches(official, d) for d in MALL_DOMAINS):
         official = None  # 쇼핑몰을 공식몰이라고 답한 경우 — 공식몰 없음으로 취급
 
@@ -441,6 +453,8 @@ ReadPagesFn = Callable[[dict, list[str]], Awaitable[ProviderResult]]
 MIN_SECONDS_FOR_PAGE_READ = 6.0  # 이보다 시간이 적게 남으면 페이지 읽기를 건너뛰고 검색 결과로만 판단
 SearchFn = Callable[[dict], Awaitable[ProviderResult]]
 RenderFn = Callable[[str], Awaitable[PageView]]
+ReadCodesFn = Callable[[bytes], Awaitable[DecodedCodes]]
+ResolveUrlFn = Callable[[str], Awaitable[QrResolution]]
 
 
 class IdentifyError(Exception):
@@ -461,6 +475,7 @@ class IdentifyOutcome:
     match: dict | None = None
     checked: list[dict] = field(default_factory=list)
     note: str | None = None
+    qr: list[dict] = field(default_factory=list)  # 사진에서 읽은 QR과 어디로 갔는지(로그·앱 안내용)
 
     def to_dict(self) -> dict:
         return {
@@ -470,6 +485,7 @@ class IdentifyOutcome:
             "match": self.match,
             "candidates_checked": self.checked,
             "note": self.note,
+            "qr": self.qr,
         }
 
 
@@ -538,23 +554,41 @@ async def identify(
     min_seconds_per_render: float = 6.0,
     verify_by_render: bool | None = None,
     read_pages: ReadPagesFn | None = None,
+    read_codes: ReadCodesFn | None = None,
+    resolve_url: ResolveUrlFn | None = None,
 ) -> IdentifyOutcome:
-    tag_res = await read_tag(image, mime_type)
+    # 0+1. 태그 읽기(Gemini)와 QR·바코드 디코딩(zxing)을 동시에 — 디코딩은 1초도 안 걸려서 시간 손해가 없다.
+    if read_codes is not None:
+        tag_res, codes = await asyncio.gather(read_tag(image, mime_type), _safe_read_codes(read_codes, image))
+    else:
+        tag_res, codes = await read_tag(image, mime_type), DecodedCodes()
     if not tag_res.ok or not tag_res.data:
         raise IdentifyError(f"태그 읽기 실패: {tag_res.error}")
-    tag = _clean_tag(tag_res.data)
-    if not tag.get("is_product_tag"):
-        return IdentifyOutcome("not_a_tag", tag)
-    if not _has_search_key(tag):
-        return IdentifyOutcome("not_found", tag, note="태그에서 품번이나 브랜드·상품명을 읽지 못했어요")
+    tag = _merge_decoded(_clean_tag(tag_res.data), codes)
 
-    # 2. Gemini + 구글 검색 — 공식몰 후보가 먼저, 그다음 쇼핑몰
+    # 0. QR이 가리키는 페이지에서 품번이 확인되면 검색 없이 끝낸다.
+    qr = await _try_qr(tag, codes, render_page=render_page, resolve_url=resolve_url,
+                       time_left=time_left, min_s=min_seconds_per_render)
+    if qr.found is not None:
+        return IdentifyOutcome("found", tag, official_domain=qr.official_domain, match=qr.found,
+                               checked=qr.checked, qr=qr.info)
+
+    if not tag.get("is_product_tag"):
+        # 태그로 안 보여도, 사진 속 QR이 상품 페이지로 갔다면 사용자에게 물어볼 가치가 있다.
+        if qr.candidate is not None:
+            return IdentifyOutcome("needs_confirm", tag, official_domain=qr.official_domain, match=qr.candidate,
+                                   checked=qr.checked, qr=qr.info, note=QR_CONFIRM_NOTE)
+        return IdentifyOutcome("not_a_tag", tag, qr=qr.info)
+    if not _has_search_key(tag):
+        return qr.fallback(IdentifyOutcome("not_found", tag, note="태그에서 품번이나 브랜드·상품명을 읽지 못했어요"))
+
+    # 2. Gemini + 구글 검색 — 공식몰 후보가 먼저, 그다음 쇼핑몰. QR이 알려 준 공식 도메인이 있으면 그걸 쓴다.
     search_res = await search(tag)
     if not search_res.ok or not search_res.data:
         logger.warning("[identify] 검색 실패: %s", search_res.error)
-        return IdentifyOutcome("not_found", tag, note=_search_fail_note(search_res.error))
+        return qr.fallback(IdentifyOutcome("not_found", tag, note=_search_fail_note(search_res.error)))
     official, candidates = parse_search_output(
-        search_res.data.get("text", ""), search_res.data.get("sources", [])
+        search_res.data.get("text", ""), search_res.data.get("sources", []), official_hint=qr.official_domain
     )
 
     if verify_by_render is None:
@@ -567,14 +601,237 @@ async def identify(
         if read_pages is not None and urls and time_left() >= MIN_SECONDS_FOR_PAGE_READ:
             read_res = await read_pages(tag, urls)
             if read_res.ok and read_res.data:
-                return _decide_from_pages(tag, official, candidates, read_res.data, sources)
+                return qr.fallback(_decide_from_pages(tag, official, candidates, read_res.data, sources))
             logger.warning("[identify] 페이지 읽기(URL context) 실패: %s", read_res.error)
-        return _decide_from_search(tag, official, candidates, sources)
+        return qr.fallback(_decide_from_search(tag, official, candidates, sources))
 
     # 3. (IDENTIFY_RENDER_VERIFY=1) 후보 페이지를 열어 확인 — 공식몰에서 품번이 확인되면 바로 끝
     checker = _Checker(tag, render_page, time_left, min_seconds_per_render)
     await checker.check_all(candidates[:max_candidates], official=official)
-    return checker.outcome(official=official)
+    return qr.fallback(checker.outcome(official=official))
+
+
+# ── 0. QR ──────────────────────────────────────────────────
+
+MAX_QR_URLS = 2  # 한 사진에서 따라가 볼 QR 주소 최대 개수
+QR_MIN_SECONDS = 10.0  # 이보다 시간이 적게 남으면 QR은 건너뛰고 검색에 시간을 준다
+QR_CONFIRM_NOTE = "태그의 QR이 가리킨 페이지예요. 품번은 확인하지 못했어요"
+
+# QR이 상품과 무관한 곳으로 가는 경우(SNS·앱스토어·링크 모음). 공식몰 도메인으로도 쓰지 않는다.
+QR_IGNORE_DOMAINS = (
+    *NON_SHOP_DOMAINS, "apps.apple.com", "itunes.apple.com", "play.google.com", "pf.kakao.com",
+    "linktr.ee", "forms.gle", "docs.google.com",
+)
+
+
+async def _safe_read_codes(read_codes: ReadCodesFn, image: bytes) -> DecodedCodes:
+    try:
+        return await read_codes(image)
+    except Exception as exc:  # noqa: BLE001 — 디코딩이 실패해도 태그 읽기·검색은 계속한다
+        logger.warning("[identify] QR·바코드 디코딩 실패: %s", exc)
+        return DecodedCodes(error=type(exc).__name__)
+
+
+def _merge_decoded(tag: dict, codes: DecodedCodes) -> dict:
+    """디코더로 읽은 값을 태그 정보에 합친다.
+    - 바코드: 디코더 값이 OCR(Gemini) 값보다 정확하다. 둘이 다르면 디코더 값을 쓰고 OCR 값은 barcode_ocr에 남긴다.
+    - 글자 바코드(Code128 등)·QR 글자 속 코드: other_codes에 더한다(품번·바코드와 같으면 뺀다)."""
+    tag = dict(tag)
+    gtins = codes.gtins
+    if gtins:
+        current = tag.get("barcode")
+        if current and current not in gtins:
+            tag["barcode_ocr"] = current
+        if current not in gtins:
+            tag["barcode"] = gtins[0]
+        tag["barcode_source"] = "decoded"
+    taken = {normalize_code(tag.get("product_code")), normalize_code(tag.get("barcode"))}
+    taken |= {normalize_code(c) for c in tag.get("other_codes") or []}
+    others = list(tag.get("other_codes") or [])
+    decoded_texts = [*codes.linear_codes, *(c for p in codes.qr for c in p.codes)]
+    for code in decoded_texts:
+        norm = normalize_code(code)
+        if len(norm) >= MIN_CODE_LEN and norm not in taken:
+            taken.add(norm)
+            others.append(code)
+    tag["other_codes"] = others
+    return tag
+
+
+_URL_CODE_TOKEN_RE = re.compile(r"[A-Za-z0-9]{7,}")
+
+
+def _url_code_tokens(url: str) -> list[str]:
+    """QR 주소의 경로·쿼리에서 품번처럼 생긴 덩어리(영문+숫자 섞인 7자 이상). nextUrl 같은 쿼리 속 경로도 본다."""
+    parts = urllib.parse.urlsplit(url or "")
+    text = urllib.parse.unquote(f"{parts.path} {parts.query}")
+    return [t for t in _URL_CODE_TOKEN_RE.findall(text)
+            if re.search(r"[A-Za-z]", t) and re.search(r"\d", t)]
+
+
+def qr_url_code_check(tag: dict, url: str) -> str | None:
+    """QR 주소 속 품번을 태그 품번과 견준다(주소에 품번이 그대로 있으면 code_evidence가 이미 잡는다).
+
+    - 'product_code_base': 끝 한 글자만 다르다 — 같은 스타일의 다른 색상(2026-11-08 노스페이스: 태그 NJ1DS87K,
+      QR /product/NJ1DS87J). 브랜드가 바로 이 태그에 인쇄한 주소라서 같은 상품으로 본다.
+    - 'conflict': 주소에 품번처럼 생긴 덩어리가 있는데 태그 품번과 전혀 다르다 — 다른 상품 페이지(8seconds:
+      태그 456X39CM55, QR …/detail/456941CM13). 페이지를 못 읽어도 "맞나요?"로 내밀지 않는다.
+    - None: 판단할 거리가 없다."""
+    code = normalize_code(tag.get("product_code"))
+    tokens = [normalize_code(t) for t in _url_code_tokens(url)]
+    if not code or not tokens:
+        return None
+    for tok in tokens:
+        if len(code) >= MIN_CODE_LEN and len(tok) == len(code) and tok[:-1] == code[:-1]:
+            return "product_code_base"
+    if any(len(tok) >= MIN_CODE_LEN for tok in tokens):
+        return "conflict"
+    return None
+
+
+def _site_domain(host: str) -> str:
+    """공식몰 도메인으로 쓸 값: 모바일 하위 주소(m.)는 뗀다 — classify_host가 하위 주소를 같이 받아 준다."""
+    return host.removeprefix("m.")
+
+
+@dataclass
+class _QrStep:
+    info: list[dict] = field(default_factory=list)  # QR마다 {raw, kind, final_url, result}
+    checked: list[dict] = field(default_factory=list)
+    official_domain: str | None = None  # QR이 브랜드 사이트로 갔으면 그 도메인
+    found: dict | None = None  # QR 페이지에서 품번이 확인된 match
+    candidate: dict | None = None  # 확인은 못 했지만(읽지 못함) 사용자에게 물어볼 QR 페이지
+
+    def fallback(self, outcome: IdentifyOutcome) -> IdentifyOutcome:
+        """검색 단계의 결과에 QR 정보를 붙인다. 검색이 found가 아니고 QR 후보가 있으면 QR 후보로
+        needs_confirm — 브랜드가 태그에 직접 인쇄한 주소라서 검색 결과보다 같은 상품일 가능성이 높다."""
+        outcome.qr = self.info
+        outcome.checked = [*self.checked, *outcome.checked]
+        if outcome.official_domain is None:
+            outcome.official_domain = self.official_domain
+        if outcome.status != "found" and self.candidate is not None:
+            outcome.status = "needs_confirm"
+            outcome.match = self.candidate
+            outcome.note = QR_CONFIRM_NOTE
+        return outcome
+
+
+async def _try_qr(
+    tag: dict,
+    codes: DecodedCodes,
+    *,
+    render_page: RenderFn,
+    resolve_url: ResolveUrlFn | None,
+    time_left: Callable[[], float],
+    min_s: float,
+) -> _QrStep:
+    step = _QrStep()
+    seen: set[str] = set()
+    for payload in codes.qr:
+        if not payload.url or payload.url in seen or len(seen) >= MAX_QR_URLS:
+            if not payload.url:
+                step.info.append({"raw": payload.raw[:200], "kind": payload.kind, "final_url": None,
+                                  "result": "주소가 아닌 QR(글자 속 코드만 사용)"})
+            continue
+        seen.add(payload.url)
+        entry = {"raw": payload.raw[:200], "kind": payload.kind, "final_url": None, "result": None}
+        step.info.append(entry)
+        if time_left() < QR_MIN_SECONDS:
+            entry["result"] = "시간 부족"
+            continue
+        await _check_qr_url(step, entry, tag, payload.url, render_page=render_page, resolve_url=resolve_url,
+                            time_left=time_left, min_s=min_s)
+        if step.found is not None:
+            break
+    return step
+
+
+async def _check_qr_url(
+    step: _QrStep,
+    entry: dict,
+    tag: dict,
+    url: str,
+    *,
+    render_page: RenderFn,
+    resolve_url: ResolveUrlFn | None,
+    time_left: Callable[[], float],
+    min_s: float,
+) -> None:
+    res = await resolve_url(url) if resolve_url is not None else QrResolution(url, url, ok=True)
+    if res.unsafe:
+        entry["result"] = f"막음: {res.error}"
+        return
+    final = res.final_url  # 따라가다 실패했어도 마지막으로 확인한(공개) 주소는 렌더링해 볼 만하다
+    entry["final_url"] = final
+    host = host_of(final)
+    if not host or any(_domain_matches(host, d) for d in QR_IGNORE_DOMAINS):
+        entry["result"] = "상품과 무관한 주소(SNS·앱스토어 등)"
+        return
+    is_mall = any(_domain_matches(host, d) for d in MALL_DOMAINS)
+    if not is_mall and step.official_domain is None:
+        step.official_domain = _site_domain(host)
+    if is_root_url(final):
+        entry["result"] = "브랜드 메인 페이지 → 공식몰 도메인으로 사용" if not is_mall else "쇼핑몰 메인 페이지"
+        return
+
+    def match(page_url: str, verified_by: str, price_ok: bool | None) -> dict:
+        page_host = host_of(page_url) or host
+        mall = any(_domain_matches(page_host, d) for d in MALL_DOMAINS)
+        return {"url": page_url, "host": page_host, "source": "mall" if mall else "official",
+                "verified_by": verified_by, "tag_price_seen": price_ok, "via": "qr"}
+
+    source = "mall" if is_mall else "official"
+    url_ev = code_evidence(tag, "", final) if has_code(tag) else None
+    url_check = None if url_ev else qr_url_code_check(tag, final)
+    if url_check == "product_code_base":
+        url_ev = url_check
+    may_offer = url_check != "conflict"  # 주소가 다른 품번을 가리키면 못 읽었어도 후보로 내밀지 않는다
+
+    if time_left() < min_s:
+        if url_ev:
+            step.found = match(final, url_ev, None)
+            entry["result"] = f"주소에 품번({url_ev})"
+        elif may_offer:
+            step.candidate = step.candidate or match(final, "qr", None)
+            entry["result"] = "시간 부족으로 페이지 확인 못 함"
+        else:
+            entry["result"] = "QR 주소의 품번이 태그와 다름"
+        step.checked.append(_checked(final, source, bool(url_ev) or None, f"QR · {entry['result']}"))
+        return
+
+    page = await render_page(final)
+    page_url = page.final_url or final
+    if not page.ok:
+        if url_ev:
+            step.found = match(final, url_ev, None)
+            entry["result"] = f"페이지는 못 열었지만 주소에 품번({url_ev})"
+        elif may_offer:
+            step.candidate = step.candidate or match(final, "qr", None)
+            entry["result"] = f"페이지를 못 읽음({page.error or '차단'})"
+        else:
+            entry["result"] = "페이지를 못 읽음 · QR 주소의 품번이 태그와 다름"
+        step.checked.append(_checked(final, source, bool(url_ev) or None, f"QR · {entry['result']}"))
+        return
+    if is_root_url(page_url):
+        entry["result"] = "열어 보니 메인 페이지"
+        step.checked.append(_checked(page_url, source, None, f"QR · {entry['result']}"))
+        return
+    evidence = page_matches(tag, page.raw_text, page_url, page.code_hints) or (
+        url_ev if url_ev == "product_code_base" else None)
+    if evidence:
+        step.found = match(page_url, evidence, price_seen(tag, page.raw_text))
+        entry["result"] = f"페이지에서 품번 확인({evidence})"
+        step.checked.append(_checked(page_url, source, True, f"QR · {evidence}"))
+        return
+    if (page.looks_blank or not page.shows_price) and may_offer:
+        # 빈 화면·가격 없는 화면에서 품번을 못 찾은 건 "다른 상품"이 아니라 "못 읽음"이다.
+        step.candidate = step.candidate or match(page_url, "qr", None)
+        entry["result"] = "페이지 내용이 거의 안 보임"
+        step.checked.append(_checked(page_url, source, None, f"QR · {entry['result']}"))
+        return
+    # 읽었는데 품번이 없다 — 브랜드 공용 QR(라인 소개·이벤트 페이지 등)일 수 있어 후보로 쓰지 않는다.
+    entry["result"] = "페이지에 품번 없음"
+    step.checked.append(_checked(page_url, source, False, f"QR · {entry['result']}"))
 
 
 class _Checker:

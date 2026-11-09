@@ -480,6 +480,7 @@ class AppStore extends ChangeNotifier {
 
   Future<void> removeProduct(int id) async {
     final tagImageUrl = productById(id)?.tagImageUrl;
+    final image = productById(id)?.image ?? '';
     products = products.where((p) => p.id != id).toList();
     basket = basket.where((b) => b.product.id != id).toList();
     final userId = uid;
@@ -489,6 +490,12 @@ class AppStore extends ChangeNotifier {
       if (tagImageUrl != null) {
         try {
           await _repo.deleteTagPhoto(tagImageUrl);
+        } catch (_) {}
+      }
+      // 직접 찍은 옷 사진(대표 사진)도 지운다. 쇼핑몰 사진 주소면 저장소가 알아서 건너뛴다.
+      if (image.isNotEmpty) {
+        try {
+          await _repo.deleteProductPhoto(image);
         } catch (_) {}
       }
     }
@@ -559,6 +566,25 @@ class AppStore extends ChangeNotifier {
   Future<void> discardTagPhoto(String url) async {
     try {
       await _repo.deleteTagPhoto(url);
+    } catch (_) {}
+  }
+
+  /// 직접 찍은 옷 사진을 저장소에 올리고 주소를 돌려준다. 상품 저장([addParsedProduct]) 전에 부르고,
+  /// 그 주소를 상품의 대표 사진(image)으로 쓴다.
+  Future<String> uploadProductPhoto(
+    Uint8List image, {
+    String mimeType = 'image/jpeg',
+  }) async {
+    if (!backendReady || uid == null) {
+      throw const TagIdentifyUnavailable();
+    }
+    return _repo.uploadProductPhoto(image, mimeType: mimeType);
+  }
+
+  /// 올렸지만 상품 저장에 쓰이지 못한 옷 사진을 지운다. 실패해도 조용히 넘어간다.
+  Future<void> discardProductPhoto(String url) async {
+    try {
+      await _repo.deleteProductPhoto(url);
     } catch (_) {}
   }
 

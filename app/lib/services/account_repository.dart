@@ -122,6 +122,13 @@ class AccountRepository {
   /// 상품을 지울 때 그 상품의 태그 사진도 지운다.
   Future<void> deleteTagPhoto(String url) => _files.removeTagPhoto(url);
 
+  /// 직접 기록한 상품의 옷 사진(대표 사진)을 올리고 영구 주소를 돌려준다.
+  Future<String> uploadProductPhoto(List<int> bytes, {required String mimeType}) =>
+      _files.uploadProductPhoto(bytes, mimeType: mimeType);
+
+  /// [url] 이 내가 올린 옷 사진이면 지운다(쇼핑몰 사진 주소면 아무것도 안 함).
+  Future<void> deleteProductPhoto(String url) => _files.removeProductPhoto(url);
+
   /// 살까말까 공유 페이지(HTML)를 올리고, 로그인 없이 열리는 주소를 돌려준다.
   /// 28일 뒤 자동 삭제는 S3 규칙이 한다. 같은 [pageId] 로 다시 올리면 같은 주소에 덮어쓴다.
   /// [basketId] · [expiresAt] 은 호환용으로 받지만 쓰지 않는다.

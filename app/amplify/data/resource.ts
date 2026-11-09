@@ -342,6 +342,8 @@ const schema = a.schema({
    * matchSource: 'official'(브랜드 공식몰) | 'mall'(공식몰에 없어 국내 쇼핑몰에서 찾음)
    * verifiedBy: 'product_code' | 'barcode' | 'product_code_base'(색상 뗀 기본 번호) | 'name'(품번 없이 이름으로만
    *             확인 — 앱이 한 번 더 확인) | 'search'(needs_confirm — 검색 결과일 뿐 확인 안 됨)
+   *             | 'qr'(needs_confirm — 태그 QR이 가리킨 페이지를 못 읽어 확인 안 됨)
+   * matchVia: 'qr'(태그 QR로 찾음) | 'search'(품번·브랜드 검색으로 찾음) | null(링크 없음)
    */
   IdentifiedTag: a.customType({
     status: a.string().required(),
@@ -361,6 +363,7 @@ const schema = a.schema({
     matchPrice: a.integer(),
     matchRegularPrice: a.integer(),
     matchImage: a.string(),
+    matchVia: a.string(),
   }),
 
   /**

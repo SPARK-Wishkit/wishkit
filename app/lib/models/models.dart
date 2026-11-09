@@ -749,6 +749,7 @@ class TagIdentifyResult {
     this.matchPrice,
     this.matchRegularPrice,
     this.matchImage,
+    this.matchVia,
   });
 
   final TagIdentifyStatus status;
@@ -776,6 +777,12 @@ class TagIdentifyResult {
   final int? matchPrice;
   final int? matchRegularPrice;
   final String? matchImage;
+
+  /// 'qr'(태그에 인쇄된 QR이 가리킨 페이지로 찾음) | 'search'(품번·브랜드 검색으로 찾음). 링크가 없으면 null.
+  final String? matchVia;
+
+  /// 태그 QR로 찾은 결과인지 — 안내 문구를 고르는 데 쓴다.
+  bool get foundByQr => hasMatch && matchVia == 'qr';
 
   /// 페이지 정보(상품명·가격)를 이미 받아서, 링크를 다시 읽지 않아도 되는지.
   bool get hasMatchDetails =>
@@ -855,6 +862,7 @@ class TagIdentifyResult {
       matchImage: (s('matchImage') ?? '').startsWith('http')
           ? s('matchImage')
           : null,
+      matchVia: s('matchVia'),
     );
   }
 }

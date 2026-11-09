@@ -53,6 +53,14 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
   Uint8List? tagPhoto;
   String tagPhotoMime = 'image/jpeg';
 
+  /// 사용자가 직접 찍은 옷 사진. 있으면 저장할 때 올려서 상품의 대표 사진(쇼핑몰 사진 자리)으로 쓴다.
+  Uint8List? clothesPhoto;
+  String clothesPhotoMime = 'image/jpeg';
+
+  /// 판매 페이지 없이 직접 기록하는 중인지(QR·검색으로 못 찾았거나, 사용자가 "직접 기록하기"를 누름).
+  /// 이때는 옷 사진 자리를 보여 주고, 태그에서 읽은 상품명·가격을 자동으로 채운다.
+  bool manualMode = false;
+
   @override
   void initState() {
     super.initState();
@@ -86,6 +94,8 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
         tagConfirmPending = false;
         tagPhoto = null; // URL로 직접 읽으면 앞서 찍은 태그 사진과는 다른 상품일 수 있다.
       }
+      // 링크로 읽으면 쇼핑몰 사진이 생긴다. 직접 찍은 옷 사진은 남겨 두되(카드에서 뺄 수 있음) 직접 기록은 끝.
+      manualMode = false;
     });
     try {
       final info = input.contains('http') && !input.trim().contains(' ')
@@ -103,8 +113,10 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
 
   // ── 태그 사진으로 찾기 ──
 
-  Future<void> _pickTagPhoto() async {
-    if (identifying || loading) return;
+  /// 카메라/앨범을 골라 사진 한 장을 받는다. 취소하면 null.
+  ///
+  /// 1280px · JPEG 75%로 줄인다 — 태그 글자와 QR을 읽기에 충분하고, 서버로 보내거나 저장하기에도 가볍다.
+  Future<(Uint8List, String)?> _pickPhoto({required String cameraLabel}) async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -113,7 +125,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('태그 사진 찍기'),
+              title: Text(cameraLabel),
               onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
             ),
             ListTile(
@@ -125,10 +137,9 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
         ),
       ),
     );
-    if (source == null || !mounted) return;
+    if (source == null || !mounted) return null;
     final XFile? picked;
     try {
-      // 서버로 보내는 크기를 줄인다 — 태그 글자를 읽기엔 1280px이면 충분하다.
       picked = await ImagePicker().pickImage(
         source: source,
         maxWidth: 1280,
@@ -137,12 +148,51 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
       );
     } catch (_) {
       if (mounted) setState(() => error = '카메라나 사진을 열 수 없어요. 권한을 확인해 주세요');
-      return;
+      return null;
     }
-    if (picked == null || !mounted) return;
+    if (picked == null || !mounted) return null;
     final bytes = await picked.readAsBytes();
-    if (!mounted) return;
-    await _identifyFromTag(bytes, _mimeTypeOf(picked));
+    if (!mounted) return null;
+    return (bytes, _mimeTypeOf(picked));
+  }
+
+  Future<void> _pickTagPhoto() async {
+    if (identifying || loading) return;
+    final photo = await _pickPhoto(cameraLabel: '태그 사진 찍기');
+    if (photo == null) return;
+    await _identifyFromTag(photo.$1, photo.$2);
+  }
+
+  /// 옷 사진을 고른다. 저장할 때 올려서 상품의 대표 사진으로 쓴다(쇼핑몰 사진이 있어도 이 사진이 우선).
+  Future<void> _pickClothesPhoto() async {
+    if (saving) return;
+    final photo = await _pickPhoto(cameraLabel: '옷 사진 찍기');
+    if (photo == null) return;
+    setState(() {
+      clothesPhoto = photo.$1;
+      clothesPhotoMime = photo.$2;
+      error = null;
+    });
+  }
+
+  void _removeClothesPhoto() => setState(() => clothesPhoto = null);
+
+  /// 링크도 태그 사진도 없이, 옷 사진·이름·가격만으로 직접 기록을 시작한다(오프라인 매장 등).
+  void _startManual() {
+    final link = ShareInput.firstUrl(urlCtrl.text);
+    setState(() {
+      manualMode = true;
+      error = null;
+      tagConfirmPending = false;
+      parsed = ParsedProductInfo(
+        name: titleCtrl.text.trim().isEmpty ? '공유된 상품' : titleCtrl.text.trim(),
+        price: 0,
+        platform: tagResult?.brand ?? '직접 기록',
+        image: '',
+        productUrl: link ?? '',
+        missingFields: const ['price', 'image_url'],
+      );
+    });
   }
 
   String _mimeTypeOf(XFile file) {
@@ -231,6 +281,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
 
   /// 엔진이 찾은 페이지에서 읽어 온 상품명·가격·사진으로 입력칸을 채운다.
   void _fillFromMatch(TagIdentifyResult r) {
+    manualMode = false;
     final price = r.matchPrice ?? 0;
     final regular = r.matchRegularPrice;
     titleCtrl.text = r.matchName!;
@@ -249,27 +300,37 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
     });
   }
 
-  /// 판매 페이지 없이 태그 정보만으로 입력칸을 채운다.
+  /// 판매 페이지 없이 태그 정보만으로 직접 기록을 시작한다(QR·품번 검색 모두 실패, 또는 "다른 상품이에요").
   ///
-  /// [withTagPrice]: 사용자가 "다른 상품이에요"라고 한 경우 — 태그의 브랜드·품번·정가를 그대로 넣는다
-  /// (매장에서 찍은 태그 가격이라 그 매장 가격인 경우가 많다). 아니면 가격은 비워 두고 사용자가 입력.
-  void _fillFromTagOnly(TagIdentifyResult result, {bool withTagPrice = false}) {
-    final name = withTagPrice ? result.tagOnlyName : result.suggestedName;
-    final tagPrice = withTagPrice ? result.tagPrice : null;
+  /// 태그에서 읽은 상품명·가격을 자동으로 채운다. 태그 가격은 보통 그 매장의 정가라서, 매장에서 본 상품을
+  /// 기록하는 이 경우엔 그대로 쓰는 게 맞다. 이미 직접 기록 중이었다면 사용자가 입력한 칸은 덮어쓰지 않는다.
+  /// 옷 사진 자리를 보여 주므로 사용자가 찍은 옷 사진이 대표 사진이 된다.
+  void _fillFromTagOnly(TagIdentifyResult result) {
+    final keepTyped = manualMode;
+    final suggested = result.suggestedName.trim();
+    final name = suggested.isNotEmpty ? suggested : result.tagOnlyName.trim();
+    final tagPrice = result.tagPrice;
     final code = (result.productCode ?? '').trim();
     urlCtrl.clear();
-    titleCtrl.text = name;
-    priceCtrl.text = tagPrice != null ? '$tagPrice' : '';
-    if (withTagPrice && code.isNotEmpty && !memoCtrl.text.contains(code)) {
+    if (!keepTyped || titleCtrl.text.trim().isEmpty) titleCtrl.text = name;
+    if (tagPrice != null && (!keepTyped || priceCtrl.text.trim().isEmpty)) {
+      priceCtrl.text = '$tagPrice';
+    } else if (!keepTyped) {
+      priceCtrl.clear();
+    }
+    // 품번은 나중에 매장·온라인에서 다시 찾을 때 필요하다 — 메모에 남겨 둔다.
+    if (code.isNotEmpty && !memoCtrl.text.contains(code)) {
       memoCtrl.text = memoCtrl.text.trim().isEmpty
           ? '품번 $code'
           : '${memoCtrl.text.trim()}\n품번 $code';
     }
+    final finalName = titleCtrl.text.trim();
     setState(() {
+      manualMode = true;
       parsed = ParsedProductInfo(
-        name: name.isEmpty ? '공유된 상품' : name,
+        name: finalName.isEmpty ? '공유된 상품' : finalName,
         price: tagPrice ?? 0,
-        platform: result.brand ?? '태그 사진',
+        platform: result.brand ?? '직접 기록',
         image: '',
         productUrl: '',
         originalPrice: tagPrice,
@@ -304,8 +365,8 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
         note: _tagRejectedNote,
       );
     });
-    // 태그의 브랜드·품번·정가로 채운다.
-    _fillFromTagOnly(r, withTagPrice: true);
+    // 태그의 브랜드·품번·가격으로 직접 기록을 시작한다.
+    _fillFromTagOnly(r);
   }
 
   Future<void> _openTagMatch() async {
@@ -323,11 +384,15 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
     final lines = <String>[];
     switch (r.status) {
       case TagIdentifyStatus.found:
-        lines.add(
-          r.foundOnOfficialSite
-              ? '브랜드 공식몰(${r.matchHost})에서 찾았어요'
-              : '${r.matchHost}에서 찾았어요',
-        );
+        if (r.foundByQr) {
+          lines.add('태그의 QR로 ${r.matchHost}에서 찾았어요');
+        } else {
+          lines.add(
+            r.foundOnOfficialSite
+                ? '브랜드 공식몰(${r.matchHost})에서 찾았어요'
+                : '${r.matchHost}에서 찾았어요',
+          );
+        }
         lines.add(
           r.needsUserCheck
               ? '품번 없이 이름으로 찾았어요'
@@ -335,15 +400,20 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
         );
         if (tagConfirmPending) lines.add('아래 상품이 태그 상품과 같은지 확인해 주세요');
       case TagIdentifyStatus.needsConfirm:
-        lines.add('${r.matchHost ?? '쇼핑몰'}에서 찾은 상품이에요');
+        lines.add(
+          r.foundByQr
+              ? '태그의 QR이 ${r.matchHost ?? '이 페이지'}로 연결돼요'
+              : '${r.matchHost ?? '쇼핑몰'}에서 찾은 상품이에요',
+        );
         lines.add('페이지에서 품번은 확인하지 못했어요');
         if (tagConfirmPending) lines.add('아래 상품이 태그 상품과 같은지 확인해 주세요');
       case TagIdentifyStatus.notFound:
         if (r.note == _tagRejectedNote) {
-          lines.add('태그의 브랜드·품번·정가로 채웠어요. 확인하고 저장해 주세요');
+          lines.add('태그에서 읽은 이름·가격으로 채웠어요. 옷 사진을 넣고 확인해서 저장해 주세요');
           break;
         }
-        lines.add('태그는 읽었지만 판매 페이지를 찾지 못했어요. 이름과 가격을 직접 입력해 주세요');
+        lines.add('판매 페이지는 찾지 못해서, 태그에서 읽은 이름·가격으로 채웠어요');
+        lines.add('옷 사진을 넣고 확인해서 저장해 주세요');
         // 서버가 알려 준 이유(예: 시간이 모자람, 품번이 적힌 페이지가 없음) — 다시 시도할지 판단하게.
         final note = r.note?.trim();
         if (note != null && note.isNotEmpty) lines.add('이유: $note');
@@ -354,7 +424,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
       lines.add('가격은 검색 기준이라 지금 판매가와 다를 수 있어요');
     }
     if (r.productCode != null) lines.add('품번 ${r.productCode}');
-    if (r.tagPrice != null) {
+    if (r.tagPrice != null && r.status != TagIdentifyStatus.notFound) {
       lines.add('태그 가격 ${formatWon(r.tagPrice!)} (정가라서 지금 판매가와 다를 수 있어요)');
     }
     return lines;
@@ -381,15 +451,19 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
       return;
     }
 
+    // 페이지에서 주소를 못 얻었으면 입력칸의 첫 URL 만 쓴다(입력칸 글 전체를 넣지 않는다).
+    // 직접 기록은 주소가 없어도 된다 — URL이 아닌 글자를 주소로 저장하지 않는다.
+    final productUrl = parsed!.productUrl.isNotEmpty
+        ? parsed!.productUrl
+        : manualMode
+        ? (ShareInput.firstUrl(urlCtrl.text) ?? '')
+        : (ShareInput.firstUrl(urlCtrl.text) ?? urlCtrl.text.trim());
     final info = ParsedProductInfo(
       name: name,
       price: price,
       platform: parsed!.platform,
       image: parsed!.image,
-      // 페이지에서 주소를 못 얻었으면 입력칸의 첫 URL 만 쓴다(입력칸 글 전체를 넣지 않는다).
-      productUrl: parsed!.productUrl.isEmpty
-          ? (ShareInput.firstUrl(urlCtrl.text) ?? urlCtrl.text.trim())
-          : parsed!.productUrl,
+      productUrl: productUrl,
       originalPrice: parsed!.originalPrice,
       discount: parsed!.discount,
       missingFields: [if (parsed!.image.isEmpty) 'image_url'],
@@ -405,6 +479,37 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
     });
     try {
       final store = context.read<AppStore>();
+      // 옷 사진이 있으면 먼저 올려서 대표 사진으로 쓴다. 실패하면 원래 사진(없으면 빈 사진)으로 저장한다.
+      String? clothesImageUrl;
+      var clothesPhotoFailed = false;
+      final clothes = clothesPhoto;
+      if (clothes != null) {
+        try {
+          clothesImageUrl = await store.uploadProductPhoto(
+            clothes,
+            mimeType: clothesPhotoMime,
+          );
+        } catch (_) {
+          clothesPhotoFailed = true;
+        }
+      }
+      final toSave = clothesImageUrl == null
+          ? info
+          : ParsedProductInfo(
+              name: info.name,
+              price: info.price,
+              platform: info.platform,
+              image: clothesImageUrl,
+              productUrl: info.productUrl,
+              originalPrice: info.originalPrice,
+              discount: info.discount,
+              missingFields: const [],
+              engineUsed: info.engineUsed,
+              purchasePriceStatus: info.purchasePriceStatus,
+              priceConfidence: info.priceConfidence,
+              extractFailureReason: info.extractFailureReason,
+            );
+
       // 태그 사진이 있으면 먼저 올린다. 실패해도 상품은 저장하고, 사진만 빠졌다고 알려 준다.
       String? tagImageUrl;
       var tagPhotoFailed = false;
@@ -416,33 +521,43 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
           tagPhotoFailed = true;
         }
       }
+      final uploadedTag = tagImageUrl;
+      final uploadedClothes = clothesImageUrl;
+      Future<void> discardUploads() async {
+        if (uploadedTag != null) await store.discardTagPhoto(uploadedTag);
+        if (uploadedClothes != null) {
+          await store.discardProductPhoto(uploadedClothes);
+        }
+      }
+
       final Product? product;
       try {
         product = await store.addParsedProduct(
-          info,
+          toSave,
           listId: selectedListId!,
           memo: memoCtrl.text,
           tagImageUrl: tagImageUrl,
         );
       } catch (_) {
-        // 상품 저장이 실패하면 방금 올린 태그 사진은 쓸 곳이 없으니 지운다.
-        if (tagImageUrl != null) await store.discardTagPhoto(tagImageUrl);
+        // 상품 저장이 실패하면 방금 올린 사진들은 쓸 곳이 없으니 지운다.
+        await discardUploads();
         rethrow;
       }
       if (product == null) {
         // 같은 상품을 이미 저장하는 중(연타) — 이번에 올린 사진은 쓰이지 않는다.
-        if (tagImageUrl != null) await store.discardTagPhoto(tagImageUrl);
+        await discardUploads();
         return;
       }
       store.setPendingShareUrl(null);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              tagPhotoFailed
-                  ? '${product.name} 을(를) 저장했어요. 태그 사진은 저장하지 못했어요'
-                  : '${product.name} 을(를) 저장했어요',
-            ),
+            content: Text(switch ((clothesPhotoFailed, tagPhotoFailed)) {
+              (true, true) => '${product.name} 을(를) 저장했어요. 옷 사진과 태그 사진은 저장하지 못했어요',
+              (true, false) => '${product.name} 을(를) 저장했어요. 옷 사진은 저장하지 못했어요',
+              (false, true) => '${product.name} 을(를) 저장했어요. 태그 사진은 저장하지 못했어요',
+              (false, false) => '${product.name} 을(를) 저장했어요',
+            }),
           ),
         );
         context.go('/');
@@ -453,6 +568,11 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
   }
 
   String _statusText(ParsedProductInfo info) {
+    if (manualMode) {
+      return tagResult != null && tagResult!.status != TagIdentifyStatus.notATag
+          ? '직접 기록 · 태그에서 읽은 값을 채웠어요'
+          : '직접 기록';
+    }
     switch (info.extractFailureReason) {
       case ExtractFailureReason.notLoggedIn:
         return '로그인하면 상품 정보를 자동으로 읽어요. 지금은 이름과 가격을 직접 입력해 주세요.';
@@ -469,6 +589,59 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
       default:
         return info.needsManualPrice ? '가격을 직접 입력해 주세요' : 'AI로 읽음';
     }
+  }
+
+  /// 카드의 사진 자리. 직접 찍은 옷 사진이 있으면 그 사진(저장하면 대표 사진이 됨), 없으면 쇼핑몰 사진,
+  /// 직접 기록 중인데 사진이 없으면 눌러서 옷 사진을 넣는 자리.
+  Widget _imageSlot(ParsedProductInfo info) {
+    const size = 72.0;
+    final radius = BorderRadius.circular(DiaryTheme.radius);
+    final photo = clothesPhoto;
+    if (photo != null) {
+      return ClipRRect(
+        borderRadius: radius,
+        child: Image.memory(photo, width: size, height: size, fit: BoxFit.cover),
+      );
+    }
+    if (info.image.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: radius,
+        child: Image.network(
+          info.image,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) =>
+              Container(width: size, height: size, color: DiaryColors.grid),
+        ),
+      );
+    }
+    if (!manualMode) return const SizedBox.shrink();
+    return Semantics(
+      button: true,
+      label: '옷 사진 넣기',
+      child: InkWell(
+        borderRadius: radius,
+        onTap: saving ? null : _pickClothesPhoto,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: DiaryColors.paper,
+            borderRadius: radius,
+            border: Border.all(color: DiaryColors.lineStrong),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.add_a_photo_outlined, color: DiaryColors.inkMuted, size: 22),
+              const SizedBox(height: 2),
+              Text('옷 사진', style: DiaryTheme.body(11, color: DiaryColors.inkMuted)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -531,6 +704,18 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   loading: identifying,
                   onPressed: loading || identifying ? null : _pickTagPhoto,
                 ),
+                // 아직 아무것도 못 읽었거나 링크 읽기가 실패했을 때만 — 읽은 쇼핑몰 정보를 덮어쓰지 않게.
+                if (!manualMode &&
+                    !identifying &&
+                    (parsed == null || parsed!.extractFailureReason != null)) ...[
+                  const SizedBox(height: 8),
+                  // 링크도 없고 태그로도 못 찾을 때(오프라인 매장 등) — 옷 사진·이름·가격만으로 기록.
+                  DiaryButton(
+                    label: '사진으로 직접 기록하기',
+                    icon: Icons.edit_note_outlined,
+                    onPressed: loading ? null : _startManual,
+                  ),
+                ],
                 // 태그 찾기를 기다리는 동안만 큰 광고(최대 화면 높이의 70%). 버튼 아래에만 두고
                 // 겹치지 않게, 버튼과 충분히 띄운다(실수 클릭 방지).
                 if (identifying) ...[
@@ -636,21 +821,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (parsed!.image.isNotEmpty)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(DiaryTheme.radius),
-                            child: Image.network(
-                              parsed!.image,
-                              width: 72,
-                              height: 72,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                width: 72,
-                                height: 72,
-                                color: DiaryColors.grid,
-                              ),
-                            ),
-                          ),
+                        _imageSlot(parsed!),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -676,6 +847,40 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                       ],
                     ),
                   ),
+                  if (clothesPhoto != null || manualMode) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DiaryButton(
+                            label: clothesPhoto == null ? '옷 사진 넣기' : '옷 사진 바꾸기',
+                            icon: Icons.checkroom_outlined,
+                            onPressed: saving ? null : _pickClothesPhoto,
+                          ),
+                        ),
+                        if (clothesPhoto != null) ...[
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DiaryButton(
+                              label: '옷 사진 빼기',
+                              icon: Icons.close,
+                              onPressed: saving ? null : _removeClothesPhoto,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    // 직접 기록 중인데 아직 태그를 안 찍었으면 — 찍으면 이름·가격을 읽어 채우고, 태그 사진도 남는다.
+                    if (manualMode && tagPhoto == null) ...[
+                      const SizedBox(height: 8),
+                      DiaryButton(
+                        label: identifying ? '태그를 읽는 중...' : '태그 사진 넣기 (이름·가격 자동 입력)',
+                        icon: Icons.sell_outlined,
+                        loading: identifying,
+                        onPressed: identifying || saving ? null : _pickTagPhoto,
+                      ),
+                    ],
+                  ],
                   const SizedBox(height: 12),
                   TextField(
                     controller: titleCtrl,
@@ -728,7 +933,12 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   ],
                   const SizedBox(height: 6),
                   // 제대로 읽었으면 가격 기준 안내, 못 읽었으면 직접 입력 안내.
-                  if (parsed!.extractFailureReason != null ||
+                  if (manualMode)
+                    Text(
+                      '매장에서 본 상품을 직접 기록해요. 가격이 비어 있으면 직접 입력해 주세요.',
+                      style: DiaryTheme.body(11, color: DiaryColors.inkMuted),
+                    )
+                  else if (parsed!.extractFailureReason != null ||
                       parsed!.needsManualPrice)
                     Text(
                       '상품 정보를 읽지 못했어요. 상품명과 판매가를 직접 입력해 주세요.',
@@ -739,7 +949,8 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                       '쿠폰을 제외한 기본 판매가예요. 옵션에 따라 가격이 달라질 수 있어요.',
                       style: DiaryTheme.body(11, color: DiaryColors.inkMuted),
                     ),
-                  if (parsed!.missingFields.isNotEmpty &&
+                  if (!manualMode &&
+                      parsed!.missingFields.isNotEmpty &&
                       parsed!.extractFailureReason == null &&
                       !parsed!.needsManualPrice) ...[
                     const SizedBox(height: 8),
