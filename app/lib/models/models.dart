@@ -281,6 +281,7 @@ class SharedBasket {
     this.publicUrlExpiresAt,
     this.memo = '',
     this.threadId = '',
+    this.allowVoting = true,
     this.allowMultipleVotes = true,
   });
 
@@ -317,6 +318,10 @@ class SharedBasket {
   /// recipient copy point at the same thread.
   final String threadId;
 
+  /// Whether this basket includes a poll.
+  /// Defaults to true for baskets created before this setting existed.
+  final bool allowVoting;
+
   /// Whether participants may select more than one product in this poll.
   /// Defaults to true for baskets created before this setting existed.
   final bool allowMultipleVotes;
@@ -347,6 +352,7 @@ class SharedBasket {
     DateTime? publicUrlExpiresAt,
     String? memo,
     String? threadId,
+    bool? allowVoting,
     bool? allowMultipleVotes,
   }) {
     return SharedBasket(
@@ -367,6 +373,7 @@ class SharedBasket {
       publicUrlExpiresAt: publicUrlExpiresAt ?? this.publicUrlExpiresAt,
       memo: memo ?? this.memo,
       threadId: threadId ?? this.threadId,
+      allowVoting: allowVoting ?? this.allowVoting,
       allowMultipleVotes: allowMultipleVotes ?? this.allowMultipleVotes,
     );
   }
@@ -389,6 +396,7 @@ class SharedBasket {
         'publicUrlExpiresAt': publicUrlExpiresAt?.toIso8601String(),
         'memo': memo,
         'threadId': threadId,
+        'allowVoting': allowVoting,
         'allowMultipleVotes': allowMultipleVotes,
       };
 
@@ -425,6 +433,7 @@ class SharedBasket {
             DateTime.tryParse(json['publicUrlExpiresAt'] as String? ?? ''),
         memo: json['memo'] as String? ?? '',
         threadId: json['threadId'] as String? ?? '',
+        allowVoting: json['allowVoting'] as bool? ?? true,
         allowMultipleVotes: json['allowMultipleVotes'] as bool? ?? true,
       );
 }
