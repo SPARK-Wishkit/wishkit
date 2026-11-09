@@ -281,6 +281,7 @@ class SharedBasket {
     this.publicUrlExpiresAt,
     this.memo = '',
     this.threadId = '',
+    this.allowMultipleVotes = true,
   });
 
   final String id;
@@ -316,6 +317,10 @@ class SharedBasket {
   /// recipient copy point at the same thread.
   final String threadId;
 
+  /// Whether participants may select more than one product in this poll.
+  /// Defaults to true for baskets created before this setting existed.
+  final bool allowMultipleVotes;
+
   /// Only friend-sent baskets belong in the 내 친구 탭 feed; link / KakaoTalk
   /// shares stay in 마이페이지 > 내가 보낸 살까말까.
   bool get sharedToFriends => channels.contains(SharedChannel.friends);
@@ -342,6 +347,7 @@ class SharedBasket {
     DateTime? publicUrlExpiresAt,
     String? memo,
     String? threadId,
+    bool? allowMultipleVotes,
   }) {
     return SharedBasket(
       id: id,
@@ -361,6 +367,7 @@ class SharedBasket {
       publicUrlExpiresAt: publicUrlExpiresAt ?? this.publicUrlExpiresAt,
       memo: memo ?? this.memo,
       threadId: threadId ?? this.threadId,
+      allowMultipleVotes: allowMultipleVotes ?? this.allowMultipleVotes,
     );
   }
 
@@ -382,6 +389,7 @@ class SharedBasket {
         'publicUrlExpiresAt': publicUrlExpiresAt?.toIso8601String(),
         'memo': memo,
         'threadId': threadId,
+        'allowMultipleVotes': allowMultipleVotes,
       };
 
   factory SharedBasket.fromJson(Map<String, dynamic> json) => SharedBasket(
@@ -417,6 +425,7 @@ class SharedBasket {
             DateTime.tryParse(json['publicUrlExpiresAt'] as String? ?? ''),
         memo: json['memo'] as String? ?? '',
         threadId: json['threadId'] as String? ?? '',
+        allowMultipleVotes: json['allowMultipleVotes'] as bool? ?? true,
       );
 }
 

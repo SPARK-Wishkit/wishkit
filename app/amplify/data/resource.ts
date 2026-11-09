@@ -194,6 +194,8 @@ const schema = a.schema({
       memo: a.string(),
       // 투표할 수 있는 상품 번호(Product.id 문자열). 다시 보내면 새 상품이 더해진다.
       itemIds: a.string().array(),
+      // Existing threads without this field default to allowing multiple choices.
+      allowMultipleVotes: a.boolean(),
     })
     .identifier(['threadId'])
     .authorization((allow) => [
@@ -258,6 +260,7 @@ const schema = a.schema({
       recipientIds: a.id().required().array().required(),
       items: a.json().required(), // Product.toJson() 목록
       memo: a.string(),
+      allowMultipleVotes: a.boolean(),
     })
     .returns(a.integer().required())
     .authorization((allow) => [allow.authenticated()])

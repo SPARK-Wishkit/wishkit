@@ -6,7 +6,7 @@ import '../../theme/diary_theme.dart';
 const kShareMemoMaxLength = 500;
 
 /// Friend picker plus the memo that goes out with a 살까말까 share.
-Future<({Set<String> friendIds, String memo})?> showShareToFriendsSheet({
+Future<({Set<String> friendIds, String memo, bool allowMultipleVotes})?> showShareToFriendsSheet({
   required BuildContext context,
   required AppStore store,
   String title = '보낼 친구 선택',
@@ -24,6 +24,7 @@ Future<({Set<String> friendIds, String memo})?> showShareToFriendsSheet({
   final selected = <String>{};
   final memoCtrl = TextEditingController(text: initialMemo);
   var confirming = false;
+  var allowMultipleVotes = true;
   final confirmed = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -69,7 +70,14 @@ Future<({Set<String> friendIds, String memo})?> showShareToFriendsSheet({
                         ),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: allowMultipleVotes,
+                      onChanged: confirming ? null : (value) => setModalState(() => allowMultipleVotes = value),
+                      title: Text('여러 상품 선택 허용', style: DiaryTheme.body(14, weight: FontWeight.w600)),
+                      subtitle: Text(allowMultipleVotes ? '받은 사람이 상품을 여러 개 고를 수 있어요' : '받은 사람은 상품 하나만 고를 수 있어요', style: DiaryTheme.body(12, color: DiaryColors.inkMuted)),
+                    ),
+                    const SizedBox(height: 4),
                     Expanded(
                       child: ListView.builder(
                         itemCount: following.length,
@@ -122,5 +130,5 @@ Future<({Set<String> friendIds, String memo})?> showShareToFriendsSheet({
   final memo = memoCtrl.text.trim();
   memoCtrl.dispose();
   if (confirmed != true || selected.isEmpty) return null;
-  return (friendIds: selected, memo: memo);
+  return (friendIds: selected, memo: memo, allowMultipleVotes: allowMultipleVotes);
 }

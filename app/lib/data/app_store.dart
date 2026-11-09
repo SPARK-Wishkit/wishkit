@@ -1267,6 +1267,7 @@ class AppStore extends ChangeNotifier {
     String? existingId,
     bool touchSharedAt = false,
     String memo = '',
+    bool allowMultipleVotes = true,
   }) async {
     final now = DateTime.now();
     final id = existingId ?? 'sb-${now.millisecondsSinceEpoch}';
@@ -1298,6 +1299,7 @@ class AppStore extends ChangeNotifier {
       publicUrlExpiresAt: existing?.publicUrlExpiresAt,
       memo: memo.isNotEmpty ? memo : (existing?.memo ?? ''),
       threadId: existing?.threadId.isNotEmpty == true ? existing!.threadId : id,
+      allowMultipleVotes: allowMultipleVotes,
     );
     sharedBaskets[id] = shared;
     await _persistShared();
@@ -1327,11 +1329,13 @@ class AppStore extends ChangeNotifier {
   Future<bool> sendBasketToFriends(
     List<String> friendIds, {
     String memo = '',
+    bool allowMultipleVotes = true,
   }) async {
     return resendBasketToFriends(
       items: _selectedBasketProducts(),
       friendIds: friendIds,
       memo: memo,
+      allowMultipleVotes: allowMultipleVotes,
     );
   }
 
@@ -1358,6 +1362,7 @@ class AppStore extends ChangeNotifier {
     required List<String> friendIds,
     String? existingId,
     String memo = '',
+    bool allowMultipleVotes = true,
   }) async {
     if (items.isEmpty) {
       throw Exception('공유할 상품을 선택해 주세요.');
@@ -1383,6 +1388,7 @@ class AppStore extends ChangeNotifier {
         items: items,
         threadId: threadId,
         memo: memo,
+        allowMultipleVotes: allowMultipleVotes,
       );
       final names = [
         for (final id in friendIds) friendById(id)?.name ?? '',
@@ -1396,6 +1402,7 @@ class AppStore extends ChangeNotifier {
         existingId: threadId,
         touchSharedAt: true,
         memo: memo,
+        allowMultipleVotes: allowMultipleVotes,
       );
       // Re-sending a basket that was X-ed out of the friends feed brings it back.
       // Covers both re-used ids (마이페이지 > 다시 보내기) and freshly minted ones.

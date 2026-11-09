@@ -81,7 +81,7 @@ class _BasketVoteSectionState extends State<BasketVoteSection> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  votes.isEmpty ? '복수 선택' : '복수 선택  ·  ${votes.length}명 참여',
+                  '${widget.basket.allowMultipleVotes ? '복수 선택' : '단일 선택'}${votes.isEmpty ? '' : '  ·  ${votes.length}명 참여'}',
                   style: DiaryTheme.body(12, color: DiaryColors.inkSoft),
                 ),
               ],
@@ -107,9 +107,13 @@ class _BasketVoteSectionState extends State<BasketVoteSection> {
                       onToggle: _sending
                           ? null
                           : () => setState(() {
-                                final next = {...selection};
-                                if (!next.remove(p.id)) next.add(p.id);
-                                _draft = next;
+                                if (widget.basket.allowMultipleVotes) {
+                                  final next = {...selection};
+                                  if (!next.remove(p.id)) next.add(p.id);
+                                  _draft = next;
+                                } else {
+                                  _draft = selection.contains(p.id) ? <int>{} : <int>{p.id};
+                                }
                               }),
                       onShowVoters: (list) => _showVoters(p, list),
                     ),
@@ -150,29 +154,13 @@ class _BasketVoteSectionState extends State<BasketVoteSection> {
             }),
       );
     }
-    // 이미 투표한 사람이 다 빼면 "투표 취소", 아니면 "투표하기".
-    final cancelling = mine != null && selection.isEmpty;
-    final submit = _VoteButton(
-      label: cancelling ? '투표 취소하기' : '투표하기',
+    return _VoteButton(
+      label: '투표하기',
       filled: true,
       busy: _sending,
       onPressed: _sending || (selection.isEmpty && mine == null)
           ? null
           : () => _submit(store, selection),
-    );
-    if (mine == null) return submit;
-    return Row(
-      children: [
-        Expanded(
-          child: _VoteButton(
-            label: '그대로 두기',
-            filled: false,
-            onPressed: _sending ? null : () => setState(() => _draft = null),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(child: submit),
-      ],
     );
   }
 
