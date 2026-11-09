@@ -6,7 +6,7 @@ import '../../theme/diary_theme.dart';
 const kShareMemoMaxLength = 500;
 
 /// Friend picker plus the memo that goes out with a 살까말까 share.
-Future<({Set<String> friendIds, String memo, bool allowMultipleVotes})?> showShareToFriendsSheet({
+Future<({Set<String> friendIds, String memo, bool allowVoting, bool allowMultipleVotes})?> showShareToFriendsSheet({
   required BuildContext context,
   required AppStore store,
   String title = '보낼 친구 선택',
@@ -24,6 +24,7 @@ Future<({Set<String> friendIds, String memo, bool allowMultipleVotes})?> showSha
   final selected = <String>{};
   final memoCtrl = TextEditingController(text: initialMemo);
   var confirming = false;
+  var allowVoting = true;
   var allowMultipleVotes = true;
   final confirmed = await showModalBottomSheet<bool>(
     context: context,
@@ -70,14 +71,6 @@ Future<({Set<String> friendIds, String memo, bool allowMultipleVotes})?> showSha
                         ),
                       ),
                     ),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      value: allowMultipleVotes,
-                      onChanged: confirming ? null : (value) => setModalState(() => allowMultipleVotes = value),
-                      title: Text('여러 상품 선택 허용', style: DiaryTheme.body(14, weight: FontWeight.w600)),
-                      subtitle: Text(allowMultipleVotes ? '받은 사람이 상품을 여러 개 고를 수 있어요' : '받은 사람은 상품 하나만 고를 수 있어요', style: DiaryTheme.body(12, color: DiaryColors.inkMuted)),
-                    ),
-                    const SizedBox(height: 4),
                     Expanded(
                       child: ListView.builder(
                         itemCount: following.length,
@@ -86,7 +79,7 @@ Future<({Set<String> friendIds, String memo, bool allowMultipleVotes})?> showSha
                           final checked = selected.contains(f.id);
                           return CheckboxListTile(
                             value: checked,
-                            onChanged: (v) {
+                            onChanged: confirming ? null : (v) {
                               setModalState(() {
                                 if (v == true) {
                                   selected.add(f.id);
@@ -104,6 +97,52 @@ Future<({Set<String> friendIds, String memo, bool allowMultipleVotes})?> showSha
                         },
                       ),
                     ),
+                    const Divider(height: 1),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      value: allowVoting,
+                      onChanged: confirming
+                          ? null
+                          : (value) => setModalState(() {
+                                allowVoting = value ?? false;
+                                if (!allowVoting) {
+                                  allowMultipleVotes = false;
+                                }
+                              }),
+                      title: Text(
+                        '투표 보내기',
+                        style: DiaryTheme.body(14, weight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        '친구들이 상품을 골라 투표할 수 있어요',
+                        style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
+                      ),
+                    ),
+                    if (allowVoting)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 28),
+                        child: CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          value: allowMultipleVotes,
+                          onChanged: confirming
+                              ? null
+                              : (value) => setModalState(() {
+                                    allowMultipleVotes = value ?? false;
+                                  }),
+                          title: Text(
+                            '복수 선택 가능',
+                            style: DiaryTheme.body(14, weight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            allowMultipleVotes
+                                ? '친구들이 상품을 여러 개 선택할 수 있어요'
+                                : '친구들은 상품 하나만 선택할 수 있어요',
+                            style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
+                          ),
+                        ),
+                      ),
                     FilledButton(
                       onPressed: selected.isEmpty || confirming
                           ? null
@@ -130,5 +169,10 @@ Future<({Set<String> friendIds, String memo, bool allowMultipleVotes})?> showSha
   final memo = memoCtrl.text.trim();
   memoCtrl.dispose();
   if (confirmed != true || selected.isEmpty) return null;
-  return (friendIds: selected, memo: memo, allowMultipleVotes: allowMultipleVotes);
+  return (
+    friendIds: selected,
+    memo: memo,
+    allowVoting: allowVoting,
+    allowMultipleVotes: allowMultipleVotes,
+  );
 }
