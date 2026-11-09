@@ -321,6 +321,7 @@ class _ShareBasketButtonState extends State<_ShareBasketButton> {
       final sent = await widget.store.sendBasketToFriends(
         picked.friendIds.toList(),
         memo: picked.memo,
+        allowVoting: picked.allowVoting,
         allowMultipleVotes: picked.allowMultipleVotes,
       );
       if (!sent || !mounted) return;
