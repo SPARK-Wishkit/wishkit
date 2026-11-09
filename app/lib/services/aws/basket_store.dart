@@ -93,6 +93,7 @@ class AwsBasketStore {
     required List<Product> items,
     required String threadId,
     String memo = '',
+    bool allowVoting = true,
     bool allowMultipleVotes = true,
   }) async {
     final data = await _call(() => _gql.mutate(Gql.sendBasket, variables: {
@@ -100,6 +101,7 @@ class AwsBasketStore {
           'recipientIds': recipientUids,
           'items': jsonEncode(items.map((p) => p.toJson()).toList()),
           'memo': memo,
+          'allowVoting': allowVoting,
           'allowMultipleVotes': allowMultipleVotes,
         }));
     _hub.refresh(_commentsKey(threadId));
