@@ -194,6 +194,8 @@ const schema = a.schema({
       memo: a.string(),
       // 투표할 수 있는 상품 번호(Product.id 문자열). 다시 보내면 새 상품이 더해진다.
       itemIds: a.string().array(),
+      // 투표 방식. false 면 하나만 고른다. 처음 보낼 때 정하고, 다시 보내도 바뀌지 않는다.
+      voteMultiple: a.boolean(),
     })
     .identifier(['threadId'])
     .authorization((allow) => [
@@ -258,6 +260,7 @@ const schema = a.schema({
       recipientIds: a.id().required().array().required(),
       items: a.json().required(), // Product.toJson() 목록
       memo: a.string(),
+      voteMultiple: a.boolean(), // 투표 복수 선택 여부 (없으면 복수). 처음 보낼 때만 쓰인다.
     })
     .returns(a.integer().required())
     .authorization((allow) => [allow.authenticated()])

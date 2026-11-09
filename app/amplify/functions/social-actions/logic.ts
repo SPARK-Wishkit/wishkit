@@ -176,7 +176,13 @@ function withDefaults(env: Env): Required<Env> {
 export async function sendBasket(
   envIn: Env,
   caller: string,
-  args: { threadId: string; recipientIds: string[]; items: unknown; memo?: string | null },
+  args: {
+    threadId: string;
+    recipientIds: string[];
+    items: unknown;
+    memo?: string | null;
+    voteMultiple?: boolean | null;
+  },
 ): Promise<number> {
   const env = withDefaults(envIn);
   const now = env.now().toISOString();
@@ -208,11 +214,20 @@ export async function sendBasket(
       ...items.map((it) => String(it.id)),
     ]),
   ];
+  // 투표 방식은 처음 보낼 때 정하고 그대로 둔다 (이미 받은 사람과 화면이 달라지지 않게).
+  const voteMultiple = thread ? thread.voteMultiple !== false : args.voteMultiple !== false;
   await env.db.put(
     'BasketThread',
     stamp(
       'BasketThread',
-      { threadId: args.threadId, ownerId: caller, participantIds: participants, memo, itemIds },
+      {
+        threadId: args.threadId,
+        ownerId: caller,
+        participantIds: participants,
+        memo,
+        itemIds,
+        voteMultiple,
+      },
       now,
       thread,
     ),
@@ -252,6 +267,7 @@ export async function sendBasket(
             channels: ['friends'],
             memo,
             threadId: args.threadId,
+            voteMultiple,
           },
         },
         now,
@@ -405,7 +421,8 @@ export async function deleteComment(
 // ── 투표 ──────────────────────────────────────────────────────
 
 /**
- * 투표하기 · 다시 투표하기 · 취소(빈 목록). 카톡 투표처럼 여러 개 고를 수 있다.
+ * 투표하기 · 다시 투표하기 · 취소(빈 목록). 카톡 투표처럼 보낸 사람이 정한 대로
+ * 여러 개 또는 하나만 고른다 (BasketThread.voteMultiple, 예전 댓글방은 여러 개).
  * - 댓글방 참여자(보낸 사람 + 받은 사람)만 투표한다.
  * - 보낸 상품만 고를 수 있다. (예전 댓글방처럼 itemIds 가 없으면 번호 모양만 확인)
  * - 마감은 없다. 투표는 댓글방을 따라간다.
@@ -430,6 +447,7 @@ export async function voteBasket(
   if (allowed && allowed.length > 0 && picked.some((id) => !allowed.includes(id))) {
     fail('INVALID_INPUT');
   }
+  if (thread.voteMultiple === false && picked.length > 1) fail('SINGLE_CHOICE');
 
   const key = { threadId: args.threadId, voterId: caller };
   if (picked.length === 0) {

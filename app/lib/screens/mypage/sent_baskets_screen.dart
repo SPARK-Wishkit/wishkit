@@ -148,6 +148,8 @@ Future<void> showSentBasketShareSheet(
     title: '다시 보낼 친구',
     confirmLabel: '다시 보내기',
     initialMemo: basket.memo,
+    // 투표 방식은 처음 보낼 때 정한 그대로 간다.
+    askVoteMode: false,
   );
   if (picked == null || picked.friendIds.isEmpty || !context.mounted) return;
   try {

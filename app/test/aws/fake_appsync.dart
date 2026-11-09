@@ -284,8 +284,12 @@ class FakeAppSync implements GqlRunner {
         final items = (jsonDecode(v['items'] as String) as List)
             .map((e) => Map<String, dynamic>.from(e as Map)..remove('memo'))
             .toList();
+        final voteMultiple = thread != null
+            ? thread['voteMultiple'] != false
+            : v['voteMultiple'] != false;
         table('BasketThread')[threadId] = {
           'threadId': threadId, 'ownerId': caller, 'participantIds': participants,
+          'voteMultiple': voteMultiple,
           'itemIds': {
             ...((thread?['itemIds'] as List?)?.cast<String>() ?? const []),
             for (final it in items) '${it['id']}',
@@ -304,6 +308,7 @@ class FakeAppSync implements GqlRunner {
               'fromHandle': from['handle'], 'fromAvatar': from['avatar'],
               'items': items, 'createdAt': now, 'channels': ['friends'],
               'memo': v['memo'] ?? '', 'threadId': threadId,
+              'voteMultiple': voteMultiple,
             }),
           };
           _notify(r, from, 'basket', '${from['name']} 님이 살까말까 장바구니를 보냈어요', threadId);
@@ -385,6 +390,7 @@ class FakeAppSync implements GqlRunner {
         if (thread == null || !participants.contains(caller)) _code('VOTE_NOT_ALLOWED');
         final allowed = (thread['itemIds'] as List?)?.cast<String>() ?? const [];
         if (allowed.isNotEmpty && picked.any((id) => !allowed.contains(id))) _code('INVALID_INPUT');
+        if (thread['voteMultiple'] == false && picked.length > 1) _code('SINGLE_CHOICE');
         final key = '$threadId#$caller';
         if (picked.isEmpty) {
           table('BasketVote').remove(key);

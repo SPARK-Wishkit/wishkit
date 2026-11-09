@@ -279,6 +279,45 @@ void main() {
       expect(await baskets.loadVotes('sb-5'), hasLength(2));
     });
 
+    test('하나만 고르기로 보낸 살까말까는 하나만 고를 수 있고, 다시 보내도 그대로다', () async {
+      await baskets.sendBasket(
+        recipientUids: ['bob'],
+        items: [product(1), product(2)],
+        threadId: 'sb-6',
+        voteMultiple: false,
+      );
+      appsync.caller = 'bob';
+      final received = (await baskets.loadReceivedBaskets('bob'))
+          .firstWhere((b) => b.threadId == 'sb-6');
+      expect(received.voteMultiple, isFalse);
+      await expectLater(
+        baskets.vote(threadId: 'sb-6', productIds: ['1', '2']),
+        throwsA(predicate((e) => e.toString().contains('하나만'))),
+      );
+      await baskets.vote(threadId: 'sb-6', productIds: ['2']);
+      expect((await baskets.loadVotes('sb-6')).single.productIds, ['2']);
+
+      // 다시 보낼 때 여러 개로 보내도 처음 정한 하나만 고르기가 유지된다.
+      appsync.caller = 'amy';
+      await baskets.sendBasket(
+        recipientUids: ['cho'],
+        items: [product(1)],
+        threadId: 'sb-6',
+        voteMultiple: true,
+      );
+      appsync.caller = 'cho';
+      final again = (await baskets.loadReceivedBaskets('cho'))
+          .firstWhere((b) => b.threadId == 'sb-6');
+      expect(again.voteMultiple, isFalse);
+    });
+
+    test('예전처럼 방식 없이 보낸 살까말까는 여러 개 고르기다', () async {
+      appsync.caller = 'bob';
+      final received = (await baskets.loadReceivedBaskets('bob'))
+          .firstWhere((b) => b.threadId == 'sb-5');
+      expect(received.voteMultiple, isTrue);
+    });
+
     test('투표 화면: 내가 투표하면 기다리지 않고 바로 새로 보인다', () async {
       appsync.caller = 'bob';
       final (got, sub) = await listen(baskets.watchVotes('sb-5'));

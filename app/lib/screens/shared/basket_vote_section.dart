@@ -8,7 +8,8 @@ import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
 
-/// 살까말까 상품 목록 밑의 투표 (카톡 투표처럼 여러 개 선택).
+/// 살까말까 상품 목록 밑의 투표 (카톡 투표처럼). 보낸 사람이 정한 대로
+/// 여러 개 고르기(체크박스) 또는 하나만 고르기(동그라미).
 ///
 /// - 앱 친구에게 보낸 살까말까(댓글방이 있는 것)에서만 보인다. 참여자만 투표한다.
 /// - 마감은 없다. 투표는 살까말까를 따라가서, 살까말까가 없어지면 같이 안 보인다.
@@ -53,6 +54,7 @@ class _BasketVoteSectionState extends State<BasketVoteSection> {
   Widget build(BuildContext context) {
     final store = context.watch<AppStore>();
     final items = widget.basket.items;
+    final multiple = widget.basket.voteMultiple;
     if (_threadId.isEmpty || !store.isLoggedIn || items.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -81,7 +83,9 @@ class _BasketVoteSectionState extends State<BasketVoteSection> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  votes.isEmpty ? '복수 선택' : '복수 선택  ·  ${votes.length}명 참여',
+                  votes.isEmpty
+                      ? (multiple ? '여러 개 선택' : '하나만 선택')
+                      : '${multiple ? '여러 개 선택' : '하나만 선택'}  ·  ${votes.length}명 참여',
                   style: DiaryTheme.body(12, color: DiaryColors.inkSoft),
                 ),
               ],
@@ -101,15 +105,23 @@ class _BasketVoteSectionState extends State<BasketVoteSection> {
                     _OptionRow(
                       product: p,
                       editing: editing,
+                      multiple: multiple,
                       checked: selection.contains(p.id),
                       voters: [for (final v in votes) if (v.picked(p)) v],
                       totalVoters: votes.length,
                       onToggle: _sending
                           ? null
                           : () => setState(() {
-                                final next = {...selection};
-                                if (!next.remove(p.id)) next.add(p.id);
-                                _draft = next;
+                                if (multiple) {
+                                  final next = {...selection};
+                                  if (!next.remove(p.id)) next.add(p.id);
+                                  _draft = next;
+                                } else {
+                                  // 하나만: 다른 걸 누르면 바뀌고, 같은 걸 다시 누르면 빠진다.
+                                  _draft = selection.contains(p.id)
+                                      ? <int>{}
+                                      : {p.id};
+                                }
                               }),
                       onShowVoters: (list) => _showVoters(p, list),
                     ),
@@ -143,6 +155,7 @@ class _BasketVoteSectionState extends State<BasketVoteSection> {
     if (!editing) {
       return _VoteButton(
         label: '다시 투표하기',
+        icon: Icons.refresh,
         filled: false,
         onPressed: () => setState(() => _draft = {
               for (final p in widget.basket.items)
@@ -154,6 +167,7 @@ class _BasketVoteSectionState extends State<BasketVoteSection> {
     final cancelling = mine != null && selection.isEmpty;
     final submit = _VoteButton(
       label: cancelling ? '투표 취소하기' : '투표하기',
+      icon: cancelling ? Icons.close : Icons.how_to_vote_outlined,
       filled: true,
       busy: _sending,
       onPressed: _sending || (selection.isEmpty && mine == null)
@@ -279,6 +293,7 @@ class _OptionRow extends StatelessWidget {
   const _OptionRow({
     required this.product,
     required this.editing,
+    required this.multiple,
     required this.checked,
     required this.voters,
     required this.totalVoters,
@@ -288,6 +303,7 @@ class _OptionRow extends StatelessWidget {
 
   final Product product;
   final bool editing;
+  final bool multiple;
   final bool checked;
   final List<BasketVote> voters;
   final int totalVoters;
@@ -305,7 +321,9 @@ class _OptionRow extends StatelessWidget {
         child: Row(
           children: [
             if (editing) ...[
-              SelectBox(checked: checked, size: 20),
+              multiple
+                  ? SelectBox(checked: checked, size: 20)
+                  : _RadioDot(checked: checked),
               const SizedBox(width: 10),
             ] else if (checked) ...[
               const Icon(Icons.check, size: 18, color: DiaryColors.ink),
@@ -386,6 +404,29 @@ class _OptionRow extends StatelessWidget {
   }
 }
 
+/// 하나만 고르는 투표의 동그라미 선택 표시.
+class _RadioDot extends StatelessWidget {
+  const _RadioDot({required this.checked});
+
+  final bool checked;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: checked ? DiaryColors.ink : DiaryColors.inkSoft,
+          width: checked ? 6 : 1.4,
+        ),
+      ),
+    );
+  }
+}
+
 /// 고른 사람 얼굴 최대 3개를 겹쳐 보여 준다.
 class _AvatarStack extends StatelessWidget {
   const _AvatarStack({required this.voters});
@@ -429,12 +470,14 @@ class _VoteButton extends StatelessWidget {
     required this.label,
     required this.filled,
     required this.onPressed,
+    this.icon,
     this.busy = false,
   });
 
   final String label;
   final bool filled;
   final VoidCallback? onPressed;
+  final IconData? icon;
   final bool busy;
 
   @override
@@ -442,16 +485,31 @@ class _VoteButton extends StatelessWidget {
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(10),
     );
+    // DiaryTheme.ui 는 글자색을 검정으로 박아 두므로, 버튼 색에 맞춰 직접 정한다.
+    // (예전엔 검은 버튼 위에 검은 글자라 "투표하기"가 안 보였다)
+    final enabled = onPressed != null;
+    final fg = filled
+        ? (enabled ? DiaryColors.white : DiaryColors.inkSoft)
+        : (enabled ? DiaryColors.ink : DiaryColors.inkSoft);
     final child = busy
-        ? const SizedBox(
+        ? SizedBox(
             width: 16,
             height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: DiaryColors.white,
-            ),
+            child: CircularProgressIndicator(strokeWidth: 2, color: fg),
           )
-        : Text(label, style: DiaryTheme.ui(14, weight: FontWeight.w700));
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 18, color: fg),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                label,
+                style: DiaryTheme.ui(14, weight: FontWeight.w700, color: fg),
+              ),
+            ],
+          );
     if (filled) {
       return FilledButton(
         onPressed: onPressed,

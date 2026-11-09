@@ -1,5 +1,21 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-09 - 살까말까 투표: 하나만/여러 개 고르기 선택 + 투표 버튼 글자
+
+🌟 **쉬운 설명**
+- 친구에게 살까말까를 보낼 때 **"여러 개 고르기 / 하나만 고르기"** 중 하나를 골라요. 기본은 여러 개예요.
+- 하나만 고르기면 투표 칸이 동그라미로 바뀌고, 다른 상품을 누르면 선택이 그쪽으로 옮겨가요.
+- 방식은 처음 보낼 때만 정해요. 마이페이지에서 다시 보내도 처음 방식 그대로예요.
+- 검은 "투표하기" 버튼의 글자가 검정이라 안 보이던 문제를 고쳤어요. 이제 흰 글자와 아이콘이 보여요.
+
+🔧 **기술 설명**
+- `sendBasket(voteMultiple)` 인자, `BasketThread.voteMultiple` 추가. 처음 만들 때만 저장하고, 받은함 데이터에도 넣는다. `voteBasket`이 하나만 투표에 2개 이상이면 `SINGLE_CHOICE`.
+- 앱: `SharedBasket.voteMultiple`(없으면 true), `showShareToFriendsSheet(askVoteMode)`가 `voteMultiple` 반환, 다시 보내기는 묻지 않음.
+- `basket_vote_section.dart`: 하나만이면 `_RadioDot`, 버튼 글자색을 버튼 색에 맞춰 지정(`DiaryTheme.ui`가 검정 고정이라 생긴 버그), 아이콘 추가.
+- 백엔드 스키마 변경 — **배포 필요**. 테스트: `basket_store_test` 2개 추가, `fake_appsync` 반영.
+
+---
+
 ## 2026-11-09 - 살까말까 투표 (카톡 투표처럼 여러 개 선택)
 
 🌟 **쉬운 설명**
