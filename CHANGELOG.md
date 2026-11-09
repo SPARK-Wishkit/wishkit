@@ -1,5 +1,34 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-09 - Google Play 출시 필수 수정 (서명·약관·신고·차단·탈퇴 정리)
+
+🌟 **쉬운 설명**
+- **회원가입할 때 이용약관·개인정보처리방침 동의**를 받아요. 마이페이지에서도 언제든 다시 볼 수 있어요.
+- 댓글·받은 살까말까·친구 위시리스트에서 **신고**할 수 있어요. 운영팀이 확인해 약관 위반이면 지워요.
+- 불편한 사람을 **차단**할 수 있어요. 차단하면 그 사람의 댓글·투표·살까말까·알림이 안 보이고, 서로 살까말까·댓글을 보낼 수 없고,
+  내 공개 위시리스트도 안 보여요. 마이페이지 → "차단한 사용자"에서 해제할 수 있어요.
+- **탈퇴하면** 친구 받은함에 있던 내가 보낸 살까말까, 남의 댓글방에 쓴 내 댓글·투표, 내가 만든 댓글방까지 모두 지워져요.
+- 안드로이드 앱 이름이 **WishKit** 이 되고, 출시용 서명 키와 실제 광고 ID 로 빌드할 수 있게 됐어요.
+
+🔧 **기술 설명**
+- Android: release 서명을 `android/key.properties` 업로드 키로(없으면 debug 키 + 경고), AdMob 앱 ID 를 manifestPlaceholders `admobAppId` 로,
+  cleartext 허용은 debug 매니페스트에만, `android:label` WishKit.
+- 백엔드: 모델 `Block`(blockerId+blockedId, 인덱스 byBlocked)·`Report`(서버만 씀), 뮤테이션 `reportContent`·`deleteMySocialData`(social-actions).
+  차단 관계면 `sendBasket`·`addComment`·알림·`publicWishlist` 거부. 신고는 신고 당시 내용을 저장하고 `{"event":"WISHKIT_REPORT"}` 로그를 남긴다.
+  탈퇴 정리용 보조 인덱스 5개: BasketComment.authorId, BasketVote.voterId, ReceivedBasket.fromUid, BasketThread.ownerId, Block.blockedId.
+  Report 는 관리 목적상 탈퇴 후에도 남긴다(처리방침에 명시). — **배포 필요**.
+- 앱: `AuthController.register(agreedToTerms:)` + 로그인 화면 `_ConsentRow`, `lib/legal/legal_links.dart`(`--dart-define=LEGAL_BASE_URL`),
+  `AwsModerationStore`, `AppStore.blockedUids/blockUser/unblockUser/reportContent/_dropBlocked`(친구·팔로워·받은함·알림·댓글·투표에서 숨김),
+  `widgets/moderation_sheet.dart`(RadioGroup), `screens/mypage/blocked_users_screen.dart`. 탈퇴 시 `deleteMySharedContent()` 를 먼저 부른다.
+- 법률 페이지 초안 `legal-site/legal/{privacy,terms,account-deletion}.html` + GitHub Pages 배포 `.github/workflows/legal-pages.yml`.
+  `[운영자명]`·`[문의 이메일]`·`[책임자 이름]`·`[시행일]` 미기입, 법률 검토 필요.
+- main 의 투표 기능과 합치면서: 탈퇴 정리에 BasketVote 포함, 차단한 사람의 투표 숨김.
+- 테스트: `test/aws/moderation_store_test.dart`(차단·신고·탈퇴 정리 6개), `fake_appsync` 에 Block·Report·reportContent·deleteMySocialData 흉내.
+  `flutter analyze`(새 코드 issue 0) · `flutter test`(186개) · `tsc --noEmit` 통과. 기기 확인 절차는 `docs/play-release/README.md` 7절.
+- 출시 준비 문서: `docs/play-release/README.md`(코드 밖 할 일), `docs/play-release/moderation.md`(신고 처리).
+
+---
+
 ## 2026-11-09 - 살까말까 투표 (카톡 투표처럼 여러 개 선택)
 
 🌟 **쉬운 설명**

@@ -43,8 +43,8 @@ flutter build appbundle --release                                  # app/ 에서
 
 ## 4. 백엔드 배포 (체크리스트 5.3–5.5, 4.4, 6.5)
 
-- 이 브랜치는 DynamoDB 표 4개(BasketComment, ReceivedBasket, BasketThread, Block)에 보조 인덱스를 하나씩 추가하고
-  Block·Report 표를 새로 만든다. 표마다 인덱스가 하나씩이라 한 번의 배포로 된다.
+- 이 브랜치는 DynamoDB 표 5개(BasketComment, BasketVote, ReceivedBasket, BasketThread, Block)에 보조 인덱스를
+  하나씩 추가하고 Block·Report 표를 새로 만든다. 표마다 인덱스가 하나씩이라 한 번의 배포로 된다.
 - 운영 환경(체크리스트 6.5): Amplify 콘솔에서 `main` 브랜치를 연결해 공용 백엔드를 만들고,
   출시 빌드는 그 환경의 `amplify_outputs.dart` 로 만든다.
 - 앱의 `lib/services/aws/gql_documents.dart` 에 새 문서(listBlocks, createBlock, deleteBlock, reportContent,
@@ -56,6 +56,27 @@ flutter build appbundle --release                                  # app/ 에서
 
 ## 6. Play Console 나머지
 
-- 개인 계정이면 비공개 테스트(테스터 12명 이상 × 14일 연속)를 바로 시작한다 (체크리스트 1.2).
+- **조직 계정**으로 등록한다(사업자등록 → D-U-N-S 번호 대기 중). 조직 계정은 비공개 테스트 14일 의무가 없다
+  (개인 계정이면 테스터 12명 이상 × 14일 연속이 필요 — 체크리스트 1.2).
 - 광고 ID 신고 "예, 광고용", 광고 포함 "예", 콘텐츠 등급 설문에서 사용자 상호작용·UGC "예".
 - 심사용 테스트 계정(위시리스트·팔로우·댓글 달린 살까말까가 있는 계정)을 앱 액세스에 넣는다.
+
+## 7. 기기에서 확인할 것 (PR 머지 전)
+
+새 표·인덱스·뮤테이션이 필요하므로 **본인 sandbox** 로 실행한다(공용 백엔드에는 아직 없음).
+
+```bash
+cd app && npx ampx sandbox --outputs-format dart --outputs-out-dir lib   # 새 스키마 배포 (몇 분)
+flutter run                                                             # 다른 터미널에서
+```
+
+계정 2개(A, B)를 만들어 서로 팔로우하고, A 가 B 에게 살까말까를 보내 둔 상태에서:
+
+1. **가입 동의** — 회원가입 화면에서 [필수] 약관·처리방침 동의를 안 하면 가입 버튼이 막히고, "보기"를 누르면 페이지가 열린다.
+2. **댓글 신고** — B 로 A 의 댓글방에 댓글 → A 로 그 댓글의 ⋯ → 신고 → 사유 선택. AWS 콘솔 DynamoDB `Report-…` 표에
+   행이 생기고(신고 당시 댓글 내용 포함), CloudWatch 로그에 `WISHKIT_REPORT` 가 찍힌다.
+3. **차단** — A 가 B 를 차단 → B 의 댓글·투표·받은 살까말까·알림이 A 화면에서 사라지고, 팔로우가 서로 끊긴다.
+   B 로 A 에게 살까말까·댓글을 보내면 거부된다. B 에게 A 의 공개 위시리스트가 안 보인다.
+4. **차단 해제** — 마이페이지 → 차단한 사용자 → 해제. 다시 팔로우하면 예전처럼 보인다(지운 팔로우는 복구 안 됨).
+5. **탈퇴** — B 가 A 의 댓글방에 댓글·투표를 남기고, A 에게 살까말까를 보낸 뒤 B 탈퇴 → A 의 받은함에서 B 의 살까말까,
+   댓글방에서 B 의 댓글·투표가 사라진다. DynamoDB 에서 B 의 Block 행도 없다(Report 행은 남는 게 정상).
