@@ -196,3 +196,22 @@ def test_code128_product_code_becomes_other_code():
     _, calls = _run_identify(codes=DecodedCodes(linear_codes=["QQ6X39EP20F"]), pages={}, tag=tag,
                              search_text="")
     assert calls["search_tag"]["other_codes"] == ["QQ6X39EP20F"]
+
+
+def test_zara_code_in_original_qr_url_counts_even_if_redirect_drops_it():
+    # 2026-11-09 실제 테스트: QR 주소엔 품번이 있지만 최종 주소엔 일부만 남고, ZARA 페이지는 서버가 못 읽음.
+    qr = "http://www.zara.com/qr/0024870795914"
+    final = "https://www.zara.com/kr/ko/fake-fur-vest-p00248707.html"
+    tag = {**TAG, "brand": "ZARA", "product_code": "0248/707/959"}
+    outcome, calls = _run_identify(codes=_codes(qr), redirects={qr: final}, pages={}, tag=tag)
+    assert outcome.status == "found" and outcome.match["url"] == final
+    assert outcome.match["verified_by"] == "product_code" and calls["search"] == 0
+
+
+def test_mall_internal_id_in_final_url_is_not_a_conflict():
+    # SSF샵 최종 주소의 몰 내부 번호(GM…)를 "다른 품번"으로 오해하면 안 된다.
+    qr = "http://m.ssfshop.com/public/inflow/partnerGate/serviceId/66290?nextUrl=/public/goods/detail/456X51CM86/sapView"
+    final = "https://m.ssfshop.com/8-seconds/GM0026101658961/good"
+    tag = {**TAG, "brand": "8seconds", "product_code": "456X51CM86"}
+    outcome, _ = _run_identify(codes=_codes(qr), redirects={qr: final}, pages={}, tag=tag)
+    assert outcome.status == "found" and outcome.match["url"] == final

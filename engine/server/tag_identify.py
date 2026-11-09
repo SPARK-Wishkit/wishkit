@@ -781,8 +781,12 @@ async def _check_qr_url(
                 "verified_by": verified_by, "tag_price_seen": price_ok, "via": "qr"}
 
     source = "mall" if is_mall else "official"
-    url_ev = code_evidence(tag, "", final) if has_code(tag) else None
-    url_check = None if url_ev else qr_url_code_check(tag, final)
+    # 품번 증거는 태그에 인쇄된 원래 QR 주소와 최종 주소를 둘 다 본다 — 리다이렉트하면 품번이 빠지는 곳이 있다
+    # (2026-11-09 ZARA: QR …/qr/0024870795914 → 최종 …/p00248707.html).
+    url_ev = (code_evidence(tag, "", url) or code_evidence(tag, "", final)) if has_code(tag) else None
+    # 다른 품번인지(conflict)는 원래 QR 주소로만 판단한다. 쇼핑몰 최종 주소에는 GM0026101658961 같은
+    # 몰 내부 상품번호가 들어 있어 품번과 다르게 보이기 때문이다(8seconds → SSF샵).
+    url_check = None if url_ev else qr_url_code_check(tag, url)
     if url_check == "product_code_base":
         url_ev = url_check
     may_offer = url_check != "conflict"  # 주소가 다른 품번을 가리키면 못 읽었어도 후보로 내밀지 않는다
