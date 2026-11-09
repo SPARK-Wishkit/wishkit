@@ -128,6 +128,7 @@ void main() {
       password: 'wishkit1',
       name: '지은',
       handle: 'Kim.Ji',
+      agreedToTerms: true,
     );
     expect(auth.status, AuthStatus.awaitingVerification);
     expect(auth.pendingEmail, 'kim@x.com');
@@ -149,7 +150,13 @@ void main() {
 
   test('입력 검사에 걸리면 서버를 부르지 않는다', () async {
     await expectLater(
-      auth.register(email: 'a@b.co', password: 'short', name: '', handle: 'ok1'),
+      auth.register(
+        email: 'a@b.co',
+        password: 'short',
+        name: '',
+        handle: 'ok1',
+        agreedToTerms: true,
+      ),
       throwsA(isA<AuthFailure>()),
     );
     expect(service.calls, isEmpty);
@@ -163,9 +170,26 @@ void main() {
         password: 'wishkit1',
         name: '',
         handle: 'taken',
+        agreedToTerms: true,
       ),
       throwsA(
         isA<AuthFailure>().having((e) => e.code, 'code', AuthFailureCode.handleTaken),
+      ),
+    );
+    expect(service.calls, isEmpty);
+  });
+
+  test('약관에 동의하지 않으면 가입 요청을 보내지 않는다', () async {
+    await expectLater(
+      auth.register(
+        email: 'a@b.co',
+        password: 'wishkit1',
+        name: '',
+        handle: 'ok1',
+        agreedToTerms: false,
+      ),
+      throwsA(
+        isA<AuthFailure>().having((e) => e.code, 'code', AuthFailureCode.invalidInput),
       ),
     );
     expect(service.calls, isEmpty);

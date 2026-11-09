@@ -6,6 +6,7 @@ import '../../auth/auth_controller.dart';
 import '../../auth/auth_models.dart';
 import '../../auth/auth_routes.dart';
 import '../../auth/auth_validators.dart';
+import '../../legal/legal_links.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
 import 'auth_widgets.dart';
@@ -23,6 +24,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final nameCtrl = TextEditingController();
   final handleCtrl = TextEditingController();
   bool isRegister = false;
+  bool agreeTerms = false;
+  bool agreePrivacy = false;
   String? error;
   String? notice;
 
@@ -55,6 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
           password: passwordCtrl.text,
           name: nameCtrl.text,
           handle: handleCtrl.text,
+          agreedToTerms: agreeTerms && agreePrivacy,
         );
       } else {
         await auth.login(email: emailCtrl.text, password: passwordCtrl.text);
@@ -69,6 +73,8 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       isRegister = !isRegister;
       error = null;
+      agreeTerms = false;
+      agreePrivacy = false;
     });
   }
 
@@ -146,6 +152,29 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
           onSubmitted: (_) => _submit(),
         ),
+        if (isRegister) ...[
+          const SizedBox(height: 12),
+          _ConsentRow(
+            label: '[필수] 이용약관 동의',
+            value: agreeTerms,
+            onChanged: loading ? null : (v) => setState(() => agreeTerms = v),
+            onView: () => LegalLinks.open(context, LegalLinks.terms),
+          ),
+          _ConsentRow(
+            label: '[필수] 개인정보 수집·이용 동의',
+            value: agreePrivacy,
+            onChanged: loading ? null : (v) => setState(() => agreePrivacy = v),
+            onView: () => LegalLinks.open(context, LegalLinks.privacy),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 12, top: 2),
+            child: Text(
+              '욕설·비방·괴롭힘·음란물·스팸 등 약관을 어기는 댓글이나 계정은 '
+              '신고를 받아 삭제·이용 정지될 수 있어요.',
+              style: DiaryTheme.body(11, color: DiaryColors.inkMuted),
+            ),
+          ),
+        ],
         AuthNotice(message: notice, error: error),
         const SizedBox(height: 20),
         DiaryButton(
@@ -153,7 +182,11 @@ class _LoginScreenState extends State<LoginScreen> {
               ? (isRegister ? '가입 중...' : '로그인 중...')
               : (isRegister ? '회원가입' : '로그인'),
           filled: true,
-          onPressed: loading || blocked ? null : _submit,
+          onPressed: loading ||
+                  blocked ||
+                  (isRegister && !(agreeTerms && agreePrivacy))
+              ? null
+              : _submit,
         ),
         if (!isRegister)
           Align(
@@ -167,6 +200,50 @@ class _LoginScreenState extends State<LoginScreen> {
         AuthTextLink(
           label: isRegister ? '이미 계정이 있나요? 로그인' : '계정이 없나요? 회원가입',
           onPressed: loading ? null : _toggleMode,
+        ),
+      ],
+    );
+  }
+}
+
+/// 회원가입 동의 한 줄: 체크박스 + 문구 + "보기"(웹페이지).
+class _ConsentRow extends StatelessWidget {
+  const _ConsentRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    required this.onView,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final VoidCallback onView;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Checkbox(
+          value: value,
+          onChanged: onChanged == null ? null : (v) => onChanged!(v ?? false),
+          visualDensity: VisualDensity.compact,
+        ),
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onChanged == null ? null : () => onChanged!(!value),
+            child: Text(label, style: DiaryTheme.body(13)),
+          ),
+        ),
+        TextButton(
+          onPressed: onView,
+          child: Text(
+            '보기',
+            style: DiaryTheme.body(12, color: DiaryColors.inkMuted).copyWith(
+              decoration: TextDecoration.underline,
+            ),
+          ),
         ),
       ],
     );

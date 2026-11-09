@@ -99,8 +99,16 @@ class AuthController extends ChangeNotifier {
     required String password,
     required String name,
     required String handle,
+    required bool agreedToTerms,
   }) =>
       _run(() async {
+        // Google Play UGC 정책: 가입(콘텐츠 작성) 전에 건너뛸 수 없는 약관 동의.
+        if (!agreedToTerms) {
+          throw const AuthFailure(
+            AuthFailureCode.invalidInput,
+            '이용약관과 개인정보 수집·이용에 동의해 주세요.',
+          );
+        }
         _require(AuthValidators.email(email));
         _require(AuthValidators.password(password));
         _require(AuthValidators.handle(handle));

@@ -1,0 +1,34 @@
+name: Legal pages (GitHub Pages)
+
+# legal-site/ 만 GitHub Pages 로 올린다 (docs/ 의 내부 문서는 올리지 않음).
+# 처음 한 번: 저장소 Settings → Pages → Source 를 "GitHub Actions" 로 바꾼다.
+# 주소: https://<조직>.github.io/<저장소>/legal/privacy.html
+on:
+  push:
+    branches: [main]
+    paths: ['legal-site/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: legal-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: legal-site
+      - id: deployment
+        uses: actions/deploy-pages@v4
