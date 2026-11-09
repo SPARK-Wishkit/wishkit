@@ -1,0 +1,97 @@
+{
+  "_설명": [
+    "태그 찾기(tag_identify)의 '브랜드 규칙' 단계가 읽는 데이터. 코드를 고치지 않고 이 파일만 바꿔서 규칙을 추가·수정한다.",
+    "brands: 브랜드 이름 정리(별칭) + 그 브랜드를 파는 모회사 쇼핑몰(mall) 또는 브랜드 전용 규칙(rules).",
+    "malls: 모회사 쇼핑몰별 규칙. rules가 비어 있으면 아직 주소 규칙을 확인하지 못한 몰 — 검색 단계에 판매처 힌트로만 쓴다.",
+    "rule.url 자리표시자: {code} 태그 품번(공백 제거), {code_compact} 영문·숫자만(대문자), 그 밖에는 code_pattern의 이름 붙은 그룹.",
+    "rule.code_pattern: 품번이 이 정규식에 맞을 때만 규칙을 쓴다(대문자로 바꾼 품번에 적용). 없으면 항상.",
+    "verified: 언제 무엇으로 확인했는지. 확인 안 된 규칙은 넣지 않는다 — 틀린 주소를 여는 데 시간을 쓰지 않게."
+  ],
+
+  "malls": {
+    "ssf": {
+      "name": "SSF샵 (삼성물산 패션)",
+      "domain": "ssfshop.com",
+      "rules": [
+        {
+          "url": "https://m.ssfshop.com/public/goods/detail/{code_compact}/sapView",
+          "verified": "2026-11-09 8seconds 태그 QR이 이 경로로 가고, 상품 페이지로 리다이렉트되는 것 확인(456X51CM86)"
+        }
+      ]
+    },
+    "lf": {
+      "name": "LF몰 (LF)",
+      "domain": "lfmall.co.kr",
+      "rules": [],
+      "todo": "품번으로 바로 가는 주소나 검색 결과 주소를 아직 확인하지 못함"
+    },
+    "handsome": {
+      "name": "더한섬닷컴 (한섬)",
+      "domain": "thehandsome.com",
+      "rules": [],
+      "todo": "품번으로 바로 가는 주소나 검색 결과 주소를 아직 확인하지 못함"
+    },
+    "sivillage": {
+      "name": "SI빌리지 (신세계인터내셔날)",
+      "domain": "sivillage.com",
+      "rules": [],
+      "todo": "품번으로 바로 가는 주소나 검색 결과 주소를 아직 확인하지 못함"
+    }
+  },
+
+  "brands": {
+    "8seconds": {"aliases": ["8 seconds", "8seconds", "에잇세컨즈", "에잇 세컨즈"], "mall": "ssf"},
+    "beaker": {"aliases": ["beaker", "비이커"], "mall": "ssf"},
+    "beanpole": {"aliases": ["beanpole", "빈폴"], "mall": "ssf"},
+    "kuho": {"aliases": ["kuho", "구호"], "mall": "ssf"},
+    "kuho plus": {"aliases": ["kuho plus", "구호플러스"], "mall": "ssf"},
+    "lebeige": {"aliases": ["lebeige", "르베이지"], "mall": "ssf"},
+    "galaxy": {"aliases": ["galaxy", "갤럭시"], "mall": "ssf"},
+    "rogatis": {"aliases": ["rogatis", "로가디스"], "mall": "ssf"},
+    "juun.j": {"aliases": ["juun.j", "juunj", "준지"], "mall": "ssf"},
+
+    "hazzys": {"aliases": ["hazzys", "헤지스"], "mall": "lf"},
+    "daks": {"aliases": ["daks", "닥스"], "mall": "lf"},
+    "maestro": {"aliases": ["maestro", "마에스트로"], "mall": "lf"},
+    "jill stuart new york": {"aliases": ["jill stuart new york", "jillstuart new york", "질스튜어트 뉴욕"], "mall": "lf"},
+    "at.corner": {"aliases": ["at.corner", "atcorner", "앳코너"], "mall": "lf"},
+    "dunst": {"aliases": ["dunst", "던스트"], "mall": "lf"},
+
+    "time": {"aliases": ["time", "타임"], "mall": "handsome"},
+    "mine": {"aliases": ["mine", "마인"], "mall": "handsome"},
+    "system": {"aliases": ["system", "시스템"], "mall": "handsome"},
+    "sjsj": {"aliases": ["sjsj"], "mall": "handsome"},
+    "the cashmere": {"aliases": ["the cashmere", "더캐시미어"], "mall": "handsome"},
+    "obzee": {"aliases": ["obzee", "오브제"], "mall": "handsome"},
+
+    "vov": {"aliases": ["vov", "보브"], "mall": "sivillage"},
+    "g-cut": {"aliases": ["g-cut", "gcut", "지컷"], "mall": "sivillage"},
+    "studio tomboy": {"aliases": ["studio tomboy", "스튜디오 톰보이", "스튜디오톰보이"], "mall": "sivillage"},
+    "comodo": {"aliases": ["comodo", "코모도"], "mall": "sivillage"},
+
+    "new balance": {
+      "aliases": ["new balance", "newbalance", "뉴발란스", "nb"],
+      "rules": [
+        {
+          "url": "https://www.nbkorea.com/product/productDetail.action?styleCode={style}&colCode={color}",
+          "code_pattern": "^(?P<style>NB[A-Z0-9]+)-(?P<color>\\d{2})$",
+          "verified": "2026-11-09 실제 태그 NBNQG41923-01 → 이 주소에서 찾음"
+        }
+      ]
+    },
+    "the north face": {"aliases": ["the north face", "thenorthface", "north face", "노스페이스", "더노스페이스"]},
+    "zara": {"aliases": ["zara", "자라"]},
+    "uniqlo": {"aliases": ["uniqlo", "유니클로"]},
+    "adidas": {"aliases": ["adidas", "아디다스"]},
+    "vans": {"aliases": ["vans", "반스"]},
+    "converse": {"aliases": ["converse", "컨버스"]},
+    "puma": {"aliases": ["puma", "푸마", "퓨마"]},
+    "oakley": {"aliases": ["oakley", "오클리"]},
+    "kream": {"aliases": ["kream", "크림"]},
+    "kream+": {"aliases": ["kream+", "kream plus", "크림플러스", "크림+"]},
+    "muji": {"aliases": ["muji", "무인양품", "무지"]},
+    "massimo dutti": {"aliases": ["massimo dutti", "마시모두띠", "마시모 두띠"]},
+    "giordano": {"aliases": ["giordano", "지오다노"]},
+    "kimmatin": {"aliases": ["kimmatin", "matin kim", "마뗑킴", "마땡킴"]}
+  }
+}

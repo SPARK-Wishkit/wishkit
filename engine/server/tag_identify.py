@@ -47,6 +47,7 @@ import urllib.parse
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
+import brand_rules
 import config
 from compare import normalize_price_text
 from providers import ProviderResult, generate, to_gemini_schema
@@ -153,6 +154,9 @@ def build_search_prompt(tag: dict) -> str:
     def v(key: str) -> str:
         return str(tag.get(key) or "").strip() or "(없음)"
 
+    seller = str(tag.get("seller_hint") or "").strip()
+    seller_line = f"\n이 브랜드는 {seller} 에서 판매합니다. 그 사이트의 상세 페이지가 검색 결과에 있으면 꼭 포함하세요." if seller else ""
+
     return f"""\
 구글에서 정확히 아래 검색어로 검색하세요.
 
@@ -162,7 +166,7 @@ def build_search_prompt(tag: dict) -> str:
 브랜드: {v("brand")} / 품번: {v("product_code")} / 상품명: {v("product_name")} / 색상: {v("color")}
 
 검색 결과에 나온 이 상품의 **상품 상세 페이지** URL을 공식몰·쇼핑몰(무신사, 29CM, W컨셉, 쿠팡 등)
-가리지 말고 모두 적으세요. 공식몰을 찾았다고 멈추지 마세요.
+가리지 말고 모두 적으세요. 공식몰을 찾았다고 멈추지 마세요.{seller_line}
 사이트 메인 페이지, 카테고리·검색 결과 목록 페이지, 블로그, 리뷰, 커뮤니티 글은 제외하세요.
 실제로 찾지 못한 URL을 지어내지 마세요.
 각 URL 옆에는 검색 결과에 보이는 그 페이지의 **제목**과 **설명 문구**를 보이는 그대로 적으세요.
@@ -220,6 +224,7 @@ MALL_DOMAINS = (
     "musinsa.com", "29cm.co.kr", "wconcept.co.kr", "ssfshop.com", "zigzag.kr", "kakaostyle.com",
     "a-bly.com", "kream.co.kr", "lotteon.com", "ssg.com", "thehyundai.com", "hmall.com",
     "lfmall.co.kr", "elandmall.co.kr", "4910.kr", "queenit.kr", "posty.kr", "coupang.com",
+    "thehandsome.com", "sivillage.com",
 )
 
 # 쇼핑몰 후보를 여는 순서(공식몰은 항상 먼저). 여기 없는 몰은 이 뒤에 검색 결과 순서대로.
@@ -454,6 +459,7 @@ MIN_SECONDS_FOR_PAGE_READ = 6.0  # 이보다 시간이 적게 남으면 페이�
 SearchFn = Callable[[dict], Awaitable[ProviderResult]]
 RenderFn = Callable[[str], Awaitable[PageView]]
 ReadCodesFn = Callable[[bytes], Awaitable[DecodedCodes]]
+RuleUrlsFn = Callable[[dict], list]  # 태그 → brand_rules.RuleUrl 목록(main.py가 brand_rules.candidate_urls를 넘김)
 ResolveUrlFn = Callable[[str], Awaitable[QrResolution]]
 
 
@@ -556,6 +562,7 @@ async def identify(
     read_pages: ReadPagesFn | None = None,
     read_codes: ReadCodesFn | None = None,
     resolve_url: ResolveUrlFn | None = None,
+    rule_urls: RuleUrlsFn | None = None,
 ) -> IdentifyOutcome:
     # 0+1. 태그 읽기(Gemini)와 QR·바코드 디코딩(zxing)을 동시에 — 디코딩은 1초도 안 걸려서 시간 손해가 없다.
     if read_codes is not None:
@@ -565,6 +572,7 @@ async def identify(
     if not tag_res.ok or not tag_res.data:
         raise IdentifyError(f"태그 읽기 실패: {tag_res.error}")
     tag = _merge_decoded(_clean_tag(tag_res.data), codes)
+    _add_brand_info(tag)
 
     # 0. QR이 가리키는 페이지에서 품번이 확인되면 검색 없이 끝낸다.
     qr = await _try_qr(tag, codes, render_page=render_page, resolve_url=resolve_url,
@@ -581,6 +589,15 @@ async def identify(
         return IdentifyOutcome("not_a_tag", tag, qr=qr.info)
     if not _has_search_key(tag):
         return qr.fallback(IdentifyOutcome("not_found", tag, note="태그에서 품번이나 브랜드·상품명을 읽지 못했어요"))
+
+    # 1.5 브랜드·모회사 몰 규칙(brand_rules.json) — 품번으로 주소를 만들어 열어 보고, 페이지에서 품번이
+    #     확인되면 검색 없이 끝낸다. 못 찾아도 열어 본 기록은 QR 기록과 함께 남긴다.
+    ruled = await _try_brand_rules(tag, rule_urls(tag) if rule_urls else [], render_page=render_page,
+                                   time_left=time_left, min_s=min_seconds_per_render)
+    qr.checked.extend(ruled.checked)
+    if ruled.found is not None:
+        return IdentifyOutcome("found", tag, official_domain=qr.official_domain, match=ruled.found,
+                               checked=qr.checked, qr=qr.info)
 
     # 2. Gemini + 구글 검색 — 공식몰 후보가 먼저, 그다음 쇼핑몰. QR이 알려 준 공식 도메인이 있으면 그걸 쓴다.
     search_res = await search(tag)
@@ -609,6 +626,60 @@ async def identify(
     checker = _Checker(tag, render_page, time_left, min_seconds_per_render)
     await checker.check_all(candidates[:max_candidates], official=official)
     return qr.fallback(checker.outcome(official=official))
+
+
+# ── 1.5 브랜드 규칙 ─────────────────────────────────────────
+
+def _add_brand_info(tag: dict) -> None:
+    """브랜드 이름 정리(brand_canonical)와 판매처 힌트(seller_hint)를 태그 정보에 더한다. 응답에도 그대로 남아
+    로그로 "어떤 브랜드가 규칙에 없나"를 볼 수 있다."""
+    rules = brand_rules.load_rules()
+    tag["brand_canonical"] = brand_rules.canonical_brand(tag.get("brand"), rules)
+    tag["seller_hint"] = brand_rules.seller_hint(tag, rules)
+
+
+@dataclass
+class _RuleStep:
+    checked: list[dict] = field(default_factory=list)
+    found: dict | None = None
+
+
+async def _try_brand_rules(
+    tag: dict,
+    candidates: list,
+    *,
+    render_page: RenderFn,
+    time_left: Callable[[], float],
+    min_s: float,
+) -> _RuleStep:
+    step = _RuleStep()
+    for cand in candidates:
+        # 검색에 쓸 시간을 남긴다 — 규칙 주소 하나를 여는 데 렌더링 한 번이 든다.
+        if time_left() < min_s + MIN_SECONDS_FOR_PAGE_READ:
+            step.checked.append(_checked(cand.url, "rule", None, f"규칙({cand.label}) · 시간 부족"))
+            break
+        page = await render_page(cand.url)
+        page_url = page.final_url or cand.url
+        if not page.ok:
+            step.checked.append(_checked(cand.url, "rule", None,
+                                         f"규칙({cand.label}) · 페이지를 못 읽음({page.error or '차단'})"))
+            continue
+        if is_root_url(page_url):
+            step.checked.append(_checked(page_url, "rule", False, f"규칙({cand.label}) · 메인으로 이동(상품 없음)"))
+            continue
+        # 주소는 우리가 품번으로 만든 것이라 증거가 아니다 — 페이지 본문·숨은 코드에서만 확인한다.
+        evidence = page_matches(tag, page.raw_text, "", page.code_hints)
+        if not evidence:
+            step.checked.append(_checked(page_url, "rule", False, f"규칙({cand.label}) · 페이지에 품번 없음"))
+            continue
+        host = host_of(page_url)
+        mall = any(_domain_matches(host, d) for d in MALL_DOMAINS)
+        step.found = {"url": page_url, "host": host, "source": "mall" if mall else "official",
+                      "verified_by": evidence, "tag_price_seen": price_seen(tag, page.raw_text),
+                      "via": "brand_rule"}
+        step.checked.append(_checked(page_url, "rule", True, f"규칙({cand.label}) · {evidence}"))
+        break
+    return step
 
 
 # ── 0. QR ──────────────────────────────────────────────────

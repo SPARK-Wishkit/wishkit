@@ -28,6 +28,7 @@ from fastapi import FastAPI, HTTPException
 from playwright.async_api import async_playwright
 from pydantic import BaseModel, HttpUrl
 
+import brand_rules
 import config
 from compare import grounding_check
 from metrics import PeakRSSSampler, now_ms
@@ -239,6 +240,7 @@ async def identify_tag(req: IdentifyTagRequest):
                 time_left=time_left,
                 # QR·바코드 디코딩과 QR 주소 따라가기는 동기 함수라 스레드에서 돈다.
                 read_codes=lambda img: timed("qr_decode", asyncio.to_thread(decode_codes, img)),
+                rule_urls=brand_rules.candidate_urls,
                 resolve_url=lambda url: timed("qr_resolve", asyncio.to_thread(
                     resolve_qr_url, url, total_timeout=max(1.0, min(4.0, time_left() - 8.0)))),
             ),

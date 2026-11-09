@@ -1,5 +1,21 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-09 - 태그 찾기: 브랜드 이름 정리 + 모회사 쇼핑몰 규칙
+
+🌟 **쉬운 설명**
+- 태그에서 "8 seconds", "에잇세컨즈"처럼 다르게 읽힌 브랜드 이름을 하나로 정리해요.
+- 삼성물산 브랜드(8seconds·비이커·빈폴·구호 등)는 SSF샵에서 **품번으로 상품 페이지를 바로 열어** 확인해요. 검색보다 빠르고 정확해요.
+- LF몰·더한섬닷컴·SI빌리지 브랜드는 아직 주소 규칙을 확인 못 해서, 검색할 때 "이 몰에서 판다"는 힌트만 줘요.
+
+🔧 **기술 설명**
+- `engine/server/brand_rules.json`(신규): 브랜드 별칭, 브랜드→모회사 몰, 몰·브랜드별 주소 템플릿. 코드 수정·배포 없이 데이터만 고쳐 규칙 추가.
+- `brand_rules.py`(신규): `canonical_brand`, `candidate_urls`(품번→주소, `code_pattern` 정규식 그룹 지원), `seller_hint`.
+- `identify()`: QR 다음, 검색 전에 규칙 주소를 렌더링해 **페이지 본문에서** 품번 확인(만든 주소 자체는 증거로 안 씀). 검색 시간을 남기려고 시간이 모자라면 건너뜀. `match.via = "brand_rule"`. 응답 tag에 `brand_canonical`, `seller_hint`.
+- 확인된 규칙: SSF `m.ssfshop.com/public/goods/detail/{품번}/sapView`(8seconds QR 리다이렉트로 확인), 뉴발란스 `styleCode/colCode`(실제 테스트로 확인).
+- 테스트: `test_brand_rules.py`.
+
+---
+
 ## 2026-11-08 - 태그 찾기 3단계: QR → 품번·브랜드 검색 → 사진으로 직접 기록
 
 🌟 **쉬운 설명**
