@@ -439,7 +439,16 @@ class _VoteButton extends StatelessWidget {
               color: DiaryColors.white,
             ),
           )
-        : Text(label, style: DiaryTheme.ui(14, weight: FontWeight.w700));
+        : Text(
+            label,
+            style: DiaryTheme.ui(
+              14,
+              weight: FontWeight.w700,
+              color: filled
+                  ? (onPressed == null ? DiaryColors.inkSoft : DiaryColors.white)
+                  : DiaryColors.ink,
+            ),
+          );
     if (filled) {
       return FilledButton(
         onPressed: onPressed,
