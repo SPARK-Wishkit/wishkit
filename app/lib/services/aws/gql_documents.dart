@@ -184,8 +184,8 @@ mutation DeleteReceivedBasket(\$input: DeleteReceivedBasketInput!) {
   deleteReceivedBasket(input: \$input) { recipientId basketId }
 }''';
   static const sendBasket = '''
-mutation SendBasket(\$threadId: String!, \$recipientIds: [ID!]!, \$items: AWSJSON!, \$memo: String, \$allowMultipleVotes: Boolean) {
-  sendBasket(threadId: \$threadId, recipientIds: \$recipientIds, items: \$items, memo: \$memo, allowMultipleVotes: \$allowMultipleVotes)
+mutation SendBasket(\$threadId: String!, \$recipientIds: [ID!]!, \$items: AWSJSON!, \$memo: String, \$allowVoting: Boolean, \$allowMultipleVotes: Boolean) {
+  sendBasket(threadId: \$threadId, recipientIds: \$recipientIds, items: \$items, memo: \$memo, allowVoting: \$allowVoting, allowMultipleVotes: \$allowMultipleVotes)
 }''';
 
   // ── 3-2: 댓글 ──
