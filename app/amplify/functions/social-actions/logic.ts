@@ -16,14 +16,16 @@ export type Table =
   | 'BasketComment'
   | 'BasketVote'
   | 'ReceivedBasket'
-  | 'Notification';
+  | 'Notification'
+  | 'Block'
+  | 'Report';
 
 export interface Db {
   get(table: Table, key: Row): Promise<Row | undefined>;
   put(table: Table, item: Row): Promise<void>;
   del(table: Table, key: Row): Promise<void>;
-  /** 파티션 키 하나로 조회 */
-  query(table: Table, keyName: string, keyValue: string): Promise<Row[]>;
+  /** 파티션 키(또는 [indexName] 보조 인덱스의 키) 하나로 조회 */
+  query(table: Table, keyName: string, keyValue: string, indexName?: string): Promise<Row[]>;
 }
 
 export const LIMITS = {
@@ -31,7 +33,11 @@ export const LIMITS = {
   items: 100,
   text: 1000,
   memo: 500,
+  reportDetail: 500,
 };
+
+export const REPORT_TARGETS = ['comment', 'basket', 'user'] as const;
+export const REPORT_REASONS = ['abuse', 'harassment', 'sexual', 'spam', 'other'] as const;
 
 const THREAD_ID = /^[A-Za-z0-9_.:-]{1,100}$/;
 /** 상품 번호(앱의 Product.id, int) 를 문자열로 받는다. */
@@ -171,6 +177,18 @@ function withDefaults(env: Env): Required<Env> {
   };
 }
 
+// ── 차단 ──────────────────────────────────────────────────────
+
+/** a 가 b 를 차단했거나 b 가 a 를 차단했으면 true. */
+export async function isBlockedEitherWay(env: Env, a: string, b: string): Promise<boolean> {
+  if (!a || !b || a === b) return false;
+  const [ab, ba] = await Promise.all([
+    env.db.get('Block', { blockerId: a, blockedId: b }),
+    env.db.get('Block', { blockerId: b, blockedId: a }),
+  ]);
+  return Boolean(ab || ba);
+}
+
 // ── 살까말까 보내기 ────────────────────────────────────────────
 
 export async function sendBasket(
@@ -191,8 +209,11 @@ export async function sendBasket(
   const from = await authorOf(env, caller);
   // 탈퇴했거나 없는 사람에게는 보내지 않는다.
   const recipients: string[] = [];
+  // 차단 관계(어느 쪽이든)인 사람에게도 보내지 않는다.
   for (const id of wanted) {
-    if (await env.db.get('Profile', { ownerId: id })) recipients.push(id);
+    if (!(await env.db.get('Profile', { ownerId: id }))) continue;
+    if (await isBlockedEitherWay(env, caller, id)) continue;
+    recipients.push(id);
   }
   if (recipients.length === 0) fail('NO_RECIPIENTS');
 
@@ -316,6 +337,8 @@ export async function addComment(
   }
   const participants = (thread.participantIds as string[]) ?? [];
   if (!participants.includes(caller)) fail('NOT_PARTICIPANT');
+  // 댓글방 주인과 차단 관계면 댓글을 달 수 없다.
+  if (await isBlockedEitherWay(env, caller, String(thread.ownerId ?? ''))) fail('BLOCKED');
 
   const existing = await env.db.query('BasketComment', 'threadId', args.threadId);
   const parentId = flattenParent(String(args.parentId ?? ''), existing);
@@ -364,6 +387,7 @@ export async function addComment(
     ? `${from.name} 님이 살까말까 댓글에 답글을 남겼어요`
     : `${from.name} 님이 살까말까에 댓글을 남겼어요`;
   for (const t of targets) {
+    if (await isBlockedEitherWay(env, caller, t)) continue;
     await notify(env, t, from, 'comment', message, args.threadId, now);
   }
   return comment;
@@ -474,6 +498,8 @@ export async function notifyFollow(
   if (!args.targetId || args.targetId === caller) return false;
   const edge = await env.db.get('Follow', { followerId: caller, followeeId: args.targetId });
   if (!edge) fail('NOT_FOLLOWING');
+  // 차단 관계면 알림을 보내지 않는다(차단 사실은 알리지 않는다).
+  if (await isBlockedEitherWay(env, caller, args.targetId)) return false;
   const from = await authorOf(env, caller);
   // 알림 id 를 고정 → 팔로우를 껐다 켜도 알림은 하나만 (최신으로 갱신)
   await notify(
@@ -487,4 +513,129 @@ export async function notifyFollow(
     `follow-${caller}`,
   );
   return true;
+}
+
+// ── 신고 ──────────────────────────────────────────────────────
+
+/**
+ * 댓글·받은 바구니·사용자 신고. 신고 당시 내용을 snapshot 으로 저장해서, 작성자가 지우거나
+ * 고쳐도 담당자가 확인할 수 있게 한다. 신고한 사람이 볼 수 있는 콘텐츠만 신고할 수 있다.
+ */
+export async function reportContent(
+  envIn: Env,
+  caller: string,
+  args: {
+    targetType: string;
+    targetUserId: string;
+    targetId?: string | null;
+    threadId?: string | null;
+    reason: string;
+    detail?: string | null;
+  },
+): Promise<boolean> {
+  const env = withDefaults(envIn);
+  const now = env.now().toISOString();
+  const type = args.targetType as (typeof REPORT_TARGETS)[number];
+  if (!REPORT_TARGETS.includes(type)) fail('INVALID_INPUT');
+  if (!REPORT_REASONS.includes(args.reason as (typeof REPORT_REASONS)[number])) fail('INVALID_INPUT');
+  if (!args.targetUserId || args.targetUserId === caller) fail('INVALID_INPUT');
+  const detail = cleanText(args.detail, LIMITS.reportDetail, { required: false });
+
+  let snapshot: unknown;
+  let targetUserId = args.targetUserId;
+  if (type === 'comment') {
+    if (!THREAD_ID.test(args.threadId ?? '') || !args.targetId) fail('INVALID_INPUT');
+    const row = await env.db.get('BasketComment', {
+      threadId: args.threadId,
+      commentId: args.targetId,
+    });
+    if (!row) fail('NOT_FOUND');
+    const participants = (row.participantIds as string[] | undefined) ?? [];
+    if (!participants.includes(caller)) fail('NOT_PARTICIPANT');
+    targetUserId = String(row.authorId);
+    snapshot = asJson(row.data);
+  } else if (type === 'basket') {
+    if (!args.targetId) fail('INVALID_INPUT');
+    const row = await env.db.get('ReceivedBasket', { recipientId: caller, basketId: args.targetId });
+    if (!row) fail('NOT_FOUND');
+    targetUserId = String(row.fromUid);
+    snapshot = asJson(row.data);
+  } else {
+    const p = await env.db.get('Profile', { ownerId: args.targetUserId });
+    if (!p) fail('NOT_FOUND');
+    snapshot = { name: p.name, handle: p.handle, avatarUrl: p.avatarUrl ?? null };
+  }
+
+  const reportId = `${now}#${env.newId()}`;
+  await env.db.put(
+    'Report',
+    stamp(
+      'Report',
+      {
+        reporterId: caller,
+        reportId,
+        targetType: type,
+        targetUserId,
+        targetId: args.targetId ?? null,
+        threadId: args.threadId ?? null,
+        reason: args.reason,
+        detail,
+        snapshot,
+        status: 'open',
+      },
+      now,
+    ),
+  );
+  // CloudWatch 지표 필터·알림용 한 줄 (docs/play-release/moderation.md)
+  console.log(
+    JSON.stringify({ event: 'WISHKIT_REPORT', reportId, reporterId: caller, targetType: type, targetUserId }),
+  );
+  return true;
+}
+
+// ── 탈퇴 시 공유 콘텐츠 정리 ─────────────────────────────────
+
+/**
+ * 탈퇴하는 사람(caller)이 남긴, 다른 사람에게 보이는 콘텐츠를 지운다. Google Play 계정 삭제 요건
+ * (연결된 사용자 데이터 모두 삭제). 앱이 Cognito 계정을 지우기 전에 호출한다.
+ * - 남의 댓글방에 쓴 내 댓글
+ * - 친구 받은함에 있는, 내가 보낸 살까말까
+ * - 내가 만든 댓글방과 그 안의 댓글 전부
+ * - 내가 한 차단, 나를 대상으로 한 차단
+ * 신고 기록(Report)은 관리 목적상 남긴다(처리방침에 명시).
+ */
+export async function deleteMySocialData(envIn: Env, caller: string): Promise<number> {
+  const env = withDefaults(envIn);
+  let count = 0;
+
+  const myComments = await env.db.query('BasketComment', 'authorId', caller, 'byAuthor');
+  for (const c of myComments) {
+    await env.db.del('BasketComment', { threadId: c.threadId, commentId: c.commentId });
+    count++;
+  }
+
+  const sent = await env.db.query('ReceivedBasket', 'fromUid', caller, 'byFromUid');
+  for (const b of sent) {
+    await env.db.del('ReceivedBasket', { recipientId: b.recipientId, basketId: b.basketId });
+    count++;
+  }
+
+  const threads = await env.db.query('BasketThread', 'ownerId', caller, 'byOwner');
+  for (const t of threads) {
+    const comments = await env.db.query('BasketComment', 'threadId', String(t.threadId));
+    for (const c of comments) {
+      await env.db.del('BasketComment', { threadId: c.threadId, commentId: c.commentId });
+      count++;
+    }
+    await env.db.del('BasketThread', { threadId: t.threadId });
+    count++;
+  }
+
+  const mine = await env.db.query('Block', 'blockerId', caller);
+  const againstMe = await env.db.query('Block', 'blockedId', caller, 'byBlocked');
+  for (const b of [...mine, ...againstMe]) {
+    await env.db.del('Block', { blockerId: b.blockerId, blockedId: b.blockedId });
+    count++;
+  }
+  return count;
 }

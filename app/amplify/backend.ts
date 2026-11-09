@@ -42,13 +42,25 @@ function grantTables(fn: FunctionHandle, grants: TableGrant[]) {
   }
 }
 
-// 공개 위시리스트 함수: 탭·상품 표를 "읽기만" 한다.
+/** 보조 인덱스(GSI)로 조회할 수 있게 `<표>/index/*` 읽기 권한을 따로 준다. */
+function grantIndexRead(fn: FunctionHandle, tables: TableName[]) {
+  const all = backend.data.resources.tables;
+  fn.resources.lambda.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: ['dynamodb:Query'],
+      resources: tables.map((t) => `${all[t].tableArn}/index/*`),
+    }),
+  );
+}
+
+// 공개 위시리스트 함수: 탭·상품 표를 "읽기만" 한다. 차단 관계면 보여 주지 않으려고 차단 표도 읽는다.
 grantTables(backend.publicWishlist, [
   { table: 'WishTab', env: 'WISH_TAB_TABLE' },
   { table: 'WishProduct', env: 'WISH_PRODUCT_TABLE' },
+  { table: 'Block', env: 'BLOCK_TABLE' },
 ]);
 
-// 살까말까·댓글·투표·알림 함수: 프로필·팔로우는 읽기만, 댓글방·댓글·투표·받은함·알림은 읽고 쓰기.
+// 살까말까·댓글·투표·알림·신고 함수: 프로필·팔로우는 읽기만, 댓글방·댓글·투표·받은함·알림·차단·신고는 읽고 쓰기.
 grantTables(backend.socialActions, [
   { table: 'Profile', env: 'PROFILE_TABLE' },
   { table: 'Follow', env: 'FOLLOW_TABLE' },
@@ -57,7 +69,11 @@ grantTables(backend.socialActions, [
   { table: 'BasketVote', env: 'VOTE_TABLE', write: true },
   { table: 'ReceivedBasket', env: 'RECEIVED_TABLE', write: true },
   { table: 'Notification', env: 'NOTIFICATION_TABLE', write: true },
+  { table: 'Block', env: 'BLOCK_TABLE', write: true },
+  { table: 'Report', env: 'REPORT_TABLE', write: true },
 ]);
+// 탈퇴 정리(deleteMySocialData)가 작성자·보낸 사람·방장·차단 대상 인덱스로 찾는다.
+grantIndexRead(backend.socialActions, ['BasketComment', 'ReceivedBasket', 'BasketThread', 'Block']);
 
 // ─────────────────────────────────────────────────────────────
 // AI 추출 엔진(parsing-engine, Fargate) 연동: parsing-proxy를 엔진과 같은 VPC에 붙인다

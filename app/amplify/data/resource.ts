@@ -20,6 +20,12 @@ import { parsingProxy } from '../functions/parsing-proxy/resource';
  * - 이메일·푸시 토큰은 PrivateProfile 로 분리해서 본인만 읽는다. (예전엔 누구나 읽기 가능)
  * - 탭·상품은 본인만 읽는다. 친구에게는 서버 함수(publicWishlist)가 "공개(isPublic)인 것만",
  *   그리고 메모(memo)는 빼고 돌려준다. (예전엔 로그인만 하면 비공개·메모까지 읽기 가능)
+ *
+ * 신고·차단 (Google Play UGC 정책)
+ * - Block: 차단한 사람이 직접 만들고 지운다. 서버 함수는 차단 관계(양방향)를 보고
+ *   살까말까 보내기·댓글·팔로우 알림·공개 위시리스트를 거부한다.
+ * - Report: 서버 함수(reportContent)만 만든다. 신고 당시 내용을 snapshot 으로 남긴다.
+ *   담당자는 DynamoDB 콘솔에서 status = 'open' 인 행을 확인한다 (docs/play-release/moderation.md).
  */
 const schema = a.schema({
   /** 친구 목록·검색에 보이는 공개 프로필. */
@@ -181,6 +187,8 @@ const schema = a.schema({
       data: a.json().required(),
     })
     .identifier(['recipientId', 'basketId'])
+    // 탈퇴한 사람이 보낸 바구니를 서버가 찾아 지우는 용도
+    .secondaryIndexes((index) => [index('fromUid').name('byFromUid')])
     .authorization((allow) => [
       allow.ownerDefinedIn('recipientId').identityClaim('sub').to(['read', 'delete']),
     ]),
@@ -196,6 +204,8 @@ const schema = a.schema({
       itemIds: a.string().array(),
     })
     .identifier(['threadId'])
+    // 탈퇴한 사람이 만든 댓글방을 서버가 찾아 지우는 용도
+    .secondaryIndexes((index) => [index('ownerId').name('byOwner')])
     .authorization((allow) => [
       allow.ownersDefinedIn('participantIds').identityClaim('sub').to(['read']),
     ]),
@@ -215,6 +225,8 @@ const schema = a.schema({
       data: a.json().required(),
     })
     .identifier(['threadId', 'commentId'])
+    // 탈퇴한 사람이 남의 댓글방에 쓴 댓글을 서버가 찾아 지우는 용도
+    .secondaryIndexes((index) => [index('authorId').name('byAuthor')])
     .authorization((allow) => [
       allow.ownersDefinedIn('participantIds').identityClaim('sub').to(['read']),
     ]),
@@ -248,6 +260,45 @@ const schema = a.schema({
     .identifier(['recipientId', 'notificationId'])
     .authorization((allow) => [
       allow.ownerDefinedIn('recipientId').identityClaim('sub').to(['read', 'update', 'delete']),
+    ]),
+
+  /**
+   * 차단 한 줄 = "blockerId 가 blockedId 를 차단했다". 차단한 사람만 만들고 읽고 지운다.
+   * 차단된 사람은 이 표를 읽을 수 없다(차단 사실을 알리지 않음).
+   */
+  Block: a
+    .model({
+      blockerId: a.id().required(),
+      blockedId: a.id().required(),
+    })
+    .identifier(['blockerId', 'blockedId'])
+    // 서버가 "나를 차단한 사람"을 찾을 때, 탈퇴 시 정리할 때 쓴다.
+    .secondaryIndexes((index) => [index('blockedId').name('byBlocked')])
+    .authorization((allow) => [
+      allow.ownerDefinedIn('blockerId').identityClaim('sub').to(['create', 'read', 'delete']),
+    ]),
+
+  /**
+   * 신고 한 건. 서버 함수(reportContent)만 만든다. 신고한 사람은 자기 신고만 읽을 수 있다.
+   * targetType: 'comment' | 'basket' | 'user'
+   * status: 'open' → 담당자가 처리하면 'actioned'(삭제·정지) 또는 'dismissed'
+   */
+  Report: a
+    .model({
+      reporterId: a.id().required(),
+      reportId: a.string().required(),
+      targetType: a.string().required(),
+      targetUserId: a.id().required(),
+      targetId: a.string(),
+      threadId: a.string(),
+      reason: a.string().required(),
+      detail: a.string(),
+      snapshot: a.json(),
+      status: a.string().required(),
+    })
+    .identifier(['reporterId', 'reportId'])
+    .authorization((allow) => [
+      allow.ownerDefinedIn('reporterId').identityClaim('sub').to(['read']),
     ]),
 
   /** 살까말까 보내기: 댓글방 준비 → 받은 사람마다 받은함 + 알림. 받은 사람 수를 돌려준다. */
@@ -307,6 +358,35 @@ const schema = a.schema({
       productIds: a.string().required().array().required(),
     })
     .returns(a.boolean().required())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(socialActions)),
+
+  /**
+   * 댓글·받은 살까말까·사용자 신고. 서버가 신고 당시 내용을 함께 저장한다.
+   * reason: 'abuse' | 'harassment' | 'sexual' | 'spam' | 'other'
+   */
+  reportContent: a
+    .mutation()
+    .arguments({
+      targetType: a.string().required(),
+      targetUserId: a.id().required(),
+      targetId: a.string(), // comment: commentId, basket: basketId(내 받은함)
+      threadId: a.string(), // comment 일 때
+      reason: a.string().required(),
+      detail: a.string(),
+    })
+    .returns(a.boolean().required())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(socialActions)),
+
+  /**
+   * 탈퇴 직전에 호출: 내가 남긴 공유 콘텐츠를 지운다.
+   * 남의 댓글방에 쓴 내 댓글, 친구 받은함에 있는 내가 보낸 바구니, 내가 만든 댓글방(과 그 댓글),
+   * 나와 관련된 차단 기록. 지운 행 수를 돌려준다.
+   */
+  deleteMySocialData: a
+    .mutation()
+    .returns(a.integer().required())
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(socialActions)),
 

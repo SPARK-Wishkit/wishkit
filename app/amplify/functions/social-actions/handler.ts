@@ -7,7 +7,9 @@ import {
   ActionError,
   addComment,
   deleteComment,
+  deleteMySocialData,
   notifyFollow,
+  reportContent,
   sendBasket,
   updateComment,
   voteBasket,
@@ -29,6 +31,8 @@ const TABLES: Record<Table, string> = {
   BasketVote: process.env.VOTE_TABLE ?? '',
   ReceivedBasket: process.env.RECEIVED_TABLE ?? '',
   Notification: process.env.NOTIFICATION_TABLE ?? '',
+  Block: process.env.BLOCK_TABLE ?? '',
+  Report: process.env.REPORT_TABLE ?? '',
 };
 
 const db: Db = {
@@ -42,9 +46,10 @@ const db: Db = {
   async del(table, key) {
     await ddb.send(new DeleteCommand({ TableName: TABLES[table], Key: key }));
   },
-  query(table, keyName, keyValue) {
+  query(table, keyName, keyValue, indexName) {
     return queryAll(ddb, {
       TableName: TABLES[table],
+      IndexName: indexName,
       KeyConditionExpression: '#k = :v',
       ExpressionAttributeNames: { '#k': keyName },
       ExpressionAttributeValues: { ':v': keyValue },
@@ -96,6 +101,17 @@ export const handler = async (event: AmplifyFunctionEvent<Args>): Promise<unknow
           threadId: a.threadId,
           productIds: a.productIds,
         });
+      case 'reportContent':
+        return await reportContent(env, caller, {
+          targetType: a.targetType,
+          targetUserId: a.targetUserId,
+          targetId: a.targetId,
+          threadId: a.threadId,
+          reason: a.reason,
+          detail: a.detail,
+        });
+      case 'deleteMySocialData':
+        return await deleteMySocialData(env, caller);
       case 'notifyFollow':
         return await notifyFollow(env, caller, { targetId: a.targetId });
       default:
