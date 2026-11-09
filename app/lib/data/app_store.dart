@@ -1267,6 +1267,7 @@ class AppStore extends ChangeNotifier {
     String? existingId,
     bool touchSharedAt = false,
     String memo = '',
+    bool allowVoting = true,
     bool allowMultipleVotes = true,
   }) async {
     final now = DateTime.now();
@@ -1299,6 +1300,7 @@ class AppStore extends ChangeNotifier {
       publicUrlExpiresAt: existing?.publicUrlExpiresAt,
       memo: memo.isNotEmpty ? memo : (existing?.memo ?? ''),
       threadId: existing?.threadId.isNotEmpty == true ? existing!.threadId : id,
+      allowVoting: allowVoting,
       allowMultipleVotes: allowMultipleVotes,
     );
     sharedBaskets[id] = shared;
@@ -1329,12 +1331,14 @@ class AppStore extends ChangeNotifier {
   Future<bool> sendBasketToFriends(
     List<String> friendIds, {
     String memo = '',
+    bool allowVoting = true,
     bool allowMultipleVotes = true,
   }) async {
     return resendBasketToFriends(
       items: _selectedBasketProducts(),
       friendIds: friendIds,
       memo: memo,
+      allowVoting: allowVoting,
       allowMultipleVotes: allowMultipleVotes,
     );
   }
@@ -1362,6 +1366,7 @@ class AppStore extends ChangeNotifier {
     required List<String> friendIds,
     String? existingId,
     String memo = '',
+    bool allowVoting = true,
     bool allowMultipleVotes = true,
   }) async {
     if (items.isEmpty) {
@@ -1388,6 +1393,7 @@ class AppStore extends ChangeNotifier {
         items: items,
         threadId: threadId,
         memo: memo,
+        allowVoting: allowVoting,
         allowMultipleVotes: allowMultipleVotes,
       );
       final names = [
@@ -1402,6 +1408,7 @@ class AppStore extends ChangeNotifier {
         existingId: threadId,
         touchSharedAt: true,
         memo: memo,
+        allowVoting: allowVoting,
         allowMultipleVotes: allowMultipleVotes,
       );
       // Re-sending a basket that was X-ed out of the friends feed brings it back.
