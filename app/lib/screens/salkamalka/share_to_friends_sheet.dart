@@ -119,33 +119,30 @@ Future<({Set<String> friendIds, String memo, bool allowVoting, bool allowMultipl
                         style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 28),
-                      child: CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        value: allowMultipleVotes,
-                        onChanged: !allowVoting || confirming
-                            ? null
-                            : (value) => setModalState(() {
-                                  allowMultipleVotes = value ?? false;
-                                }),
-                        title: Text(
-                          '복수 선택 가능',
-                          style: DiaryTheme.body(
-                            14,
-                            color: allowVoting ? DiaryColors.ink : DiaryColors.inkMuted,
-                            weight: FontWeight.w600,
+                    if (allowVoting)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 28),
+                        child: CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          value: allowMultipleVotes,
+                          onChanged: confirming
+                              ? null
+                              : (value) => setModalState(() {
+                                    allowMultipleVotes = value ?? false;
+                                  }),
+                          title: Text(
+                            '복수 선택 가능',
+                            style: DiaryTheme.body(14, weight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            allowMultipleVotes
+                                ? '친구들이 상품을 여러 개 선택할 수 있어요'
+                                : '친구들은 상품 하나만 선택할 수 있어요',
+                            style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
                           ),
                         ),
-                        subtitle: Text(
-                          allowMultipleVotes
-                              ? '친구들이 상품을 여러 개 선택할 수 있어요'
-                              : '친구들은 상품 하나만 선택할 수 있어요',
-                          style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
-                        ),
                       ),
-                    ),
                     FilledButton(
                       onPressed: selected.isEmpty || confirming
                           ? null
