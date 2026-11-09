@@ -110,4 +110,20 @@ void main() {
     expect(await baskets.loadReceivedBaskets('bob'), isEmpty);
     expect(await baskets.loadComments('sb-2'), isEmpty);
   });
+
+  test('탈퇴 정리: 남의 댓글방에 남긴 내 투표와 내 댓글방의 투표가 지워진다', () async {
+    // amy → bob (amy 의 댓글방 sb-1), bob → amy (bob 의 댓글방 sb-2)
+    await baskets.sendBasket(recipientUids: ['bob'], items: [product(1)], threadId: 'sb-1');
+    appsync.caller = 'bob';
+    await baskets.sendBasket(recipientUids: ['amy'], items: [product(2)], threadId: 'sb-2');
+    await baskets.vote(threadId: 'sb-1', productIds: ['1']);
+    appsync.caller = 'amy';
+    await baskets.vote(threadId: 'sb-2', productIds: ['2']);
+
+    await moderation.deleteMySharedContent();
+
+    appsync.caller = 'bob';
+    expect(await baskets.loadVotes('sb-2'), isEmpty);
+    expect(appsync.table('BasketVote'), isEmpty);
+  });
 }

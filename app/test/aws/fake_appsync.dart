@@ -459,6 +459,8 @@ class FakeAppSync implements GqlRunner {
             .toSet();
         count += _removeWhere('BasketComment',
             (r) => r['authorId'] == caller || myThreads.contains(r['threadId']));
+        count += _removeWhere('BasketVote',
+            (r) => r['voterId'] == caller || myThreads.contains(r['threadId']));
         count += _removeWhere('ReceivedBasket', (r) => r['fromUid'] == caller);
         count += _removeWhere(
             'BasketThread', (r) => myThreads.contains(r['threadId']));

@@ -72,8 +72,8 @@ grantTables(backend.socialActions, [
   { table: 'Block', env: 'BLOCK_TABLE', write: true },
   { table: 'Report', env: 'REPORT_TABLE', write: true },
 ]);
-// 탈퇴 정리(deleteMySocialData)가 작성자·보낸 사람·방장·차단 대상 인덱스로 찾는다.
-grantIndexRead(backend.socialActions, ['BasketComment', 'ReceivedBasket', 'BasketThread', 'Block']);
+// 탈퇴 정리(deleteMySocialData)가 작성자·투표자·보낸 사람·방장·차단 대상 인덱스로 찾는다.
+grantIndexRead(backend.socialActions, ['BasketComment', 'BasketVote', 'ReceivedBasket', 'BasketThread', 'Block']);
 
 // ─────────────────────────────────────────────────────────────
 // AI 추출 엔진(parsing-engine, Fargate) 연동: parsing-proxy를 엔진과 같은 VPC에 붙인다

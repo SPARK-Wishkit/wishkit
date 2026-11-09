@@ -244,6 +244,7 @@ const schema = a.schema({
       data: a.json().required(),
     })
     .identifier(['threadId', 'voterId'])
+    .secondaryIndexes((index) => [index('voterId').name('byVoter')])
     .authorization((allow) => [
       allow.ownersDefinedIn('participantIds').identityClaim('sub').to(['read']),
     ]),

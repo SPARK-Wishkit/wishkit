@@ -598,9 +598,9 @@ export async function reportContent(
 /**
  * 탈퇴하는 사람(caller)이 남긴, 다른 사람에게 보이는 콘텐츠를 지운다. Google Play 계정 삭제 요건
  * (연결된 사용자 데이터 모두 삭제). 앱이 Cognito 계정을 지우기 전에 호출한다.
- * - 남의 댓글방에 쓴 내 댓글
+ * - 남의 댓글방에 쓴 내 댓글, 남긴 내 투표
  * - 친구 받은함에 있는, 내가 보낸 살까말까
- * - 내가 만든 댓글방과 그 안의 댓글 전부
+ * - 내가 만든 댓글방과 그 안의 댓글·투표 전부
  * - 내가 한 차단, 나를 대상으로 한 차단
  * 신고 기록(Report)은 관리 목적상 남긴다(처리방침에 명시).
  */
@@ -611,6 +611,12 @@ export async function deleteMySocialData(envIn: Env, caller: string): Promise<nu
   const myComments = await env.db.query('BasketComment', 'authorId', caller, 'byAuthor');
   for (const c of myComments) {
     await env.db.del('BasketComment', { threadId: c.threadId, commentId: c.commentId });
+    count++;
+  }
+
+  const myVotes = await env.db.query('BasketVote', 'voterId', caller, 'byVoter');
+  for (const v of myVotes) {
+    await env.db.del('BasketVote', { threadId: v.threadId, voterId: v.voterId });
     count++;
   }
 
@@ -625,6 +631,11 @@ export async function deleteMySocialData(envIn: Env, caller: string): Promise<nu
     const comments = await env.db.query('BasketComment', 'threadId', String(t.threadId));
     for (const c of comments) {
       await env.db.del('BasketComment', { threadId: c.threadId, commentId: c.commentId });
+      count++;
+    }
+    const votes = await env.db.query('BasketVote', 'threadId', String(t.threadId));
+    for (const v of votes) {
+      await env.db.del('BasketVote', { threadId: v.threadId, voterId: v.voterId });
       count++;
     }
     await env.db.del('BasketThread', { threadId: t.threadId });
