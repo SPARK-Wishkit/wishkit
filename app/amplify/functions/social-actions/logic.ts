@@ -176,7 +176,7 @@ function withDefaults(env: Env): Required<Env> {
 export async function sendBasket(
   envIn: Env,
   caller: string,
-  args: { threadId: string; recipientIds: string[]; items: unknown; memo?: string | null; allowMultipleVotes?: boolean },
+  args: { threadId: string; recipientIds: string[]; items: unknown; memo?: string | null; allowVoting?: boolean; allowMultipleVotes?: boolean },
 ): Promise<number> {
   const env = withDefaults(envIn);
   const now = env.now().toISOString();
@@ -212,7 +212,15 @@ export async function sendBasket(
     'BasketThread',
     stamp(
       'BasketThread',
-      { threadId: args.threadId, ownerId: caller, participantIds: participants, memo, itemIds, allowMultipleVotes: args.allowMultipleVotes ?? true },
+      {
+        threadId: args.threadId,
+        ownerId: caller,
+        participantIds: participants,
+        memo,
+        itemIds,
+        allowVoting: args.allowVoting ?? true,
+        allowMultipleVotes: args.allowMultipleVotes ?? true,
+      },
       now,
       thread,
     ),
@@ -252,6 +260,7 @@ export async function sendBasket(
             channels: ['friends'],
             memo,
             threadId: args.threadId,
+            allowVoting: args.allowVoting ?? true,
             allowMultipleVotes: args.allowMultipleVotes ?? true,
           },
         },
@@ -427,6 +436,7 @@ export async function voteBasket(
   const thread = await env.db.get('BasketThread', { threadId: args.threadId });
   const participants = (thread?.participantIds as string[] | undefined) ?? [];
   if (!thread || !participants.includes(caller)) fail('VOTE_NOT_ALLOWED');
+  if (thread.allowVoting === false) fail('VOTE_NOT_ALLOWED');
   if (thread.allowMultipleVotes === false && picked.length > 1) fail('MULTIPLE_VOTES_NOT_ALLOWED');
   const allowed = thread.itemIds as string[] | undefined;
   if (allowed && allowed.length > 0 && picked.some((id) => !allowed.includes(id))) {
