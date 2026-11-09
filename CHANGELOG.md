@@ -1,5 +1,26 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-08 - 태그 찾기 3단계: QR → 품번·브랜드 검색 → 사진으로 직접 기록
+
+🌟 **쉬운 설명**
+- 태그에 **QR이 있으면 그걸 먼저 써요.** QR이 상품 페이지로 가면 그 페이지에서 품번을 확인하고 바로 찾아요(검색보다 빠르고 정확). QR이 브랜드 메인으로만 가면, 그 사이트를 "공식몰"로 알고 품번 검색에 써요.
+- QR로 못 찾으면 **예전처럼 품번·브랜드로 검색**해요.
+- 그래도 못 찾으면 **직접 기록 화면**이 돼요. 태그에서 읽은 **상품명·가격은 자동으로 채워지고**, **옷 사진을 찍어 넣으면 그 사진이 상품 사진 자리에** 들어가요. 태그 사진도 같이 저장돼요(나만 봄).
+- 링크도 태그도 없이 시작할 수도 있어요: "사진으로 직접 기록하기" → 옷 사진·이름·가격 입력(태그 사진을 넣으면 이름·가격 자동 입력).
+
+🔧 **기술 설명**
+- 엔진 `qr_codes.py`(신규): zxing-cpp로 QR·DataMatrix·EAN/UPC 디코딩(LLM에 QR을 읽히지 않음 — 주소를 지어낼 수 있어서). GS1 Digital Link·요소 문자열의 GTIN → 태그 바코드. QR 주소는 홉마다 http/https·공개 IP인지 확인하며 리다이렉트를 따라감(SSRF 방지, 4초).
+- `tag_identify.identify()`: 태그 읽기(Gemini)와 디코딩을 `asyncio.gather`로 동시에 → QR 단계(`_try_qr`) → 검색. QR 페이지에서 품번 확인 시 `found`, `match.via='qr'`, 검색 생략. 못 읽은 QR 페이지는 검색이 found가 아닐 때 `needs_confirm`(verified_by `qr`). 읽었는데 품번 없는 QR 페이지는 후보로 안 씀. `parse_search_output(official_hint=)`로 QR 도메인을 공식몰로. 응답에 `qr`(QR별 결과) 추가.
+- 디코딩된 바코드가 OCR 바코드보다 우선(`barcode_source: decoded`, 다르면 `barcode_ocr`에 원래 값).
+- Lambda·GraphQL `IdentifiedTag.matchVia`('qr'|'search') 추가. 앱 `TagIdentifyResult.foundByQr`.
+- 앱 공유 담기: `manualMode`·`clothesPhoto` 추가. not_found·"다른 상품이에요"면 태그 가격까지 자동 입력(기존엔 정가라 비웠음 — 매장에서 본 상품 기록이라 정책 변경). 옷 사진은 저장 시 `product-photos/`에 올려 `Product.image`로 저장, 상품 삭제·회원 탈퇴 때 같이 지움.
+- 저장소 `product-photos/{entity_id}/*` 경로 추가(`storage/resource.ts`) — **배포 필요**. CloudFront는 버킷 전체를 이미 서빙하므로 추가 설정 없음.
+- 테스트: 엔진 `test_qr_codes.py`(디코딩·GS1·SSRF·리다이렉트), `test_tag_identify_qr.py`(QR 우선·폴백 순서). 앱 `file_store_test`·`product_tag_store_test`에 옷 사진·matchVia 추가.
+- 실제 오프라인 태그 83장(21개 브랜드)으로 조정: 디코딩을 여러 단계로(원본 → 흑백·선명·2배 → 겹치는 조각, 최대 1.5초) 해서 앱 크기(1280px) 사진에서 무언가 읽히는 사진이 47장 → 63장. Code128/93/39·ITF 같은 **글자 바코드에 품번이 들어 있는 태그가 많아서**(비이커·크림+·뉴발란스·지오다노·AMOU) 그 내용을 보조 코드로 씀. 매장 내부용 바코드(EAN 접두 02x·04x·2xx — 오클리·유니클로)는 버림.
+- QR 주소 속 품번 비교(`qr_url_code_check`): 끝 한 글자만 다르면 같은 스타일 다른 색상으로 인정(노스페이스 태그 NJ1DS87K ↔ QR NJ1DS87J), 전혀 다른 품번이면 페이지를 못 읽어도 "맞나요?"로 내밀지 않음(8seconds 태그 456X39CM55 ↔ QR 456941CM13).
+
+---
+
 ## 2026-11-06 - 태그 찾기 광고: 전면 광고 → 버튼 아래 큰 배너
 
 🌟 **쉬운 설명**

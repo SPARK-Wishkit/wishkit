@@ -87,6 +87,8 @@ export interface EngineIdentifyResponse {
     price?: number | null;
     regular_price?: number | null;
     image?: string | null;
+    /** 'qr' = 태그 QR이 가리킨 페이지로 찾음. 검색으로 찾았으면 생략. */
+    via?: string | null;
   } | null;
   note: string | null;
 }
@@ -109,6 +111,8 @@ export interface IdentifiedTag {
   matchPrice: number | null;
   matchRegularPrice: number | null;
   matchImage: string | null;
+  /** 'qr'(태그 QR로 찾음) | 'search'(품번·브랜드 검색으로 찾음) | null(링크 없음) */
+  matchVia: string | null;
 }
 
 /** 엔진 서버가 받는 사진 형식. */
@@ -152,5 +156,6 @@ export function toIdentifiedTag(res: EngineIdentifyResponse): IdentifiedTag {
     matchPrice: wonOrNull(res.match?.price),
     matchRegularPrice: wonOrNull(res.match?.regular_price),
     matchImage: typeof image === 'string' && /^https?:\/\//.test(image) ? image : null,
+    matchVia: res.match ? (res.match.via === 'qr' ? 'qr' : 'search') : null,
   };
 }

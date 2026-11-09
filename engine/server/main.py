@@ -7,8 +7,9 @@ engine-ai-prototype(2026-09-18 결정: 몰별 DOM 규칙 폐기, 서버 AI가 �
 흐름: POST /extract {url} → 렌더링(공유 브라우저, 새 컨텍스트) → cleaned_html을 Gemini에 전달
 → ambiguous면 스크린샷으로 Gemini 비전 재시도 → 그라운딩 체크 → JSON 응답.
 
-POST /identify-tag {image_base64, mime_type} → 태그 사진에서 품번을 읽고, 검색으로 찾은 상품
-페이지에 그 품번이 실제로 있는지 확인해 URL을 돌려준다(가격은 읽지 않음 — tag_identify.py 참고).
+POST /identify-tag {image_base64, mime_type} → 태그 사진의 QR을 먼저 따라가 보고(qr_codes.py), 안 되면
+품번을 읽어 검색으로 찾은 상품 페이지에 그 품번이 실제로 있는지 확인해 URL을 돌려준다
+(가격은 읽지 않음 — tag_identify.py 참고).
 
 실행: `uvicorn main:app --host 0.0.0.0 --port 8000` (.env에 GEMINI_API_KEY 필요 — .env.example 참고).
 """
@@ -31,6 +32,7 @@ import config
 from compare import grounding_check
 from metrics import PeakRSSSampler, now_ms
 from providers import ProviderResult, call_gemini, call_gemini_vision
+from qr_codes import decode_codes, resolve_qr_url
 from render import launch_browser, render
 from share_links import resolve_share_link
 from tag_identify import (
@@ -235,6 +237,10 @@ async def identify_tag(req: IdentifyTagRequest):
                 read_pages=lambda tag, urls: timed("read_pages", gemini_once(call_gemini_read_pages, tag, urls)),
                 render_page=lambda url: timed("render", _render_for_identify(url, time_left() - 1.0)),
                 time_left=time_left,
+                # QR·바코드 디코딩과 QR 주소 따라가기는 동기 함수라 스레드에서 돈다.
+                read_codes=lambda img: timed("qr_decode", asyncio.to_thread(decode_codes, img)),
+                resolve_url=lambda url: timed("qr_resolve", asyncio.to_thread(
+                    resolve_qr_url, url, total_timeout=max(1.0, min(4.0, time_left() - 8.0)))),
             ),
             timeout=config.IDENTIFY_TIMEOUT_S,
         )
@@ -249,11 +255,14 @@ async def identify_tag(req: IdentifyTagRequest):
     total_ms = now_ms() - started
     # 한 줄 요약 로그(사진은 남기지 않음): 무엇을 읽고, 어디를 열어 봤고, 왜 떨어졌는지.
     logger.info(
-        "[identify] %s (%dms, 단계 %s) brand=%r code=%r other=%r official=%r note=%r checked=%s match=%s",
+        "[identify] %s (%dms, 단계 %s) brand=%r code=%r other=%r barcode=%r(%s) qr=%s official=%r note=%r "
+        "checked=%s match=%s",
         outcome.status, total_ms, stages, outcome.tag.get("brand"), outcome.tag.get("product_code"),
-        outcome.tag.get("other_codes"), outcome.official_domain, outcome.note,
+        outcome.tag.get("other_codes"), outcome.tag.get("barcode"), outcome.tag.get("barcode_source", "ocr"),
+        [(q.get("kind"), q.get("final_url"), q.get("result")) for q in outcome.qr],
+        outcome.official_domain, outcome.note,
         [(c["url"], c["source"], c["verified"], c["reason"]) for c in outcome.checked],
-        {k: (outcome.match or {}).get(k) for k in ("url", "verified_by", "name", "price", "regular_price")}
+        {k: (outcome.match or {}).get(k) for k in ("url", "verified_by", "via", "name", "price", "regular_price")}
         if outcome.match else None,
     )
     return {**outcome.to_dict(), "metrics": {"total_elapsed_ms": total_ms, "stages_ms": stages}}

@@ -111,6 +111,29 @@ void main() {
     expect(r.matchRegularPrice, 299000);
   });
 
+  test('태그 QR로 찾은 결과는 foundByQr', () {
+    final byQr = TagIdentifyResult.fromJson({
+      'status': 'needs_confirm',
+      'matchUrl': 'https://brand.example/item/1',
+      'matchHost': 'brand.example',
+      'verifiedBy': 'qr',
+      'matchVia': 'qr',
+    });
+    expect(byQr.foundByQr, isTrue);
+    expect(byQr.status, TagIdentifyStatus.needsConfirm);
+
+    final bySearch = TagIdentifyResult.fromJson({
+      'status': 'found',
+      'matchUrl': 'https://brand.example/item/1',
+      'matchVia': 'search',
+    });
+    expect(bySearch.foundByQr, isFalse);
+
+    // 링크가 없으면(not_found) matchVia가 와도 QR로 찾은 게 아니다.
+    final none = TagIdentifyResult.fromJson({'status': 'not_found', 'matchVia': 'qr'});
+    expect(none.foundByQr, isFalse);
+  });
+
   test('이상한 사진 주소·0원은 버린다', () {
     final r = TagIdentifyResult.fromJson({
       'status': 'found',

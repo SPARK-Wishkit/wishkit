@@ -245,7 +245,7 @@ query IdentifyProductTag(\$imageBase64: String!, \$mimeType: String!) {
   identifyProductTag(imageBase64: \$imageBase64, mimeType: \$mimeType) {
     status brand productCode productName color tagPrice officialDomain
     matchUrl matchHost matchSource verifiedBy note
-    matchName matchPrice matchRegularPrice matchImage
+    matchName matchPrice matchRegularPrice matchImage matchVia
   }
 }''';
 

@@ -168,10 +168,41 @@ void main() {
     );
   });
 
+  test('옷 사진: 추측할 수 없는 이름으로 product-photos 에 올리고, 주소로 다시 지운다', () async {
+    final url = await store.uploadProductPhoto([1, 2, 3], mimeType: 'image/png');
+    final path = s3.files.keys.single;
+    expect(path, startsWith('product-photos/${FakeTransport.identity}/'));
+    expect(RegExp(r'/[0-9a-f]{32}\.png$').hasMatch(path), isTrue);
+    expect(s3.files[path]!.$2, 'image/png');
+    expect(url, startsWith('https://cdn.example.net/product-photos/'));
+
+    await store.removeProductPhoto(url);
+    expect(s3.files, isEmpty);
+  });
+
+  test('옷 사진: 쇼핑몰 사진 주소나 태그 사진 주소는 지우지 않는다', () async {
+    final tagUrl = await store.uploadTagPhoto([1], mimeType: 'image/jpeg');
+    await store.removeProductPhoto('https://img.musinsa.com/product-photos/x.jpg');
+    await store.removeProductPhoto(tagUrl);
+    expect(s3.files.length, 1);
+  });
+
+  test('옷 사진: 비었거나 5MB 넘으면 거절', () async {
+    await expectLater(
+      store.uploadProductPhoto(const [], mimeType: 'image/jpeg'),
+      throwsA(predicate((e) => e.toString().contains('비어'))),
+    );
+    await expectLater(
+      store.uploadProductPhoto(List.filled(5 * 1024 * 1024 + 1, 0), mimeType: 'image/jpeg'),
+      throwsA(predicate((e) => e.toString().contains('5MB'))),
+    );
+  });
+
   test('회원 탈퇴: 내 폴더의 파일을 모두 지운다 (태그 사진 포함)', () async {
     await store.uploadAvatar(await fileOf('a.jpg', 1));
     await store.uploadSharePage(pageId: 'p', html: 'x');
     await store.uploadTagPhoto([1], mimeType: 'image/png');
+    await store.uploadProductPhoto([1], mimeType: 'image/jpeg');
     await store.deleteAll();
     expect(s3.files, isEmpty);
   });
