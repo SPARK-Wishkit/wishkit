@@ -2,7 +2,7 @@
   {
     "file": "8seconds_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 12.3,
+    "elapsed_s": 5.7,
     "response": {
       "status": "not_found",
       "tag": {
@@ -39,13 +39,13 @@
         }
       ],
       "metrics": {
-        "total_elapsed_ms": 12295,
+        "total_elapsed_ms": 5699,
         "stages_ms": {
-          "qr_decode": 2197,
-          "read_tag": 4407,
-          "qr_resolve": 109,
-          "render": 3760,
-          "search": 4017
+          "qr_decode": 272,
+          "read_tag": 1620,
+          "qr_resolve": 104,
+          "render": 1638,
+          "search": 2335
         }
       }
     }
@@ -53,7 +53,7 @@
   {
     "file": "8seconds_3.jpeg",
     "verdict": "정답",
-    "elapsed_s": 3.8,
+    "elapsed_s": 2.9,
     "response": {
       "status": "found",
       "tag": {
@@ -95,12 +95,12 @@
         }
       ],
       "metrics": {
-        "total_elapsed_ms": 3780,
+        "total_elapsed_ms": 2878,
         "stages_ms": {
-          "qr_decode": 63,
-          "read_tag": 1882,
-          "qr_resolve": 190,
-          "render": 1708
+          "qr_decode": 70,
+          "read_tag": 1731,
+          "qr_resolve": 102,
+          "render": 1044
         }
       }
     }
@@ -108,7 +108,7 @@
   {
     "file": "PIEDPIPER_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 4.1,
+    "elapsed_s": 3.5,
     "response": {
       "status": "not_found",
       "tag": {
@@ -130,11 +130,11 @@
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 4128,
+        "total_elapsed_ms": 3485,
         "stages_ms": {
-          "qr_decode": 463,
-          "read_tag": 1848,
-          "search": 2279
+          "qr_decode": 366,
+          "read_tag": 1258,
+          "search": 2227
         }
       }
     }
@@ -142,7 +142,7 @@
   {
     "file": "amou_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 4.4,
+    "elapsed_s": 3.3,
     "response": {
       "status": "not_found",
       "tag": {
@@ -155,7 +155,8 @@
         "color": "Black",
         "size": "1",
         "tag_price": 59600,
-        "confidence": "high"
+        "confidence": "high",
+        "barcode_rejected": "AM26FWJP07BK001"
       },
       "official_domain": null,
       "match": null,
@@ -163,11 +164,11 @@
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 4414,
+        "total_elapsed_ms": 3254,
         "stages_ms": {
-          "qr_decode": 493,
-          "read_tag": 2212,
-          "search": 2202
+          "qr_decode": 483,
+          "read_tag": 1707,
+          "search": 1547
         }
       }
     }
@@ -175,7 +176,7 @@
   {
     "file": "eeut_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 6.2,
+    "elapsed_s": 3.7,
     "response": {
       "status": "not_found",
       "tag": {
@@ -196,11 +197,11 @@
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 6241,
+        "total_elapsed_ms": 3659,
         "stages_ms": {
-          "qr_decode": 532,
-          "read_tag": 3389,
-          "search": 2851
+          "qr_decode": 494,
+          "read_tag": 1549,
+          "search": 2109
         }
       }
     }
@@ -208,7 +209,7 @@
   {
     "file": "globeride_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 4.8,
+    "elapsed_s": 5.4,
     "response": {
       "status": "not_found",
       "tag": {
@@ -229,11 +230,11 @@
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 4784,
+        "total_elapsed_ms": 5403,
         "stages_ms": {
-          "qr_decode": 490,
-          "read_tag": 2038,
-          "search": 2744
+          "qr_decode": 479,
+          "read_tag": 3471,
+          "search": 1932
         }
       }
     }
@@ -241,16 +242,14 @@
   {
     "file": "oakley_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 3.9,
+    "elapsed_s": 3.4,
     "response": {
       "status": "not_found",
       "tag": {
         "is_product_tag": true,
         "brand": "OAKLEY",
         "product_code": "FOS902280",
-        "other_codes": [
-          "00200244907084"
-        ],
+        "other_codes": [],
         "barcode": "8051731168707",
         "product_name": "SLUSH POLAR CROWN BEANIE",
         "color": "Pitch Black",
@@ -265,11 +264,11 @@
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 3883,
+        "total_elapsed_ms": 3395,
         "stages_ms": {
-          "qr_decode": 135,
-          "read_tag": 1624,
-          "search": 2258
+          "qr_decode": 138,
+          "read_tag": 1339,
+          "search": 2056
         }
       }
     }
@@ -277,7 +276,7 @@
   {
     "file": "zara_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 20.7,
+    "elapsed_s": 21.9,
     "response": {
       "status": "needs_confirm",
       "tag": {
@@ -305,7 +304,7 @@
         "name": "페이크 퍼 베스트",
         "price": 47900,
         "regular_price": null,
-        "image": "https://static.zara.net/assets/public/8d51/b89b/d3f84f4f968e/d6e9872a8628/00248707832-e1/00248707832-e1.jpg?ts=1788260143357&w=1920"
+        "image": "https://static.zara.net/assets/public/ebab/a04d/09dc41e288f8/9c1049358872/00248707959-e1/00248707959-e1.jpg?ts=1788269719446&w=1920"
       },
       "candidates_checked": [
         {
@@ -331,14 +330,14 @@
         }
       ],
       "metrics": {
-        "total_elapsed_ms": 20684,
+        "total_elapsed_ms": 21917,
         "stages_ms": {
-          "qr_decode": 211,
-          "read_tag": 2231,
-          "qr_resolve": 734,
-          "render": 9393,
-          "search": 3204,
-          "read_pages": 5118
+          "qr_decode": 218,
+          "read_tag": 1623,
+          "qr_resolve": 674,
+          "render": 9998,
+          "search": 3235,
+          "read_pages": 6385
         }
       }
     }
@@ -346,7 +345,7 @@
   {
     "file": "노스페이스_1.jpeg",
     "verdict": "정답",
-    "elapsed_s": 6.6,
+    "elapsed_s": 6.1,
     "response": {
       "status": "found",
       "tag": {
@@ -389,12 +388,12 @@
         }
       ],
       "metrics": {
-        "total_elapsed_ms": 6578,
+        "total_elapsed_ms": 6114,
         "stages_ms": {
-          "qr_decode": 52,
-          "read_tag": 1731,
-          "qr_resolve": 995,
-          "render": 3850
+          "qr_decode": 56,
+          "read_tag": 1898,
+          "qr_resolve": 1161,
+          "render": 3053
         }
       }
     }
@@ -402,7 +401,7 @@
   {
     "file": "노스페이스_3.jpeg",
     "verdict": "정답",
-    "elapsed_s": 6.6,
+    "elapsed_s": 6.0,
     "response": {
       "status": "found",
       "tag": {
@@ -445,12 +444,12 @@
         }
       ],
       "metrics": {
-        "total_elapsed_ms": 6571,
+        "total_elapsed_ms": 5982,
         "stages_ms": {
-          "qr_decode": 47,
-          "read_tag": 2206,
-          "qr_resolve": 1239,
-          "render": 3124
+          "qr_decode": 37,
+          "read_tag": 1781,
+          "qr_resolve": 1165,
+          "render": 3033
         }
       }
     }
@@ -458,9 +457,9 @@
   {
     "file": "뉴발란스_1.jpeg",
     "verdict": "품번 오독",
-    "elapsed_s": 12.3,
+    "elapsed_s": 6.8,
     "response": {
-      "status": "found",
+      "status": "not_found",
       "tag": {
         "is_product_tag": true,
         "brand": "NEW BALANCE",
@@ -469,49 +468,24 @@
           "NBNQG41923B810501"
         ],
         "barcode": null,
-        "product_name": "UNI 헤리티지 스텐드넥 패딩 자켓",
-        "color": "(B8) Grayish Beige",
+        "product_name": "UNI 헤리티지 스탠드넥 패딩 자켓",
+        "color": "Grayish Beige",
         "size": "105(XL)",
         "tag_price": 199000,
         "confidence": "high",
         "barcode_rejected": "NBNQG41923B810501"
       },
       "official_domain": "nbkorea.com",
-      "match": {
-        "url": "https://www.nbkorea.com/product/productDetail.action?styleCode=NBNQG41923&colCode=01&cstCateCd=5002",
-        "host": "nbkorea.com",
-        "source": "official",
-        "verified_by": "product_code_base",
-        "tag_price_seen": false,
-        "title": "New Balance Korea - UNI 헤리티지 스텐드넥 패딩 자켓",
-        "name": null,
-        "price": null,
-        "regular_price": null,
-        "image": null
-      },
-      "candidates_checked": [
-        {
-          "url": "https://www.nbkorea.com/product/productDetail.action?styleCode=NBNQG41923&colCode=01&cstCateCd=5002",
-          "source": "official",
-          "verified": true,
-          "reason": "product_code_base (구글 사본)"
-        },
-        {
-          "url": "https://www.musinsa.com/products/7299569",
-          "source": "mall",
-          "verified": true,
-          "reason": "product_code_base (구글 사본)"
-        }
-      ],
-      "note": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 12279,
+        "total_elapsed_ms": 6814,
         "stages_ms": {
-          "qr_decode": 503,
-          "read_tag": 2080,
-          "search": 7164,
-          "read_pages": 3033
+          "qr_decode": 495,
+          "read_tag": 1454,
+          "search": 5359
         }
       }
     }
@@ -519,7 +493,7 @@
   {
     "file": "마땡킴_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 4.1,
+    "elapsed_s": 4.5,
     "response": {
       "status": "not_found",
       "tag": {
@@ -549,11 +523,11 @@
         }
       ],
       "metrics": {
-        "total_elapsed_ms": 4119,
+        "total_elapsed_ms": 4481,
         "stages_ms": {
-          "qr_decode": 69,
-          "read_tag": 1952,
-          "search": 2165
+          "qr_decode": 68,
+          "read_tag": 2093,
+          "search": 2388
         }
       }
     }
@@ -561,7 +535,7 @@
   {
     "file": "마시모두띠_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 3.5,
+    "elapsed_s": 3.7,
     "response": {
       "status": "not_found",
       "tag": {
@@ -569,7 +543,7 @@
         "brand": null,
         "product_code": "4649 / 635 / 717",
         "other_codes": [
-          "NIF A 70115201"
+          "ALFA 70115201"
         ],
         "barcode": "04649635717011",
         "product_name": null,
@@ -584,11 +558,11 @@
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 3525,
+        "total_elapsed_ms": 3656,
         "stages_ms": {
-          "qr_decode": 1001,
-          "read_tag": 1869,
-          "search": 1656
+          "qr_decode": 847,
+          "read_tag": 2059,
+          "search": 1597
         }
       }
     }
@@ -596,7 +570,7 @@
   {
     "file": "무인앙품_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 4.0,
+    "elapsed_s": 4.1,
     "response": {
       "status": "not_found",
       "tag": {
@@ -620,11 +594,11 @@
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 3998,
+        "total_elapsed_ms": 4092,
         "stages_ms": {
-          "qr_decode": 526,
-          "read_tag": 1833,
-          "search": 2165
+          "qr_decode": 506,
+          "read_tag": 1370,
+          "search": 2721
         }
       }
     }
@@ -632,7 +606,7 @@
   {
     "file": "반스_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 10.3,
+    "elapsed_s": 9.3,
     "response": {
       "status": "not_found",
       "tag": {
@@ -659,21 +633,21 @@
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 10312,
+        "total_elapsed_ms": 9326,
         "stages_ms": {
-          "qr_decode": 485,
-          "read_tag": 1815,
-          "search": 8497
+          "qr_decode": 484,
+          "read_tag": 1730,
+          "search": 7595
         }
       }
     }
   },
   {
     "file": "비이커_1.jpeg",
-    "verdict": "정답",
-    "elapsed_s": 14.8,
+    "verdict": "못 찾음",
+    "elapsed_s": 5.1,
     "response": {
-      "status": "found",
+      "status": "not_found",
       "tag": {
         "is_product_tag": true,
         "brand": "BEAKER",
@@ -689,35 +663,16 @@
         "confidence": "high"
       },
       "official_domain": null,
-      "match": {
-        "url": "https://www.ssfshop.com/BEAKER/GM0026101660266/good?dspCtgNo=",
-        "host": "ssfshop.com",
-        "source": "mall",
-        "verified_by": "product_code",
-        "tag_price_seen": false,
-        "title": "[BEAKER] EPINGLER｜Laced Hoodie - Oatmeal QQ6X39EP20 - SSF SHOP",
-        "name": "Laced Hoodie - Oatmeal",
-        "price": null,
-        "regular_price": null,
-        "image": null
-      },
-      "candidates_checked": [
-        {
-          "url": "https://www.ssfshop.com/BEAKER/GM0026101660266/good?dspCtgNo=",
-          "source": "mall",
-          "verified": true,
-          "reason": "product_code (구글 사본)"
-        }
-      ],
-      "note": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 14775,
+        "total_elapsed_ms": 5095,
         "stages_ms": {
-          "qr_decode": 674,
-          "read_tag": 1566,
-          "search": 2984,
-          "read_pages": 10224
+          "qr_decode": 869,
+          "read_tag": 1877,
+          "search": 3214
         }
       }
     }
@@ -725,17 +680,17 @@
   {
     "file": "아디다스_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 5.0,
+    "elapsed_s": 4.3,
     "response": {
       "status": "not_found",
       "tag": {
         "is_product_tag": true,
         "brand": "adidas",
-        "product_code": "II2842",
+        "product_code": "IJ2842",
         "other_codes": [
           "96000195",
           "0902791854",
-          "CKRAPPSP/0317/V01"
+          "CKRAPPST/0317/V01"
         ],
         "barcode": "4071125716653",
         "product_name": "KNITTED POLO",
@@ -750,11 +705,11 @@
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 4998,
+        "total_elapsed_ms": 4293,
         "stages_ms": {
-          "qr_decode": 648,
-          "read_tag": 2856,
-          "search": 2141
+          "qr_decode": 613,
+          "read_tag": 1933,
+          "search": 2359
         }
       }
     }
@@ -762,7 +717,7 @@
   {
     "file": "유니클로_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 3.4,
+    "elapsed_s": 4.2,
     "response": {
       "status": "not_found",
       "tag": {
@@ -773,27 +728,27 @@
           "HT00189FT-KR",
           "S664-5371",
           "IT10747FT-KR",
-          "05-35-6F009A",
-          "69-006-000(63-08)"
+          "69-006-000(63-08)",
+          "05-35-6F009A"
         ],
         "barcode": "2000225631469",
-        "product_name": "워셔블3D니트크루넥스웨터",
+        "product_name": "워셔블3D니트 크루넥스웨터",
         "color": "69 Navy",
         "size": "XL",
         "tag_price": 49900,
         "confidence": "high"
       },
-      "official_domain": null,
+      "official_domain": "uniqlo.com",
       "match": null,
       "candidates_checked": [],
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 3357,
+        "total_elapsed_ms": 4157,
         "stages_ms": {
-          "qr_decode": 492,
-          "read_tag": 1714,
-          "search": 1642
+          "qr_decode": 485,
+          "read_tag": 1908,
+          "search": 2248
         }
       }
     }
@@ -801,51 +756,35 @@
   {
     "file": "지오다노_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 8.8,
+    "elapsed_s": 2.7,
     "response": {
-      "status": "needs_confirm",
+      "status": "not_found",
       "tag": {
         "is_product_tag": true,
         "brand": "GIORDANO",
-        "product_code": "01 05 6930 12 02",
-        "other_codes": [],
+        "product_code": "01 05 6930 12",
+        "other_codes": [
+          "010569301202"
+        ],
         "barcode": null,
         "product_name": null,
         "color": "Crimson",
         "size": "95",
         "tag_price": 69800,
-        "confidence": "high"
+        "confidence": "high",
+        "barcode_rejected": "010569301202"
       },
       "official_domain": "giordano.co.kr",
-      "match": {
-        "url": "https://m.giordano.co.kr/product/detail.html?product_no=9524&cate_no=1&display_group=3",
-        "host": "m.giordano.co.kr",
-        "source": "official",
-        "verified_by": "search",
-        "tag_price_seen": null,
-        "title": "NEW [변우석] 메리노울 크루넥 니트 - 지오다노",
-        "name": null,
-        "price": null,
-        "regular_price": null,
-        "image": null
-      },
-      "candidates_checked": [
-        {
-          "url": "https://m.giordano.co.kr/product/detail.html?product_no=9524&cate_no=1&display_group=3",
-          "source": "official",
-          "verified": false,
-          "reason": "구글이 페이지를 가져오지 못함"
-        }
-      ],
-      "note": "찾은 페이지에서 품번을 확인하지는 못했어요",
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 8774,
+        "total_elapsed_ms": 2734,
         "stages_ms": {
-          "qr_decode": 475,
-          "read_tag": 1956,
-          "search": 3875,
-          "read_pages": 2941
+          "qr_decode": 484,
+          "read_tag": 1226,
+          "search": 1508
         }
       }
     }
@@ -853,7 +792,7 @@
   {
     "file": "컨버스_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 9.2,
+    "elapsed_s": 10.0,
     "response": {
       "status": "not_found",
       "tag": {
@@ -862,6 +801,7 @@
         "product_code": "A24229C",
         "other_codes": [
           "0128563",
+          "220 ~ 290 (5)",
           "02810128563"
         ],
         "barcode": null,
@@ -884,11 +824,11 @@
         }
       ],
       "metrics": {
-        "total_elapsed_ms": 9244,
+        "total_elapsed_ms": 10040,
         "stages_ms": {
-          "qr_decode": 67,
-          "read_tag": 1878,
-          "search": 7366
+          "qr_decode": 52,
+          "read_tag": 2129,
+          "search": 7910
         }
       }
     }
@@ -896,7 +836,7 @@
   {
     "file": "크림_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 3.6,
+    "elapsed_s": 3.7,
     "response": {
       "status": "not_found",
       "tag": {
@@ -919,11 +859,11 @@
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 3584,
+        "total_elapsed_ms": 3662,
         "stages_ms": {
-          "qr_decode": 513,
-          "read_tag": 1557,
-          "search": 2026
+          "qr_decode": 503,
+          "read_tag": 1257,
+          "search": 2405
         }
       }
     }
@@ -954,11 +894,11 @@
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 3627,
+        "total_elapsed_ms": 3624,
         "stages_ms": {
-          "qr_decode": 432,
-          "read_tag": 1932,
-          "search": 1694
+          "qr_decode": 428,
+          "read_tag": 1328,
+          "search": 2296
         }
       }
     }
@@ -966,7 +906,7 @@
   {
     "file": "퓨마_1.jpeg",
     "verdict": "못 찾음",
-    "elapsed_s": 3.8,
+    "elapsed_s": 4.5,
     "response": {
       "status": "not_found",
       "tag": {
@@ -974,13 +914,12 @@
         "brand": "PUMA",
         "product_code": "PKI4072803",
         "other_codes": [
-          "PKI4072803-G",
-          "0287459"
+          "3987459"
         ],
         "barcode": null,
-        "product_name": "M-STREET MESH",
-        "color": "BUTTERCREAM",
-        "size": "230",
+        "product_name": "H-STREET MESH",
+        "color": "BUTTERCREAM-G",
+        "size": "230 (S)",
         "tag_price": 77000,
         "confidence": "high"
       },
@@ -990,11 +929,11 @@
       "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
       "qr": [],
       "metrics": {
-        "total_elapsed_ms": 3789,
+        "total_elapsed_ms": 4376,
         "stages_ms": {
-          "qr_decode": 433,
-          "read_tag": 1767,
-          "search": 2022
+          "qr_decode": 411,
+          "read_tag": 2021,
+          "search": 2354
         }
       }
     }
