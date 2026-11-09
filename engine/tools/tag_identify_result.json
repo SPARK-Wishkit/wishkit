@@ -1,0 +1,1002 @@
+[
+  {
+    "file": "8seconds_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 12.3,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "8 seconds",
+        "product_code": "456X39CM55",
+        "other_codes": [
+          "45 6X 39 CM55 M"
+        ],
+        "barcode": null,
+        "product_name": null,
+        "color": null,
+        "size": "95/M",
+        "tag_price": 109900,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [
+        {
+          "url": "https://m.ssfshop.com/8seconds/main?brandShopNo=BDMA07A01&brndShopId=8SBSS&utag=ref_ptn:66290",
+          "source": "mall",
+          "verified": false,
+          "reason": "QR · 페이지에 품번 없음"
+        }
+      ],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [
+        {
+          "raw": "http://m.ssfshop.com/public/inflow/partnerGate/serviceId/66290?nextUrl=/public/goods/detail/456941CM13/sapView",
+          "kind": "url",
+          "final_url": "https://m.ssfshop.com:443/public/inflow/partnerGate/serviceId/66290?nextUrl=/public/goods/detail/456941CM13/sapView",
+          "result": "페이지에 품번 없음"
+        }
+      ],
+      "metrics": {
+        "total_elapsed_ms": 12295,
+        "stages_ms": {
+          "qr_decode": 2197,
+          "read_tag": 4407,
+          "qr_resolve": 109,
+          "render": 3760,
+          "search": 4017
+        }
+      }
+    }
+  },
+  {
+    "file": "8seconds_3.jpeg",
+    "verdict": "정답",
+    "elapsed_s": 3.8,
+    "response": {
+      "status": "found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "8 seconds",
+        "product_code": "456X51CM86",
+        "other_codes": [],
+        "barcode": null,
+        "product_name": null,
+        "color": null,
+        "size": "90/S",
+        "tag_price": 49900,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": {
+        "url": "https://m.ssfshop.com/8-seconds/GM0026101658961/good?brandShopNo=BDMA07A01&brndShopId=8SBSS",
+        "host": "m.ssfshop.com",
+        "source": "mall",
+        "verified_by": "product_code",
+        "tag_price_seen": true,
+        "via": "qr"
+      },
+      "candidates_checked": [
+        {
+          "url": "https://m.ssfshop.com/8-seconds/GM0026101658961/good?brandShopNo=BDMA07A01&brndShopId=8SBSS",
+          "source": "mall",
+          "verified": true,
+          "reason": "QR · product_code"
+        }
+      ],
+      "note": null,
+      "qr": [
+        {
+          "raw": "http://m.ssfshop.com/public/inflow/partnerGate/serviceId/66290?nextUrl=/public/goods/detail/456X51CM86/sapView",
+          "kind": "url",
+          "final_url": "https://m.ssfshop.com:443/public/inflow/partnerGate/serviceId/66290?nextUrl=/public/goods/detail/456X51CM86/sapView",
+          "result": "페이지에서 품번 확인(product_code)"
+        }
+      ],
+      "metrics": {
+        "total_elapsed_ms": 3780,
+        "stages_ms": {
+          "qr_decode": 63,
+          "read_tag": 1882,
+          "qr_resolve": 190,
+          "render": 1708
+        }
+      }
+    }
+  },
+  {
+    "file": "PIEDPIPER_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 4.1,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "PIEDPIPER",
+        "product_code": "PP263LT01MT",
+        "other_codes": [],
+        "barcode": "8800353760420",
+        "product_name": "SOUND ATELIER RAGLAN L/S",
+        "color": "MINT",
+        "size": "1",
+        "tag_price": 59000,
+        "confidence": "high",
+        "barcode_source": "decoded"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 4128,
+        "stages_ms": {
+          "qr_decode": 463,
+          "read_tag": 1848,
+          "search": 2279
+        }
+      }
+    }
+  },
+  {
+    "file": "amou_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 4.4,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "AMOU",
+        "product_code": "AM26FWJP07BK001",
+        "other_codes": [],
+        "barcode": null,
+        "product_name": "AMOU [Fleece] Pony Fur Hoodie Zip-up Blac",
+        "color": "Black",
+        "size": "1",
+        "tag_price": 59600,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 4414,
+        "stages_ms": {
+          "qr_decode": 493,
+          "read_tag": 2212,
+          "search": 2202
+        }
+      }
+    }
+  },
+  {
+    "file": "eeut_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 6.2,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "Eeut",
+        "product_code": "EEA3PT01LR001",
+        "other_codes": [],
+        "barcode": null,
+        "product_name": "17 FLEECE PANTS",
+        "color": "LIGHT GREEN",
+        "size": "S",
+        "tag_price": 149000,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 6241,
+        "stages_ms": {
+          "qr_decode": 532,
+          "read_tag": 3389,
+          "search": 2851
+        }
+      }
+    }
+  },
+  {
+    "file": "globeride_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 4.8,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "GLOBERIDE",
+        "product_code": "BW-45026WL",
+        "other_codes": [],
+        "barcode": null,
+        "product_name": null,
+        "color": "LT.BLUE",
+        "size": "FREE",
+        "tag_price": null,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 4784,
+        "stages_ms": {
+          "qr_decode": 490,
+          "read_tag": 2038,
+          "search": 2744
+        }
+      }
+    }
+  },
+  {
+    "file": "oakley_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 3.9,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "OAKLEY",
+        "product_code": "FOS902280",
+        "other_codes": [
+          "00200244907084"
+        ],
+        "barcode": "8051731168707",
+        "product_name": "SLUSH POLAR CROWN BEANIE",
+        "color": "Pitch Black",
+        "size": "U",
+        "tag_price": null,
+        "confidence": "high",
+        "barcode_source": "decoded"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 3883,
+        "stages_ms": {
+          "qr_decode": 135,
+          "read_tag": 1624,
+          "search": 2258
+        }
+      }
+    }
+  },
+  {
+    "file": "zara_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 20.7,
+    "response": {
+      "status": "needs_confirm",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "ZARA",
+        "product_code": "0248/707/959",
+        "other_codes": [
+          "0248/707/959/14"
+        ],
+        "barcode": "00248707959140",
+        "product_name": null,
+        "color": null,
+        "size": "13-14",
+        "tag_price": 47900,
+        "confidence": "high"
+      },
+      "official_domain": "zara.com",
+      "match": {
+        "url": "https://www.zara.com/kr/ko/페이크-퍼-베스트-p00248707.html",
+        "host": "zara.com",
+        "source": "official",
+        "verified_by": "search",
+        "tag_price_seen": null,
+        "title": "페이크 퍼 베스트 - 토프 그레이",
+        "name": "페이크 퍼 베스트",
+        "price": 47900,
+        "regular_price": null,
+        "image": "https://static.zara.net/assets/public/8d51/b89b/d3f84f4f968e/d6e9872a8628/00248707832-e1/00248707832-e1.jpg?ts=1788260143357&w=1920"
+      },
+      "candidates_checked": [
+        {
+          "url": "https://www.zara.com/kr/ko/%E1%84%91%E1%85%A6%E1%84%8B%E1%85%B5%E1%84%8F%E1%85%B3-%E1%84%91%E1%85%A5-%E1%84%87%E1%85%A6%E1%84%89%E1%85%B3%E1%84%90%E1%85%B3-p00248707.html?v1=608478320",
+          "source": "official",
+          "verified": null,
+          "reason": "QR · 페이지를 못 읽음 · QR 주소의 품번이 태그와 다름"
+        },
+        {
+          "url": "https://www.zara.com/kr/ko/페이크-퍼-베스트-p00248707.html",
+          "source": "official",
+          "verified": null,
+          "reason": "구글이 페이지를 가져오지 못함"
+        }
+      ],
+      "note": "찾은 페이지에서 품번을 확인하지는 못했어요",
+      "qr": [
+        {
+          "raw": "http://www.zara.com/qr/0024870795914",
+          "kind": "url",
+          "final_url": "https://www.zara.com/kr/ko/%E1%84%91%E1%85%A6%E1%84%8B%E1%85%B5%E1%84%8F%E1%85%B3-%E1%84%91%E1%85%A5-%E1%84%87%E1%85%A6%E1%84%89%E1%85%B3%E1%84%90%E1%85%B3-p00248707.html?v1=608478320",
+          "result": "페이지를 못 읽음 · QR 주소의 품번이 태그와 다름"
+        }
+      ],
+      "metrics": {
+        "total_elapsed_ms": 20684,
+        "stages_ms": {
+          "qr_decode": 211,
+          "read_tag": 2231,
+          "qr_resolve": 734,
+          "render": 9393,
+          "search": 3204,
+          "read_pages": 5118
+        }
+      }
+    }
+  },
+  {
+    "file": "노스페이스_1.jpeg",
+    "verdict": "정답",
+    "elapsed_s": 6.6,
+    "response": {
+      "status": "found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "THE NORTH FACE",
+        "product_code": "NN2PS68K",
+        "other_codes": [],
+        "barcode": "1000008667167",
+        "product_name": "ELLA TOTE BAG MINI",
+        "color": "CRE / CREAM",
+        "size": "ONE",
+        "tag_price": 79000,
+        "confidence": "high",
+        "barcode_source": "decoded"
+      },
+      "official_domain": "thenorthfacekorea.co.kr",
+      "match": {
+        "url": "https://www.thenorthfacekorea.co.kr/product/NN2PS68J",
+        "host": "thenorthfacekorea.co.kr",
+        "source": "official",
+        "verified_by": "product_code_base",
+        "tag_price_seen": true,
+        "via": "qr"
+      },
+      "candidates_checked": [
+        {
+          "url": "https://www.thenorthfacekorea.co.kr/product/NN2PS68J",
+          "source": "official",
+          "verified": true,
+          "reason": "QR · product_code_base"
+        }
+      ],
+      "note": null,
+      "qr": [
+        {
+          "raw": "https://www.thenorthfacekorea.co.kr/product/NN2PS68J",
+          "kind": "url",
+          "final_url": "https://www.thenorthfacekorea.co.kr/product/NN2PS68J",
+          "result": "페이지에서 품번 확인(product_code_base)"
+        }
+      ],
+      "metrics": {
+        "total_elapsed_ms": 6578,
+        "stages_ms": {
+          "qr_decode": 52,
+          "read_tag": 1731,
+          "qr_resolve": 995,
+          "render": 3850
+        }
+      }
+    }
+  },
+  {
+    "file": "노스페이스_3.jpeg",
+    "verdict": "정답",
+    "elapsed_s": 6.6,
+    "response": {
+      "status": "found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "THE NORTH FACE",
+        "product_code": "NJ1DS87K",
+        "other_codes": [],
+        "barcode": "1000008635265",
+        "product_name": "W'S PROJECT DOWN JACKET (RDS)",
+        "color": "PBL / PASTEL BLUE",
+        "size": "85 (S)",
+        "tag_price": 448000,
+        "confidence": "high",
+        "barcode_source": "decoded"
+      },
+      "official_domain": "thenorthfacekorea.co.kr",
+      "match": {
+        "url": "https://www.thenorthfacekorea.co.kr/product/NJ1DS87J",
+        "host": "thenorthfacekorea.co.kr",
+        "source": "official",
+        "verified_by": "product_code_base",
+        "tag_price_seen": true,
+        "via": "qr"
+      },
+      "candidates_checked": [
+        {
+          "url": "https://www.thenorthfacekorea.co.kr/product/NJ1DS87J",
+          "source": "official",
+          "verified": true,
+          "reason": "QR · product_code_base"
+        }
+      ],
+      "note": null,
+      "qr": [
+        {
+          "raw": "https://www.thenorthfacekorea.co.kr/product/NJ1DS87J",
+          "kind": "url",
+          "final_url": "https://www.thenorthfacekorea.co.kr/product/NJ1DS87J",
+          "result": "페이지에서 품번 확인(product_code_base)"
+        }
+      ],
+      "metrics": {
+        "total_elapsed_ms": 6571,
+        "stages_ms": {
+          "qr_decode": 47,
+          "read_tag": 2206,
+          "qr_resolve": 1239,
+          "render": 3124
+        }
+      }
+    }
+  },
+  {
+    "file": "뉴발란스_1.jpeg",
+    "verdict": "품번 오독",
+    "elapsed_s": 12.3,
+    "response": {
+      "status": "found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "NEW BALANCE",
+        "product_code": "NBNQG41923-01",
+        "other_codes": [
+          "NBNQG41923B810501"
+        ],
+        "barcode": null,
+        "product_name": "UNI 헤리티지 스텐드넥 패딩 자켓",
+        "color": "(B8) Grayish Beige",
+        "size": "105(XL)",
+        "tag_price": 199000,
+        "confidence": "high",
+        "barcode_rejected": "NBNQG41923B810501"
+      },
+      "official_domain": "nbkorea.com",
+      "match": {
+        "url": "https://www.nbkorea.com/product/productDetail.action?styleCode=NBNQG41923&colCode=01&cstCateCd=5002",
+        "host": "nbkorea.com",
+        "source": "official",
+        "verified_by": "product_code_base",
+        "tag_price_seen": false,
+        "title": "New Balance Korea - UNI 헤리티지 스텐드넥 패딩 자켓",
+        "name": null,
+        "price": null,
+        "regular_price": null,
+        "image": null
+      },
+      "candidates_checked": [
+        {
+          "url": "https://www.nbkorea.com/product/productDetail.action?styleCode=NBNQG41923&colCode=01&cstCateCd=5002",
+          "source": "official",
+          "verified": true,
+          "reason": "product_code_base (구글 사본)"
+        },
+        {
+          "url": "https://www.musinsa.com/products/7299569",
+          "source": "mall",
+          "verified": true,
+          "reason": "product_code_base (구글 사본)"
+        }
+      ],
+      "note": null,
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 12279,
+        "stages_ms": {
+          "qr_decode": 503,
+          "read_tag": 2080,
+          "search": 7164,
+          "read_pages": 3033
+        }
+      }
+    }
+  },
+  {
+    "file": "마땡킴_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 4.1,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "KIMMATIN",
+        "product_code": "KM269OFU001M",
+        "other_codes": [
+          "KM269OFU001MBBS"
+        ],
+        "barcode": null,
+        "product_name": "HIGH-NECK SHEARLING JACKET",
+        "color": "BLACK",
+        "size": "S (S/M)",
+        "tag_price": 598000,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [
+        {
+          "raw": "KM269OFU001MBBS",
+          "kind": "text",
+          "final_url": null,
+          "result": "주소가 아닌 QR(글자 속 코드만 사용)"
+        }
+      ],
+      "metrics": {
+        "total_elapsed_ms": 4119,
+        "stages_ms": {
+          "qr_decode": 69,
+          "read_tag": 1952,
+          "search": 2165
+        }
+      }
+    }
+  },
+  {
+    "file": "마시모두띠_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 3.5,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": null,
+        "product_code": "4649 / 635 / 717",
+        "other_codes": [
+          "NIF A 70115201"
+        ],
+        "barcode": "04649635717011",
+        "product_name": null,
+        "color": null,
+        "size": "25",
+        "tag_price": 129000,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 3525,
+        "stages_ms": {
+          "qr_decode": 1001,
+          "read_tag": 1869,
+          "search": 1656
+        }
+      }
+    }
+  },
+  {
+    "file": "무인앙품_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 4.0,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": null,
+        "product_code": null,
+        "other_codes": [
+          "AA0VVA6A-014"
+        ],
+        "barcode": "4550723618786",
+        "product_name": "야크 울 리브 하프 집업 스웨터",
+        "color": "라이트베이지",
+        "size": "L",
+        "tag_price": 99900,
+        "confidence": "high",
+        "barcode_source": "decoded"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 3998,
+        "stages_ms": {
+          "qr_decode": 526,
+          "read_tag": 1833,
+          "search": 2165
+        }
+      }
+    }
+  },
+  {
+    "file": "반스_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 10.3,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "VANS",
+        "product_code": "VN000T78RKZ",
+        "other_codes": [
+          "CP105149",
+          "000T78",
+          "508957"
+        ],
+        "barcode": "0198266608716",
+        "product_name": "PREMIUM FULL ZI",
+        "color": "RKZ",
+        "size": "S",
+        "tag_price": 175000,
+        "confidence": "high",
+        "barcode_ocr": "198266608716",
+        "barcode_source": "decoded"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 10312,
+        "stages_ms": {
+          "qr_decode": 485,
+          "read_tag": 1815,
+          "search": 8497
+        }
+      }
+    }
+  },
+  {
+    "file": "비이커_1.jpeg",
+    "verdict": "정답",
+    "elapsed_s": 14.8,
+    "response": {
+      "status": "found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "BEAKER",
+        "product_code": "QQ6X39EP20",
+        "other_codes": [
+          "QQ6X39EP20 F"
+        ],
+        "barcode": null,
+        "product_name": null,
+        "color": null,
+        "size": "F",
+        "tag_price": 298000,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": {
+        "url": "https://www.ssfshop.com/BEAKER/GM0026101660266/good?dspCtgNo=",
+        "host": "ssfshop.com",
+        "source": "mall",
+        "verified_by": "product_code",
+        "tag_price_seen": false,
+        "title": "[BEAKER] EPINGLER｜Laced Hoodie - Oatmeal QQ6X39EP20 - SSF SHOP",
+        "name": "Laced Hoodie - Oatmeal",
+        "price": null,
+        "regular_price": null,
+        "image": null
+      },
+      "candidates_checked": [
+        {
+          "url": "https://www.ssfshop.com/BEAKER/GM0026101660266/good?dspCtgNo=",
+          "source": "mall",
+          "verified": true,
+          "reason": "product_code (구글 사본)"
+        }
+      ],
+      "note": null,
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 14775,
+        "stages_ms": {
+          "qr_decode": 674,
+          "read_tag": 1566,
+          "search": 2984,
+          "read_pages": 10224
+        }
+      }
+    }
+  },
+  {
+    "file": "아디다스_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 5.0,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "adidas",
+        "product_code": "II2842",
+        "other_codes": [
+          "96000195",
+          "0902791854",
+          "CKRAPPSP/0317/V01"
+        ],
+        "barcode": "4071125716653",
+        "product_name": "KNITTED POLO",
+        "color": "CBURGU/WARVAN",
+        "size": "XL",
+        "tag_price": 139000,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 4998,
+        "stages_ms": {
+          "qr_decode": 648,
+          "read_tag": 2856,
+          "search": 2141
+        }
+      }
+    }
+  },
+  {
+    "file": "유니클로_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 3.4,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "UNIQLO",
+        "product_code": "351-490692",
+        "other_codes": [
+          "HT00189FT-KR",
+          "S664-5371",
+          "IT10747FT-KR",
+          "05-35-6F009A",
+          "69-006-000(63-08)"
+        ],
+        "barcode": "2000225631469",
+        "product_name": "워셔블3D니트크루넥스웨터",
+        "color": "69 Navy",
+        "size": "XL",
+        "tag_price": 49900,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 3357,
+        "stages_ms": {
+          "qr_decode": 492,
+          "read_tag": 1714,
+          "search": 1642
+        }
+      }
+    }
+  },
+  {
+    "file": "지오다노_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 8.8,
+    "response": {
+      "status": "needs_confirm",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "GIORDANO",
+        "product_code": "01 05 6930 12 02",
+        "other_codes": [],
+        "barcode": null,
+        "product_name": null,
+        "color": "Crimson",
+        "size": "95",
+        "tag_price": 69800,
+        "confidence": "high"
+      },
+      "official_domain": "giordano.co.kr",
+      "match": {
+        "url": "https://m.giordano.co.kr/product/detail.html?product_no=9524&cate_no=1&display_group=3",
+        "host": "m.giordano.co.kr",
+        "source": "official",
+        "verified_by": "search",
+        "tag_price_seen": null,
+        "title": "NEW [변우석] 메리노울 크루넥 니트 - 지오다노",
+        "name": null,
+        "price": null,
+        "regular_price": null,
+        "image": null
+      },
+      "candidates_checked": [
+        {
+          "url": "https://m.giordano.co.kr/product/detail.html?product_no=9524&cate_no=1&display_group=3",
+          "source": "official",
+          "verified": false,
+          "reason": "구글이 페이지를 가져오지 못함"
+        }
+      ],
+      "note": "찾은 페이지에서 품번을 확인하지는 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 8774,
+        "stages_ms": {
+          "qr_decode": 475,
+          "read_tag": 1956,
+          "search": 3875,
+          "read_pages": 2941
+        }
+      }
+    }
+  },
+  {
+    "file": "컨버스_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 9.2,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "CONVERSE",
+        "product_code": "A24229C",
+        "other_codes": [
+          "0128563",
+          "02810128563"
+        ],
+        "barcode": null,
+        "product_name": "CHUCK 70 X OX",
+        "color": "PARCHMENT/GAR",
+        "size": null,
+        "tag_price": 99000,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [
+        {
+          "raw": "02810128563",
+          "kind": "text",
+          "final_url": null,
+          "result": "주소가 아닌 QR(글자 속 코드만 사용)"
+        }
+      ],
+      "metrics": {
+        "total_elapsed_ms": 9244,
+        "stages_ms": {
+          "qr_decode": 67,
+          "read_tag": 1878,
+          "search": 7366
+        }
+      }
+    }
+  },
+  {
+    "file": "크림_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 3.6,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "KREAM",
+        "product_code": "DW6DDWJKD87LB",
+        "other_codes": [
+          "DW6DDWJKD87LB_F"
+        ],
+        "barcode": null,
+        "product_name": null,
+        "color": null,
+        "size": "F",
+        "tag_price": 695000,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 3584,
+        "stages_ms": {
+          "qr_decode": 513,
+          "read_tag": 1557,
+          "search": 2026
+        }
+      }
+    }
+  },
+  {
+    "file": "크림플러스_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 3.6,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "KREAM+",
+        "product_code": "KW6DKNCAE08NY",
+        "other_codes": [
+          "KW6DKNCAE08NY_002"
+        ],
+        "barcode": null,
+        "product_name": null,
+        "color": null,
+        "size": "002",
+        "tag_price": 185000,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 3627,
+        "stages_ms": {
+          "qr_decode": 432,
+          "read_tag": 1932,
+          "search": 1694
+        }
+      }
+    }
+  },
+  {
+    "file": "퓨마_1.jpeg",
+    "verdict": "못 찾음",
+    "elapsed_s": 3.8,
+    "response": {
+      "status": "not_found",
+      "tag": {
+        "is_product_tag": true,
+        "brand": "PUMA",
+        "product_code": "PKI4072803",
+        "other_codes": [
+          "PKI4072803-G",
+          "0287459"
+        ],
+        "barcode": null,
+        "product_name": "M-STREET MESH",
+        "color": "BUTTERCREAM",
+        "size": "230",
+        "tag_price": 77000,
+        "confidence": "high"
+      },
+      "official_domain": null,
+      "match": null,
+      "candidates_checked": [],
+      "note": "검색 결과에서 쇼핑몰 상품 페이지를 찾지 못했어요",
+      "qr": [],
+      "metrics": {
+        "total_elapsed_ms": 3789,
+        "stages_ms": {
+          "qr_decode": 433,
+          "read_tag": 1767,
+          "search": 2022
+        }
+      }
+    }
+  }
+]
