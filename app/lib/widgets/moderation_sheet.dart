@@ -165,15 +165,22 @@ Future<void> _report(
                 style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
               ),
               const SizedBox(height: 8),
-              for (final r in ReportReason.values)
-                RadioListTile<ReportReason>(
-                  value: r,
-                  groupValue: reason,
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(r.label, style: DiaryTheme.body(14)),
-                  onChanged: (v) => setLocal(() => reason = v),
+              RadioGroup<ReportReason>(
+                groupValue: reason,
+                onChanged: (v) => setLocal(() => reason = v),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final r in ReportReason.values)
+                      RadioListTile<ReportReason>(
+                        value: r,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(r.label, style: DiaryTheme.body(14)),
+                      ),
+                  ],
                 ),
+              ),
               TextField(
                 controller: detailCtrl,
                 maxLength: 500,

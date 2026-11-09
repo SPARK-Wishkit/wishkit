@@ -92,7 +92,7 @@ class FakeAppSync implements GqlRunner {
       _owns(model, row) || (model == 'Follow' && row['followeeId'] == caller);
 
   static String _op(String document) =>
-      RegExp(r'\{\s*(\w+)\(').firstMatch(document)!.group(1)!;
+      RegExp(r'\{\s*(\w+)').firstMatch(document)!.group(1)!;
 
   @override
   Future<Map<String, dynamic>> query(
