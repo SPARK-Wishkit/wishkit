@@ -119,8 +119,12 @@ Future<({Set<String> friendIds, String memo, bool allowVoting, bool allowMultipl
                         style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
                       ),
                     ),
-                    if (allowVoting)
-                      Padding(
+                    Visibility(
+                      visible: allowVoting,
+                      maintainState: true,
+                      maintainAnimation: true,
+                      maintainSize: true,
+                      child: Padding(
                         padding: const EdgeInsets.only(left: 28),
                         child: CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
@@ -143,6 +147,7 @@ Future<({Set<String> friendIds, String memo, bool allowVoting, bool allowMultipl
                           ),
                         ),
                       ),
+                    ),
                     FilledButton(
                       onPressed: selected.isEmpty || confirming
                           ? null
