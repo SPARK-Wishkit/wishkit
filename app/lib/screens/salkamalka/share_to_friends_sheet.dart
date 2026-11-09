@@ -106,6 +106,9 @@ Future<({Set<String> friendIds, String memo, bool allowVoting, bool allowMultipl
                           ? null
                           : (value) => setModalState(() {
                                 allowVoting = value ?? false;
+                                if (!allowVoting) {
+                                  allowMultipleVotes = false;
+                                }
                               }),
                       title: Text(
                         '투표 보내기',
