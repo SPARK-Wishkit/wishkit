@@ -9,7 +9,6 @@ import '../../auth/auth_validators.dart';
 import '../../data/app_store.dart';
 import '../../theme/avatar_presets.dart';
 import '../../theme/diary_theme.dart';
-import '../../widgets/add_folder_dialog.dart';
 import '../../widgets/diary_widgets.dart';
 
 class MyPageScreen extends StatefulWidget {
@@ -201,12 +200,6 @@ class _MyPageScreenState extends State<MyPageScreen> {
                         context.go('/');
                       },
                     ),
-                  _FolderChip(
-                    width: chipWidth,
-                    label: '폴더 추가',
-                    icon: Icons.add,
-                    onTap: () => showAddFolderDialog(context, store),
-                  ),
                 ],
                   );
                 },
