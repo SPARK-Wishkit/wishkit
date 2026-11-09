@@ -1,0 +1,9 @@
+# 이 파일을 android/key.properties 로 복사해 값을 채운다. key.properties 는 git 에 올리지 않는다.
+# 키스토어(.jks)는 레포 밖에 두고, 잃어버리지 않게 팀 금고(1Password 등)에 백업한다.
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=upload
+storeFile=/절대/경로/upload-keystore.jks
+
+# 실제 AdMob 앱 ID (AdMob 콘솔 → 앱 → 앱 설정). 비우면 테스트 앱 ID 로 빌드된다.
+admobAppId=ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY
