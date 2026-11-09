@@ -71,6 +71,7 @@ export const handler = async (event: AmplifyFunctionEvent<Args>): Promise<unknow
           recipientIds: a.recipientIds,
           items: a.items,
           memo: a.memo,
+          allowVoting: a.allowVoting,
           allowMultipleVotes: a.allowMultipleVotes,
         });
       case 'addBasketComment':
