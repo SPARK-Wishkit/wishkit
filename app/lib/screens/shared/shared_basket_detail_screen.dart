@@ -6,6 +6,7 @@ import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/moderation_sheet.dart';
 import '../mypage/sent_baskets_screen.dart';
 import '../product/product_detail_screen.dart';
 import '../wishlist/wishlist_screen.dart';
@@ -78,6 +79,22 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
               tooltip: '공유하기',
               onPressed: () => showSentBasketShareSheet(context, store, basket),
               icon: const Icon(Icons.ios_share),
+            ),
+          // 친구에게 받은 살까말까: 신고 / 보낸 사람 차단 (Google Play UGC 정책)
+          if (!isMine && basket.fromUid.isNotEmpty)
+            IconButton(
+              tooltip: '신고·차단',
+              icon: const Icon(Icons.more_vert),
+              onPressed: () async {
+                final blocked = await showModerationSheet(
+                  context,
+                  store: store,
+                  targetUid: basket.fromUid,
+                  targetName: basket.ownerName,
+                  target: ReportTarget.basket(basketId: basket.id),
+                );
+                if (blocked && context.mounted) context.pop();
+              },
             ),
         ],
       ),
@@ -212,11 +229,9 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
                           comment: thread.root,
                           isMine: thread.root.authorUid == store.uid,
                           onReply: () => _startReply(thread.root),
-                          onManage: () => _manageComment(
-                            store,
-                            basket,
-                            thread.root,
-                          ),
+                          onManage: thread.root.authorUid == store.uid
+                              ? () => _manageComment(store, basket, thread.root)
+                              : () => _moderateComment(store, thread.root),
                         ),
                         for (final reply in thread.replies)
                           _CommentTile(
@@ -224,11 +239,9 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
                             indented: true,
                             isMine: reply.authorUid == store.uid,
                             onReply: () => _startReply(thread.root),
-                            onManage: () => _manageComment(
-                              store,
-                              basket,
-                              reply,
-                            ),
+                            onManage: reply.authorUid == store.uid
+                                ? () => _manageComment(store, basket, reply)
+                                : () => _moderateComment(store, reply),
                           ),
                       ],
                   ],
@@ -270,6 +283,21 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
       _editing = null;
     });
     _commentCtrl.clear();
+  }
+
+  /// 다른 사람 댓글: 신고 / 작성자 차단.
+  Future<void> _moderateComment(AppStore store, BasketComment comment) async {
+    if (comment.authorUid.isEmpty) return;
+    await showModerationSheet(
+      context,
+      store: store,
+      targetUid: comment.authorUid,
+      targetName: comment.authorName,
+      target: ReportTarget.comment(
+        commentId: comment.id,
+        threadId: comment.threadId,
+      ),
+    );
   }
 
   Future<void> _manageComment(
@@ -529,7 +557,8 @@ class _CommentTile extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(left: indented ? 36 : 0, bottom: 12),
       child: GestureDetector(
-        onLongPress: isMine ? onManage : null,
+        // 내 댓글: 수정·삭제, 다른 사람 댓글: 신고·차단
+        onLongPress: onManage,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -580,9 +609,9 @@ class _CommentTile extends StatelessWidget {
                 ],
               ),
             ),
-            if (isMine)
+            if (onManage != null)
               IconButton(
-                tooltip: '댓글 관리',
+                tooltip: isMine ? '댓글 관리' : '신고·차단',
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),

@@ -12,6 +12,7 @@ import '../auth/auth_controller.dart';
 import '../auth/auth_models.dart';
 import '../models/models.dart';
 import '../services/account_repository.dart';
+import '../services/aws/moderation_store.dart';
 import '../services/parsing_bridge.dart';
 import '../services/push_notification_service.dart';
 import '../services/share_page_html.dart';
@@ -88,6 +89,10 @@ class AppStore extends ChangeNotifier {
   List<AppNotification> notifications = [];
   List<SharedBasket> receivedBaskets = [];
   final Map<String, SharedBasket> sharedBaskets = {};
+
+  /// 내가 차단한 사람들의 uid. 이 사람들의 프로필·살까말까·댓글·알림은 화면에서 숨긴다.
+  /// (서버도 차단 관계면 새 살까말까·댓글·알림을 막는다)
+  Set<String> blockedUids = {};
 
   /// Baskets the user X-ed out of the 내 친구 탭 feed. The profile doc is the
   /// source of truth; this is the local cache the UI reads, kept so nothing
@@ -172,6 +177,12 @@ class AppStore extends ChangeNotifier {
     tabs = await _repo.loadTabs(fresh.uid);
     products = await _repo.loadProducts(fresh.uid);
 
+    try {
+      blockedUids = await _repo.blockedIds(fresh.uid);
+    } catch (e) {
+      debugPrint('AppStore: 차단 목록 불러오기 실패 (${e.runtimeType})');
+    }
+
     // 친구·팔로우 — 불러오기가 실패해도 내 데이터 화면은 쓸 수 있게 한다.
     try {
       final following = (await _repo.followingIds(fresh.uid)).toSet();
@@ -188,6 +199,7 @@ class AppStore extends ChangeNotifier {
       debugPrint('AppStore: 친구 정보 불러오기 실패 (${e.runtimeType})');
     }
     await _loadInboxSafely(fresh.uid);
+    _dropBlocked();
     _syncFriendCounts();
     isLoggedIn = true;
     selectedTabId = 'all';
@@ -282,6 +294,7 @@ class AppStore extends ChangeNotifier {
     followerUsers = [];
     notifications = [];
     receivedBaskets = [];
+    blockedUids = {};
     _hiddenFeedIds = {};
     _pendingHideIds = {};
     _pendingUnhideIds = {};
@@ -1029,6 +1042,7 @@ class AppStore extends ChangeNotifier {
     friendWishlists = await _repo.loadFriendWishlists(friends);
     followerUsers = await _repo.loadUsers(await _repo.followerIds(userId));
     await _loadInboxSafely(userId);
+    _dropBlocked();
     _syncFriendCounts();
     final profile = await _repo.loadProfile(userId);
     // 숫자는 방금 불러온 실제 목록으로 — 프로필 문서에 저장된 팔로워 수는 옛 값일 수 있다.
@@ -1062,6 +1076,7 @@ class AppStore extends ChangeNotifier {
     } catch (_) {
       notifications = [];
     }
+    _dropBlocked();
     notifyListeners();
   }
 
@@ -1143,6 +1158,76 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── 신고 · 차단 ──────────────────────────────────────────────
+
+  bool isBlocked(String otherUid) => blockedUids.contains(otherUid);
+
+  /// 차단한 사람과 관련된 항목을 화면 목록에서 뺀다.
+  void _dropBlocked() {
+    if (blockedUids.isEmpty) return;
+    bool ok(String id) => id.isEmpty || !blockedUids.contains(id);
+    friends = friends.where((f) => ok(f.id)).toList();
+    friendWishlists = friendWishlists.where((w) => ok(w.friendId)).toList();
+    followerUsers = followerUsers.where((u) => ok(u.uid)).toList();
+    receivedBaskets = receivedBaskets.where((b) => ok(b.fromUid)).toList();
+    notifications = notifications.where((n) => ok(n.fromUid)).toList();
+  }
+
+  /// [targetUid] 를 차단한다. 서로의 팔로우도 끊는다.
+  Future<void> blockUser(String targetUid) async {
+    final userId = uid;
+    if (userId == null) throw Exception('로그인된 계정이 없어요.');
+    if (targetUid.isEmpty || targetUid == userId) return;
+    await _repo.setBlocked(myUid: userId, targetUid: targetUid, blocked: true);
+    blockedUids = {...blockedUids, targetUid};
+    try {
+      await _repo.setFollowing(
+        myUid: userId,
+        targetUid: targetUid,
+        follow: false,
+      );
+    } catch (_) {}
+    try {
+      await _repo.removeFollower(myUid: userId, followerUid: targetUid);
+    } catch (_) {}
+    _dropBlocked();
+    _syncFriendCounts();
+    currentUser = currentUser.copyWith(followers: followerUsers.length);
+    notifyListeners();
+    unawaited(refreshSocialCounts());
+  }
+
+  Future<void> unblockUser(String targetUid) async {
+    final userId = uid;
+    if (userId == null) throw Exception('로그인된 계정이 없어요.');
+    await _repo.setBlocked(myUid: userId, targetUid: targetUid, blocked: false);
+    blockedUids = {...blockedUids}..remove(targetUid);
+    notifyListeners();
+    try {
+      await refreshFriends();
+    } catch (_) {}
+  }
+
+  /// 차단한 사람들의 공개 프로필 (차단 목록 화면).
+  Future<List<AppUser>> loadBlockedUsers() => _repo.loadUsers(blockedUids.toList());
+
+  Future<void> reportContent({
+    required ReportTargetType type,
+    required String targetUserId,
+    required ReportReason reason,
+    String? targetId,
+    String? threadId,
+    String? detail,
+  }) =>
+      _repo.report(
+        type: type,
+        targetUserId: targetUserId,
+        reason: reason,
+        targetId: targetId,
+        threadId: threadId,
+        detail: detail,
+      );
+
   void _watchInbox(String userId) {
     _stopInboxWatch();
     var primed = false;
@@ -1158,6 +1243,7 @@ class AppStore extends ChangeNotifier {
         }
         for (final n in list) {
           if (!seen.contains(n.id) &&
+              !blockedUids.contains(n.fromUid) &&
               n.type != AppNotificationType.review &&
               n.type != AppNotificationType.list) {
             if (notificationsEnabled) {
@@ -1171,10 +1257,12 @@ class AppStore extends ChangeNotifier {
         ..addAll(list.map((n) => n.id));
       primed = true;
       notifications = list;
+      _dropBlocked();
       notifyListeners();
     }, onError: (_) {});
     _receivedBasketSub = _repo.watchReceivedBaskets(userId).listen((list) {
       receivedBaskets = list;
+      _dropBlocked();
       notifyListeners();
     }, onError: (_) {});
   }
@@ -1409,7 +1497,12 @@ class AppStore extends ChangeNotifier {
     if (threadId.isEmpty || !_backendConfigured || uid == null) {
       return Stream.value(const []);
     }
-    return _repo.watchBasketComments(threadId);
+    return _repo.watchBasketComments(threadId).map(
+          (list) => [
+            for (final c in list)
+              if (!blockedUids.contains(c.authorUid)) c,
+          ],
+        );
   }
 
   /// Returns false when a comment on this thread is already being posted.

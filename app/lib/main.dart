@@ -16,6 +16,7 @@ import 'data/app_store.dart';
 import 'services/push_notification_service.dart';
 import 'screens/friends/friends_screen.dart';
 import 'screens/friends/notifications_screen.dart';
+import 'screens/mypage/blocked_users_screen.dart';
 import 'screens/mypage/follow_list_screen.dart';
 import 'screens/mypage/mypage_screen.dart';
 import 'screens/mypage/sent_baskets_screen.dart';
@@ -28,6 +29,7 @@ import 'screens/wishlist/wishlist_screen.dart';
 import 'services/share_input.dart';
 import 'theme/diary_scale.dart';
 import 'theme/diary_theme.dart';
+import 'widgets/moderation_sheet.dart';
 import 'widgets/diary_widgets.dart';
 
 Future<void> main() async {
@@ -216,6 +218,16 @@ GoRouter _buildRouter(AuthController auth, AppStore store) {
             products: list.items,
             accentColor: DiaryColors.folderPink,
             wishlistId: list.id,
+            onMore: () async {
+              final blocked = await showModerationSheet(
+                context,
+                store: store,
+                targetUid: list.friendId,
+                targetName: list.friendName,
+                target: const ReportTarget.user(),
+              );
+              if (blocked && context.mounted) context.pop();
+            },
           );
         },
       ),
@@ -228,6 +240,10 @@ GoRouter _buildRouter(AuthController auth, AppStore store) {
         path: '/following',
         builder: (context, state) =>
             const FollowListScreen(kind: FollowListKind.following),
+      ),
+      GoRoute(
+        path: '/blocked-users',
+        builder: (context, state) => const BlockedUsersScreen(),
       ),
       GoRoute(
         path: '/sent-baskets',

@@ -24,6 +24,7 @@ class SharedWishlistScreen extends StatelessWidget {
     this.wishlistId,
     this.basketId,
     this.friendId,
+    this.onMore,
   });
 
   final String title;
@@ -35,6 +36,9 @@ class SharedWishlistScreen extends StatelessWidget {
   final String? wishlistId;
   final String? basketId;
   final String? friendId;
+
+  /// 친구 wishkit: 신고·차단 메뉴. null 이면 버튼을 숨긴다.
+  final VoidCallback? onMore;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +63,12 @@ class SharedWishlistScreen extends StatelessWidget {
               tooltip: '다시 보내기',
               onPressed: onShare,
               icon: const Icon(Icons.ios_share),
+            ),
+          if (onMore != null)
+            IconButton(
+              tooltip: '신고·차단',
+              onPressed: onMore,
+              icon: const Icon(Icons.more_vert),
             ),
         ],
       ),

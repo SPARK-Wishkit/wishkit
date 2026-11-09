@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../models/models.dart';
 import 'aws/basket_store.dart';
 import 'aws/file_store.dart';
+import 'aws/moderation_store.dart';
 import 'aws/product_tag_store.dart';
 import 'aws/social_store.dart';
 import 'aws/user_data_store.dart';
@@ -24,7 +25,9 @@ class AccountRepository {
     AwsBasketStore? baskets,
     AwsFileStore? files,
     AwsProductTagStore? productTags,
+    AwsModerationStore? moderation,
   })  : _aws = userData ?? AwsUserDataStore(),
+        _moderation = moderation ?? AwsModerationStore(),
         _social = social ?? AwsSocialStore(),
         _baskets = baskets ?? AwsBasketStore(),
         _files = files ?? AwsFileStore(),
@@ -38,6 +41,9 @@ class AccountRepository {
 
   /// 3-2단계: 살까말까 · 댓글 · 알림.
   final AwsBasketStore _baskets;
+
+  /// 신고 · 차단 · 탈퇴 시 공유 콘텐츠 정리.
+  final AwsModerationStore _moderation;
 
   /// 4단계: 프로필 사진 · 공유 페이지 (S3 + CloudFront).
   final AwsFileStore _files;
@@ -56,11 +62,42 @@ class AccountRepository {
   /// AuthController.deleteAccount → AuthDataHooks.deleteMyData 에서 호출된다.
   /// 아직 로그인된 상태에서 불리므로, 내 파일 폴더에 접근할 수 있다.
   Future<void> deleteUserData(String uid) async {
+    // 다른 사람에게 보이는 내 콘텐츠(댓글·보낸 살까말까·댓글방)를 먼저 지운다.
+    // Google Play 계정 삭제 요건: 연결된 사용자 데이터 모두 삭제.
+    await _moderation.deleteMySharedContent();
     await _files.deleteAll();
     await _baskets.deleteAll(uid);
     await _social.deleteAllFollows(uid);
     await _aws.deleteAll(uid);
   }
+
+  // ── 신고 · 차단 ──────────────────────────────────────────────
+
+  Future<Set<String>> blockedIds(String uid) => _moderation.blockedIds(uid);
+
+  Future<void> setBlocked({
+    required String myUid,
+    required String targetUid,
+    required bool blocked,
+  }) =>
+      _moderation.setBlocked(myUid: myUid, targetUid: targetUid, blocked: blocked);
+
+  Future<void> report({
+    required ReportTargetType type,
+    required String targetUserId,
+    required ReportReason reason,
+    String? targetId,
+    String? threadId,
+    String? detail,
+  }) =>
+      _moderation.report(
+        type: type,
+        targetUserId: targetUserId,
+        reason: reason,
+        targetId: targetId,
+        threadId: threadId,
+        detail: detail,
+      );
 
   /// 가입 전 아이디 미리 확인용. 사용 가능하면 true.
   Future<bool> isHandleAvailable(String handle) =>

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../auth/auth_validators.dart';
 import '../../data/app_store.dart';
+import '../../legal/legal_links.dart';
 import '../../theme/avatar_presets.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
@@ -267,6 +268,24 @@ class _MyPageScreenState extends State<MyPageScreen> {
                   ),
                 );
               },
+            ),
+            MenuRow(
+              height: 66,
+              label: '이용약관',
+              icon: Icons.description_outlined,
+              onTap: () => LegalLinks.open(context, LegalLinks.terms),
+            ),
+            MenuRow(
+              height: 66,
+              label: '개인정보처리방침',
+              icon: Icons.privacy_tip_outlined,
+              onTap: () => LegalLinks.open(context, LegalLinks.privacy),
+            ),
+            MenuRow(
+              height: 66,
+              label: '차단한 사용자',
+              icon: Icons.block_outlined,
+              onTap: () => context.push('/blocked-users'),
             ),
             const SizedBox(height: 24),
           ],

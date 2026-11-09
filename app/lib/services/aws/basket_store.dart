@@ -274,7 +274,8 @@ class AwsBasketStore {
   // ── 회원 탈퇴 ─────────────────────────────────────────────
 
   /// 내 알림 · 받은 살까말까 · 보낸 살까말까 기록 · 내 투표를 지운다.
-  /// (남의 댓글방에 쓴 내 댓글은 대화 흐름을 위해 남긴다 — 기존 동작과 같음)
+  /// 남의 댓글방에 쓴 내 댓글과 친구 받은함의 내가 보낸 살까말까는 서버 함수
+  /// deleteMySocialData 가 지운다 (AwsModerationStore.deleteMySharedContent).
   Future<void> deleteAll(String uid) async {
     final notes =
         await _listAll(Gql.listNotifications, 'listNotifications', uid);
@@ -342,6 +343,7 @@ class AwsBasketStore {
         'TOO_LONG' => '글이 너무 길어요.',
         'PROFILE_MISSING' => '프로필 정보를 찾지 못했어요. 다시 로그인해 주세요.',
         'INVALID_INPUT' => '입력한 내용을 다시 확인해 주세요.',
+        'BLOCKED' => '이 살까말까에는 댓글을 쓸 수 없어요.',
         _ => null,
       };
       if (message != null) throw Exception(message);

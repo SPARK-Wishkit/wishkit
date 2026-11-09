@@ -243,6 +243,31 @@ mutation NotifyFollow(\$targetId: ID!) {
   notifyFollow(targetId: \$targetId)
 }''';
 
+  // ── 신고 · 차단 (Google Play UGC 정책) ──
+  static const listBlocks = '''
+query ListBlocks(\$ownerId: ID!, \$limit: Int, \$nextToken: String) {
+  listBlocks(blockerId: \$ownerId, limit: \$limit, nextToken: \$nextToken) {
+    items { blockerId blockedId }
+    nextToken
+  }
+}''';
+  static const createBlock = '''
+mutation CreateBlock(\$input: CreateBlockInput!) {
+  createBlock(input: \$input) { blockerId blockedId }
+}''';
+  static const deleteBlock = '''
+mutation DeleteBlock(\$input: DeleteBlockInput!) {
+  deleteBlock(input: \$input) { blockerId blockedId }
+}''';
+  static const reportContent = '''
+mutation ReportContent(\$targetType: String!, \$targetUserId: ID!, \$targetId: String, \$threadId: String, \$reason: String!, \$detail: String) {
+  reportContent(targetType: \$targetType, targetUserId: \$targetUserId, targetId: \$targetId, threadId: \$threadId, reason: \$reason, detail: \$detail)
+}''';
+  static const deleteMySocialData = '''
+mutation DeleteMySocialData {
+  deleteMySocialData
+}''';
+
   // ── AI 엔진: 상품 URL 읽기 (서버 함수 parsing-proxy → 엔진 /extract) ──
   static const extractProduct = '''
 query ExtractProduct(\$url: String!) {
@@ -278,6 +303,7 @@ query IdentifyProductTag(\$imageBase64: String!, \$mimeType: String!) {
     removeBasketComment,
     listBasketVotes, voteBasket,
     listNotifications, markNotificationRead, deleteNotification, notifyFollow,
+    listBlocks, createBlock, deleteBlock, reportContent, deleteMySocialData,
     extractProduct, identifyProductTag,
   ];
 }

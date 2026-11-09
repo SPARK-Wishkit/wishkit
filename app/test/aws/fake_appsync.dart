@@ -31,6 +31,8 @@ class FakeAppSync implements GqlRunner {
     'BasketComment': ['threadId', 'commentId'],
     'BasketVote': ['threadId', 'voterId'],
     'Notification': ['recipientId', 'notificationId'],
+    'Block': ['blockerId', 'blockedId'],
+    'Report': ['reporterId', 'reportId'],
   };
 
   /// 표마다 "주인" 칸
@@ -38,18 +40,20 @@ class FakeAppSync implements GqlRunner {
     'Follow': 'followerId',
     'ReceivedBasket': 'recipientId',
     'Notification': 'recipientId',
+    'Block': 'blockerId',
+    'Report': 'reporterId',
   };
 
   /// 앱이 직접 만들 수 없는 표 (서버 함수만)
   static const _serverCreateOnly = {
     'ReceivedBasket', 'Notification', 'BasketThread', 'BasketComment',
-    'BasketVote',
+    'BasketVote', 'Report',
   };
 
   /// 앱이 직접 고칠 수 없는 표
   static const _noClientUpdate = {
     'Handle', 'Follow', 'ReceivedBasket', 'BasketThread', 'BasketComment',
-    'BasketVote',
+    'BasketVote', 'Block', 'Report',
   };
 
   /// 앱이 직접 지울 수 없는 표
@@ -67,6 +71,7 @@ class FakeAppSync implements GqlRunner {
     'listBasketComments': ('BasketComment', 'threadId'),
     'listBasketVotes': ('BasketVote', 'threadId'),
     'listNotifications': ('Notification', 'recipientId'),
+    'listBlocks': ('Block', 'blockerId'),
   };
 
   /// 로그인한 사람이면 남의 것도 읽을 수 있는 표
@@ -227,10 +232,20 @@ class FakeAppSync implements GqlRunner {
 
   static const _serverOps = {
     'sendBasket', 'addBasketComment', 'editBasketComment',
-    'removeBasketComment', 'notifyFollow', 'voteBasket',
+    'removeBasketComment', 'notifyFollow', 'voteBasket', 'reportContent',
+    'deleteMySocialData',
   };
   int _seq = 0;
   String _id() => 'srv${++_seq}';
+
+  int _removeWhere(String model, bool Function(Map<String, dynamic>) test) {
+    final t = table(model);
+    final keys = [for (final e in t.entries) if (test(e.value)) e.key];
+    for (final k in keys) {
+      t.remove(k);
+    }
+    return keys.length;
+  }
   Never _code(String code) =>
       throw AwsDataException(code, errorType: 'Lambda:Unhandled');
 
@@ -400,7 +415,56 @@ class FakeAppSync implements GqlRunner {
           }),
         };
         return true;
-
+      }
+      case 'reportContent': {
+        const types = {'comment', 'basket', 'user'};
+        const reasons = {'abuse', 'harassment', 'sexual', 'spam', 'other'};
+        if (!types.contains(v['targetType']) || !reasons.contains(v['reason'])) {
+          _code('INVALID_INPUT');
+        }
+        var target = v['targetUserId'] as String;
+        if (target == caller) _code('INVALID_INPUT');
+        if (v['targetType'] == 'comment') {
+          final row = table('BasketComment')['${v['threadId']}#${v['targetId']}'];
+          if (row == null) _code('NOT_FOUND');
+          if (!(row['participantIds'] as List).contains(caller)) {
+            _code('NOT_PARTICIPANT');
+          }
+          target = row['authorId'] as String;
+        } else if (v['targetType'] == 'basket') {
+          final row = table('ReceivedBasket')['$caller#${v['targetId']}'];
+          if (row == null) _code('NOT_FOUND');
+          target = row['fromUid'] as String;
+        }
+        final id = _id();
+        table('Report')['$caller#$id'] = {
+          'reporterId': caller,
+          'reportId': id,
+          'targetType': v['targetType'],
+          'targetUserId': target,
+          'targetId': v['targetId'],
+          'threadId': v['threadId'],
+          'reason': v['reason'],
+          'detail': v['detail'],
+          'status': 'open',
+        };
+        return true;
+      }
+      case 'deleteMySocialData': {
+        var count = 0;
+        final myThreads = table('BasketThread')
+            .values
+            .where((t) => t['ownerId'] == caller)
+            .map((t) => t['threadId'])
+            .toSet();
+        count += _removeWhere('BasketComment',
+            (r) => r['authorId'] == caller || myThreads.contains(r['threadId']));
+        count += _removeWhere('ReceivedBasket', (r) => r['fromUid'] == caller);
+        count += _removeWhere(
+            'BasketThread', (r) => myThreads.contains(r['threadId']));
+        count += _removeWhere('Block',
+            (r) => r['blockerId'] == caller || r['blockedId'] == caller);
+        return count;
       }
       case 'notifyFollow': {
         final target = v['targetId'] as String;
