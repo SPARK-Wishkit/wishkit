@@ -93,12 +93,14 @@ class AwsBasketStore {
     required List<Product> items,
     required String threadId,
     String memo = '',
+    bool allowMultipleVotes = true,
   }) async {
     final data = await _call(() => _gql.mutate(Gql.sendBasket, variables: {
           'threadId': threadId,
           'recipientIds': recipientUids,
           'items': jsonEncode(items.map((p) => p.toJson()).toList()),
           'memo': memo,
+          'allowMultipleVotes': allowMultipleVotes,
         }));
     _hub.refresh(_commentsKey(threadId));
     return (data['sendBasket'] as num?)?.toInt() ?? 0;
@@ -337,6 +339,7 @@ class AwsBasketStore {
         'THREAD_CONFLICT' => '공유 번호가 겹쳤어요. 다시 보내 주세요.',
         'NOT_PARTICIPANT' => '이 살까말까에 참여한 사람만 댓글을 쓸 수 있어요.',
         'VOTE_NOT_ALLOWED' => '이 살까말까를 받은 사람만 투표할 수 있어요.',
+        'MULTIPLE_VOTES_NOT_ALLOWED' => '이 투표는 한 상품만 선택할 수 있어요.',
         'NOT_AUTHOR' => '내 댓글만 고치거나 지울 수 있어요.',
         'COMMENT_NOT_FOUND' => '댓글을 찾을 수 없어요.',
         'TOO_LONG' => '글이 너무 길어요.',
