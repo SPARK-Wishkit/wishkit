@@ -492,6 +492,45 @@ class BasketComment {
       );
 }
 
+/// One person's vote on a shared 살까말까 — the products they picked.
+/// Like a KakaoTalk poll with multiple choice; there is no deadline, the vote
+/// lives as long as the basket's thread.
+class BasketVote {
+  BasketVote({
+    required this.threadId,
+    required this.voterUid,
+    required this.voterName,
+    required this.voterHandle,
+    required this.voterAvatar,
+    required this.productIds,
+    this.updatedAt,
+  });
+
+  final String threadId;
+  final String voterUid;
+  final String voterName;
+  final String voterHandle;
+  final String voterAvatar;
+
+  /// [Product.id] values as strings.
+  final List<String> productIds;
+  final DateTime? updatedAt;
+
+  bool picked(Product p) => productIds.contains(p.id.toString());
+
+  factory BasketVote.fromJson(Map<String, dynamic> json) => BasketVote(
+        threadId: json['threadId'] as String? ?? '',
+        voterUid: json['voterUid'] as String? ?? '',
+        voterName: json['voterName'] as String? ?? '',
+        voterHandle: json['voterHandle'] as String? ?? '',
+        voterAvatar: json['voterAvatar'] as String? ?? '',
+        productIds: (json['productIds'] as List? ?? [])
+            .map((e) => e.toString())
+            .toList(),
+        updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),
+      );
+}
+
 /// Instagram-style grouping: top-level comments with one level of replies.
 class BasketCommentThread {
   BasketCommentThread({required this.root, required this.replies});

@@ -266,6 +266,17 @@ class AccountRepository {
         memo: memo,
       );
 
+  /// 살까말까 투표. 5초마다 새로고침 + 투표 직후 바로 새로고침.
+  Stream<List<BasketVote>> watchBasketVotes(String threadId) =>
+      _baskets.watchVotes(threadId);
+
+  /// 투표하기 · 다시 투표하기 · 취소(빈 목록). 참여자인지는 서버가 확인한다.
+  Future<void> voteBasket({
+    required String threadId,
+    required List<String> productIds,
+  }) =>
+      _baskets.vote(threadId: threadId, productIds: productIds);
+
   /// 내 댓글 고치기. 작성자 확인은 서버가 한다.
   Future<void> updateBasketComment({
     required String threadId,

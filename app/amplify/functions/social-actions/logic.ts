@@ -14,6 +14,7 @@ export type Table =
   | 'Follow'
   | 'BasketThread'
   | 'BasketComment'
+  | 'BasketVote'
   | 'ReceivedBasket'
   | 'Notification';
 
@@ -33,6 +34,8 @@ export const LIMITS = {
 };
 
 const THREAD_ID = /^[A-Za-z0-9_.:-]{1,100}$/;
+/** 상품 번호(앱의 Product.id, int) 를 문자열로 받는다. */
+const PRODUCT_ID = /^-?\d{1,20}$/;
 
 /** 앱에 돌려주는 오류 코드. 앱이 한국어 문구로 바꿔 보여 준다. */
 export class ActionError extends Error {
@@ -198,21 +201,32 @@ export async function sendBasket(
   if (thread && thread.ownerId !== caller) fail('THREAD_CONFLICT');
   const before = new Set((thread?.participantIds as string[] | undefined) ?? []);
   const participants = [...new Set([...before, caller, ...recipients])];
+  // 투표 후보: 이전에 보낸 상품 + 이번에 보낸 상품 (다시 보내도 기존 표가 무효가 되지 않게)
+  const itemIds = [
+    ...new Set([
+      ...((thread?.itemIds as string[] | undefined) ?? []),
+      ...items.map((it) => String(it.id)),
+    ]),
+  ];
   await env.db.put(
     'BasketThread',
     stamp(
       'BasketThread',
-      { threadId: args.threadId, ownerId: caller, participantIds: participants, memo },
+      { threadId: args.threadId, ownerId: caller, participantIds: participants, memo, itemIds },
       now,
       thread,
     ),
   );
 
-  // 참여자가 늘었으면, 새 참여자도 기존 댓글을 볼 수 있게 목록을 고친다.
+  // 참여자가 늘었으면, 새 참여자도 기존 댓글·투표를 볼 수 있게 목록을 고친다.
   if (thread && participants.length !== before.size) {
     const comments = await env.db.query('BasketComment', 'threadId', args.threadId);
     for (const c of comments) {
       await env.db.put('BasketComment', { ...c, participantIds: participants, updatedAt: now });
+    }
+    const votes = await env.db.query('BasketVote', 'threadId', args.threadId);
+    for (const v of votes) {
+      await env.db.put('BasketVote', { ...v, participantIds: participants, updatedAt: now });
     }
   }
 
@@ -385,6 +399,66 @@ export async function deleteComment(
   const env = withDefaults(envIn);
   const row = await ownComment(env, caller, args.threadId, args.commentId);
   if (row) await env.db.del('BasketComment', { threadId: args.threadId, commentId: args.commentId });
+  return true;
+}
+
+// ── 투표 ──────────────────────────────────────────────────────
+
+/**
+ * 투표하기 · 다시 투표하기 · 취소(빈 목록). 카톡 투표처럼 여러 개 고를 수 있다.
+ * - 댓글방 참여자(보낸 사람 + 받은 사람)만 투표한다.
+ * - 보낸 상품만 고를 수 있다. (예전 댓글방처럼 itemIds 가 없으면 번호 모양만 확인)
+ * - 마감은 없다. 투표는 댓글방을 따라간다.
+ */
+export async function voteBasket(
+  envIn: Env,
+  caller: string,
+  args: { threadId: string; productIds: unknown },
+): Promise<boolean> {
+  const env = withDefaults(envIn);
+  const now = env.now().toISOString();
+  if (!THREAD_ID.test(args.threadId ?? '')) fail('INVALID_INPUT');
+  if (!Array.isArray(args.productIds)) fail('INVALID_INPUT');
+  const picked = [...new Set(args.productIds.map((id) => String(id ?? '').trim()))];
+  if (picked.length > LIMITS.items) fail('TOO_MANY_ITEMS');
+  if (picked.some((id) => !PRODUCT_ID.test(id))) fail('INVALID_INPUT');
+
+  const thread = await env.db.get('BasketThread', { threadId: args.threadId });
+  const participants = (thread?.participantIds as string[] | undefined) ?? [];
+  if (!thread || !participants.includes(caller)) fail('VOTE_NOT_ALLOWED');
+  const allowed = thread.itemIds as string[] | undefined;
+  if (allowed && allowed.length > 0 && picked.some((id) => !allowed.includes(id))) {
+    fail('INVALID_INPUT');
+  }
+
+  const key = { threadId: args.threadId, voterId: caller };
+  if (picked.length === 0) {
+    await env.db.del('BasketVote', key);
+    return true;
+  }
+  const existing = await env.db.get('BasketVote', key);
+  const from = await authorOf(env, caller);
+  await env.db.put(
+    'BasketVote',
+    stamp(
+      'BasketVote',
+      {
+        ...key,
+        participantIds: participants,
+        data: {
+          threadId: args.threadId,
+          voterUid: caller,
+          voterName: from.name,
+          voterHandle: from.handle,
+          voterAvatar: from.avatar,
+          productIds: picked,
+          updatedAt: now,
+        },
+      },
+      now,
+      existing,
+    ),
+  );
   return true;
 }
 

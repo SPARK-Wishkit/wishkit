@@ -10,6 +10,7 @@ import {
   notifyFollow,
   sendBasket,
   updateComment,
+  voteBasket,
   type Db,
   type Row,
   type Table,
@@ -25,6 +26,7 @@ const TABLES: Record<Table, string> = {
   Follow: process.env.FOLLOW_TABLE ?? '',
   BasketThread: process.env.THREAD_TABLE ?? '',
   BasketComment: process.env.COMMENT_TABLE ?? '',
+  BasketVote: process.env.VOTE_TABLE ?? '',
   ReceivedBasket: process.env.RECEIVED_TABLE ?? '',
   Notification: process.env.NOTIFICATION_TABLE ?? '',
 };
@@ -88,6 +90,11 @@ export const handler = async (event: AmplifyFunctionEvent<Args>): Promise<unknow
         return await deleteComment(env, caller, {
           threadId: a.threadId,
           commentId: a.commentId,
+        });
+      case 'voteBasket':
+        return await voteBasket(env, caller, {
+          threadId: a.threadId,
+          productIds: a.productIds,
         });
       case 'notifyFollow':
         return await notifyFollow(env, caller, { targetId: a.targetId });

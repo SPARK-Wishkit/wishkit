@@ -221,6 +221,75 @@ void main() {
     });
   });
 
+  group('투표', () {
+    setUp(() async {
+      await baskets.sendBasket(
+        recipientUids: ['bob'],
+        items: [product(1), product(2), product(3)],
+        threadId: 'sb-5',
+      );
+    });
+
+    test('여러 개 고를 수 있고, 투표한 사람 정보는 서버가 채운다', () async {
+      appsync.caller = 'bob';
+      await baskets.vote(threadId: 'sb-5', productIds: ['1', '3', '3']);
+      final v = (await baskets.loadVotes('sb-5')).single;
+      expect(v.voterUid, 'bob');
+      expect(v.voterName, '밥');
+      expect(v.productIds, ['1', '3']);
+      expect(v.picked(product(2)), isFalse);
+    });
+
+    test('다시 투표하면 바뀌고, 다 빼면 취소된다', () async {
+      appsync.caller = 'bob';
+      await baskets.vote(threadId: 'sb-5', productIds: ['1']);
+      await baskets.vote(threadId: 'sb-5', productIds: ['2']);
+      expect((await baskets.loadVotes('sb-5')).single.productIds, ['2']);
+      await baskets.vote(threadId: 'sb-5', productIds: []);
+      expect(await baskets.loadVotes('sb-5'), isEmpty);
+    });
+
+    test('받지 않은 사람은 보지도 투표하지도 못한다 (한국어 안내)', () async {
+      appsync.caller = 'bob';
+      await baskets.vote(threadId: 'sb-5', productIds: ['1']);
+      appsync.caller = 'cho';
+      expect(await baskets.loadVotes('sb-5'), isEmpty);
+      await expectLater(
+        baskets.vote(threadId: 'sb-5', productIds: ['1']),
+        throwsA(predicate((e) => e.toString().contains('받은 사람만'))),
+      );
+    });
+
+    test('보내지 않은 상품에는 투표할 수 없다', () async {
+      appsync.caller = 'bob';
+      await expectLater(
+        baskets.vote(threadId: 'sb-5', productIds: ['99']),
+        throwsA(predicate((e) => e.toString().contains('다시 확인'))),
+      );
+    });
+
+    test('나중에 초대된 사람도 이전 투표를 보고, 새 상품에 투표할 수 있다', () async {
+      appsync.caller = 'bob';
+      await baskets.vote(threadId: 'sb-5', productIds: ['1']);
+      appsync.caller = 'amy';
+      await baskets.sendBasket(recipientUids: ['cho'], items: [product(4)], threadId: 'sb-5');
+      appsync.caller = 'cho';
+      expect((await baskets.loadVotes('sb-5')).single.voterUid, 'bob');
+      await baskets.vote(threadId: 'sb-5', productIds: ['1', '4']);
+      expect(await baskets.loadVotes('sb-5'), hasLength(2));
+    });
+
+    test('투표 화면: 내가 투표하면 기다리지 않고 바로 새로 보인다', () async {
+      appsync.caller = 'bob';
+      final (got, sub) = await listen(baskets.watchVotes('sb-5'));
+      expect(got.single, isEmpty);
+      await baskets.vote(threadId: 'sb-5', productIds: ['2']);
+      await pump();
+      expect(got.last.single.productIds, ['2']);
+      await sub.cancel();
+    });
+  });
+
   group('알림', () {
     test('읽음 표시하면 알림 화면이 바로 갱신된다', () async {
       await baskets.sendBasket(recipientUids: ['bob'], items: [product(1)], threadId: 'sb-3');
@@ -248,10 +317,11 @@ void main() {
     });
   });
 
-  test('회원 탈퇴: 내 알림·받은함·보낸 기록이 지워진다', () async {
+  test('회원 탈퇴: 내 알림·받은함·보낸 기록·투표가 지워진다', () async {
     appsync.caller = 'bob';
     await baskets.sendBasket(recipientUids: ['amy'], items: [product(1)], threadId: 'sb-4');
     appsync.caller = 'amy';
+    await baskets.vote(threadId: 'sb-4', productIds: ['1']);
     await baskets.upsertSentBasket(
       'amy',
       SharedBasket(id: 's1', title: 't', ownerName: '에이미', items: [product(1)], createdAt: DateTime.utc(2026)),
@@ -261,5 +331,6 @@ void main() {
       expect(appsync.table(t).values.where((r) => r['recipientId'] == 'amy'), isEmpty);
     }
     expect(appsync.table('SentBasket'), isEmpty);
+    expect(appsync.table('BasketVote'), isEmpty);
   });
 }

@@ -209,6 +209,19 @@ mutation RemoveBasketComment(\$threadId: String!, \$commentId: String!) {
   removeBasketComment(threadId: \$threadId, commentId: \$commentId)
 }''';
 
+  // ── 살까말까 투표 ──
+  static const listBasketVotes = '''
+query ListBasketVotes(\$ownerId: String!, \$limit: Int, \$nextToken: String) {
+  listBasketVotes(threadId: \$ownerId, limit: \$limit, nextToken: \$nextToken) {
+    items { threadId voterId data }
+    nextToken
+  }
+}''';
+  static const voteBasket = '''
+mutation VoteBasket(\$threadId: String!, \$productIds: [String!]!) {
+  voteBasket(threadId: \$threadId, productIds: \$productIds)
+}''';
+
   // ── 3-2: 알림 ──
   static const listNotifications = '''
 query ListNotifications(\$ownerId: ID!, \$limit: Int, \$nextToken: String) {
@@ -263,6 +276,7 @@ query IdentifyProductTag(\$imageBase64: String!, \$mimeType: String!) {
     listReceivedBaskets, deleteReceivedBasket, sendBasket,
     listBasketComments, addBasketComment, editBasketComment,
     removeBasketComment,
+    listBasketVotes, voteBasket,
     listNotifications, markNotificationRead, deleteNotification, notifyFollow,
     extractProduct, identifyProductTag,
   ];

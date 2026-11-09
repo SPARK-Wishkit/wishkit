@@ -48,12 +48,13 @@ grantTables(backend.publicWishlist, [
   { table: 'WishProduct', env: 'WISH_PRODUCT_TABLE' },
 ]);
 
-// 살까말까·댓글·알림 함수: 프로필·팔로우는 읽기만, 댓글방·댓글·받은함·알림은 읽고 쓰기.
+// 살까말까·댓글·투표·알림 함수: 프로필·팔로우는 읽기만, 댓글방·댓글·투표·받은함·알림은 읽고 쓰기.
 grantTables(backend.socialActions, [
   { table: 'Profile', env: 'PROFILE_TABLE' },
   { table: 'Follow', env: 'FOLLOW_TABLE' },
   { table: 'BasketThread', env: 'THREAD_TABLE', write: true },
   { table: 'BasketComment', env: 'COMMENT_TABLE', write: true },
+  { table: 'BasketVote', env: 'VOTE_TABLE', write: true },
   { table: 'ReceivedBasket', env: 'RECEIVED_TABLE', write: true },
   { table: 'Notification', env: 'NOTIFICATION_TABLE', write: true },
 ]);
