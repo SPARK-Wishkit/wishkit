@@ -37,6 +37,7 @@ class AwsBasketStore {
   static String _notificationsKey(String uid) => 'notifications:$uid';
   static String _receivedKey(String uid) => 'received:$uid';
   static String _commentsKey(String threadId) => 'comments:$threadId';
+  static String _votesKey(String threadId) => 'votes:$threadId';
 
   // ── 보낸 살까말까 (본인만) ──────────────────────────────────
 
@@ -175,6 +176,48 @@ class AwsBasketStore {
     _hub.refresh(_commentsKey(threadId));
   }
 
+  // ── 투표 ───────────────────────────────────────────────────
+
+  Future<List<BasketVote>> loadVotes(String threadId) async {
+    if (threadId.isEmpty) return const [];
+    final rows = await _listAll(Gql.listBasketVotes, 'listBasketVotes', threadId);
+    return [
+      for (final r in rows)
+        if (decodeAwsJson(r['data']) case final d?)
+          BasketVote.fromJson(d..['voterUid'] = r['voterId']),
+    ];
+  }
+
+  /// 댓글과 같은 간격으로 새로고침 + 내가 투표한 직후 바로 새로고침.
+  Stream<List<BasketVote>> watchVotes(String threadId) {
+    if (threadId.isEmpty) return Stream.value(const []);
+    return pollingStream(
+      load: () => loadVotes(threadId),
+      interval: commentsInterval,
+      hub: _hub,
+      key: _votesKey(threadId),
+      signature: (list) {
+        final sigs = [
+          for (final v in list) '${v.voterUid}:${(List.of(v.productIds)..sort()).join('+')}',
+        ]..sort();
+        return sigs.join(',');
+      },
+    );
+  }
+
+  /// 투표하기 · 다시 투표하기. [productIds] 가 비어 있으면 내 투표를 취소한다.
+  Future<void> vote({
+    required String threadId,
+    required List<String> productIds,
+  }) async {
+    if (threadId.isEmpty) return;
+    await _call(() => _gql.mutate(Gql.voteBasket, variables: {
+          'threadId': threadId,
+          'productIds': productIds.toSet().toList(),
+        }));
+    _hub.refresh(_votesKey(threadId));
+  }
+
   // ── 알림 ───────────────────────────────────────────────────
 
   Future<List<AppNotification>> loadNotifications(String uid) async {
@@ -230,7 +273,7 @@ class AwsBasketStore {
 
   // ── 회원 탈퇴 ─────────────────────────────────────────────
 
-  /// 내 알림 · 받은 살까말까 · 보낸 살까말까 기록을 지운다.
+  /// 내 알림 · 받은 살까말까 · 보낸 살까말까 기록 · 내 투표를 지운다.
   /// (남의 댓글방에 쓴 내 댓글은 대화 흐름을 위해 남긴다 — 기존 동작과 같음)
   Future<void> deleteAll(String uid) async {
     final notes =
@@ -238,6 +281,25 @@ class AwsBasketStore {
     final received =
         await _listAll(Gql.listReceivedBaskets, 'listReceivedBaskets', uid);
     final sent = await _listAll(Gql.listSentBaskets, 'listSentBaskets', uid);
+
+    // 내 투표는 받은함·보낸함 기록이 지워지기 전에 취소한다(어느 댓글방인지 거기서만 알 수 있음).
+    final threadIds = <String>{
+      for (final r in [...received, ...sent])
+        if (decodeAwsJson(r['data']) case final d?)
+          if ((d['threadId'] as String?)?.isNotEmpty == true)
+            d['threadId'] as String,
+    };
+    await _runLimited([
+      for (final t in threadIds)
+        () async {
+          try {
+            await _gql.mutate(Gql.voteBasket,
+                variables: {'threadId': t, 'productIds': <String>[]});
+          } on AwsDataException {
+            // 이미 없어진 댓글방 등 — 탈퇴는 계속 진행
+          }
+        },
+    ]);
     Future<void> del(String doc, Map<String, dynamic> key) async {
       try {
         await _gql.mutate(doc, variables: {'input': key});
@@ -274,6 +336,7 @@ class AwsBasketStore {
         'TOO_MANY_ITEMS' => '한 번에 상품 100개까지 보낼 수 있어요.',
         'THREAD_CONFLICT' => '공유 번호가 겹쳤어요. 다시 보내 주세요.',
         'NOT_PARTICIPANT' => '이 살까말까에 참여한 사람만 댓글을 쓸 수 있어요.',
+        'VOTE_NOT_ALLOWED' => '이 살까말까를 받은 사람만 투표할 수 있어요.',
         'NOT_AUTHOR' => '내 댓글만 고치거나 지울 수 있어요.',
         'COMMENT_NOT_FOUND' => '댓글을 찾을 수 없어요.',
         'TOO_LONG' => '글이 너무 길어요.',

@@ -192,6 +192,8 @@ const schema = a.schema({
       ownerId: a.id().required(),
       participantIds: a.id().required().array().required(),
       memo: a.string(),
+      // 투표할 수 있는 상품 번호(Product.id 문자열). 다시 보내면 새 상품이 더해진다.
+      itemIds: a.string().array(),
     })
     .identifier(['threadId'])
     .authorization((allow) => [
@@ -213,6 +215,23 @@ const schema = a.schema({
       data: a.json().required(),
     })
     .identifier(['threadId', 'commentId'])
+    .authorization((allow) => [
+      allow.ownersDefinedIn('participantIds').identityClaim('sub').to(['read']),
+    ]),
+
+  /**
+   * 살까말까 투표: 한 사람당 한 줄 = 그 사람이 고른 상품들(여러 개 선택).
+   * 댓글처럼 참여자만 읽고, 쓰기·바꾸기·취소는 서버만 한다(참여자인지, 보낸 상품인지 확인).
+   * 마감은 없다. 살까말까(댓글방)를 따라가고, 다 빼고 투표하면 줄이 지워진다.
+   */
+  BasketVote: a
+    .model({
+      threadId: a.string().required(),
+      voterId: a.id().required(),
+      participantIds: a.id().required().array().required(),
+      data: a.json().required(),
+    })
+    .identifier(['threadId', 'voterId'])
     .authorization((allow) => [
       allow.ownersDefinedIn('participantIds').identityClaim('sub').to(['read']),
     ]),
@@ -275,6 +294,17 @@ const schema = a.schema({
     .arguments({
       threadId: a.string().required(),
       commentId: a.string().required(),
+    })
+    .returns(a.boolean().required())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(socialActions)),
+
+  /** 투표하기·다시 투표하기. productIds 가 비어 있으면 내 투표를 취소한다. */
+  voteBasket: a
+    .mutation()
+    .arguments({
+      threadId: a.string().required(),
+      productIds: a.string().required().array().required(),
     })
     .returns(a.boolean().required())
     .authorization((allow) => [allow.authenticated()])

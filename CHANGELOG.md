@@ -1,5 +1,26 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-09 - 살까말까 투표 (카톡 투표처럼 여러 개 선택)
+
+🌟 **쉬운 설명**
+- 친구에게 보낸 살까말까의 **상품 목록 바로 밑에 투표**가 생겼어요. 사고 싶은 상품을 **여러 개** 체크하고 "투표하기"를 누르면 돼요.
+- 상품마다 몇 명이 골랐는지 막대와 얼굴로 보여요. 숫자를 누르면 누가 골랐는지 볼 수 있어요.
+- 마음이 바뀌면 "다시 투표하기", 다 빼고 누르면 투표가 취소돼요.
+- **마감은 없어요.** 투표는 살까말까에 붙어 있어서, 살까말까가 없어지면 같이 없어져요. 탈퇴하면 내 투표도 지워져요.
+- 살까말까를 받은 사람(과 보낸 사람)만 보고 투표할 수 있어요. 링크·카톡으로만 공유한 살까말까에는 댓글처럼 투표도 없어요.
+
+🔧 **기술 설명**
+- 모델 `BasketVote`(threadId + voterId, 한 사람당 한 줄). 댓글처럼 `participantIds` 참여자만 읽고, 쓰기는 서버 함수만.
+- 뮤테이션 `voteBasket(threadId, productIds)` → `social-actions`. 참여자인지(`VOTE_NOT_ALLOWED`), 보낸 상품인지 확인. 빈 목록이면 행 삭제.
+- `BasketThread.itemIds` 추가: `sendBasket`이 보낸 상품 번호를 모아 둔다(다시 보내면 합침). 예전 댓글방은 값이 없어서 번호 모양만 확인.
+- `sendBasket`으로 참여자가 늘면 기존 투표의 `participantIds`도 고친다(댓글과 같음).
+- 앱: `BasketVote` 모델, `AwsBasketStore.loadVotes/watchVotes/vote`(5초 새로고침 + 투표 직후 즉시), `AccountRepository.watchBasketVotes/voteBasket`, `AppStore.watchBasketVotes/voteBasket`, 화면 `screens/shared/basket_vote_section.dart`.
+- 회원 탈퇴 `deleteAll`: 받은·보낸 살까말까의 댓글방마다 빈 투표를 보내 내 투표를 지운 뒤 기록을 지운다.
+- 백엔드 새 표·권한(`backend.ts` `VOTE_TABLE`) — **배포 필요**.
+- 테스트: `basket_store_test` 투표 6개 + 탈퇴 테스트에 투표 삭제 확인. `fake_appsync`에 `voteBasket`·`listBasketVotes` 흉내 추가.
+
+---
+
 ## 2026-11-08 - 태그 찾기 3단계: QR → 품번·브랜드 검색 → 사진으로 직접 기록
 
 🌟 **쉬운 설명**

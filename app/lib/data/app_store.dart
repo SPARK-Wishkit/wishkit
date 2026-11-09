@@ -1509,6 +1509,37 @@ class AppStore extends ChangeNotifier {
     return deleted ?? false;
   }
 
+  Stream<List<BasketVote>> watchBasketVotes(String threadId) {
+    if (threadId.isEmpty || !_backendConfigured || uid == null) {
+      return Stream.value(const []);
+    }
+    return _repo.watchBasketVotes(threadId);
+  }
+
+  /// 살까말까 투표 (여러 개 선택). 빈 목록이면 내 투표를 취소한다.
+  /// Returns false when a vote on this basket is already being sent.
+  Future<bool> voteBasket({
+    required SharedBasket basket,
+    required Iterable<int> productIds,
+  }) async {
+    final threadId = basket.commentThreadId;
+    if (threadId.isEmpty) {
+      throw Exception('이 살까말까에는 투표할 수 없어요.');
+    }
+    final voted = await _withLock('vote:$threadId', () async {
+      _ensureBackend();
+      if (uid == null) {
+        throw Exception('로그인된 계정이 없어요.');
+      }
+      await _repo.voteBasket(
+        threadId: threadId,
+        productIds: [for (final id in productIds.toSet()) id.toString()],
+      );
+      return true;
+    });
+    return voted ?? false;
+  }
+
   /// Hosts an HTML snapshot of [basket] in Storage and returns a public URL.
   /// Re-publishing the same basket overwrites the page and restarts the 28-day
   /// clock so an actively re-shared link stays alive.

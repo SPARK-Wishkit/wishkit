@@ -9,8 +9,10 @@ import '../../widgets/diary_widgets.dart';
 import '../mypage/sent_baskets_screen.dart';
 import '../product/product_detail_screen.dart';
 import '../wishlist/wishlist_screen.dart';
+import 'basket_vote_section.dart';
 
-/// Shared 살까말까 post: products, sender memo, Instagram-style comments.
+/// Shared 살까말까 post: products, sender memo, a multi-choice vote, and
+/// Instagram-style comments.
 class SharedBasketDetailScreen extends StatefulWidget {
   const SharedBasketDetailScreen({super.key, required this.basketId});
 
@@ -163,6 +165,8 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
                         const SizedBox(height: 10),
                       ],
                     const SizedBox(height: 8),
+                    // 상품 목록 바로 밑: 카톡 투표처럼 여러 개 고르는 투표.
+                    BasketVoteSection(basket: basket),
                     Text(
                       '댓글 ${comments.length}',
                       style: DiaryTheme.body(16, weight: FontWeight.w700),

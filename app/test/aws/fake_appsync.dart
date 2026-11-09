@@ -29,6 +29,7 @@ class FakeAppSync implements GqlRunner {
     'ReceivedBasket': ['recipientId', 'basketId'],
     'BasketThread': ['threadId'],
     'BasketComment': ['threadId', 'commentId'],
+    'BasketVote': ['threadId', 'voterId'],
     'Notification': ['recipientId', 'notificationId'],
   };
 
@@ -42,15 +43,17 @@ class FakeAppSync implements GqlRunner {
   /// 앱이 직접 만들 수 없는 표 (서버 함수만)
   static const _serverCreateOnly = {
     'ReceivedBasket', 'Notification', 'BasketThread', 'BasketComment',
+    'BasketVote',
   };
 
   /// 앱이 직접 고칠 수 없는 표
   static const _noClientUpdate = {
     'Handle', 'Follow', 'ReceivedBasket', 'BasketThread', 'BasketComment',
+    'BasketVote',
   };
 
   /// 앱이 직접 지울 수 없는 표
-  static const _noClientDelete = {'BasketThread', 'BasketComment'};
+  static const _noClientDelete = {'BasketThread', 'BasketComment', 'BasketVote'};
 
   /// list 쿼리 이름 → (표, 조회 기준 필드)
   static const _lists = {
@@ -62,6 +65,7 @@ class FakeAppSync implements GqlRunner {
     'listSentBaskets': ('SentBasket', 'ownerId'),
     'listReceivedBaskets': ('ReceivedBasket', 'recipientId'),
     'listBasketComments': ('BasketComment', 'threadId'),
+    'listBasketVotes': ('BasketVote', 'threadId'),
     'listNotifications': ('Notification', 'recipientId'),
   };
 
@@ -124,7 +128,7 @@ class FakeAppSync implements GqlRunner {
 
     final (model, field) = _lists[op]!;
     Iterable<Map<String, dynamic>> rows = table(model).values;
-    if (model == 'BasketComment') {
+    if (model == 'BasketComment' || model == 'BasketVote') {
       // 참여자만 읽기: 목록에서 내가 참여자인 댓글만 남긴다 (실제 AppSync 도 거른다)
       final want = variables['ownerId'];
       rows = rows.where((r) =>
@@ -223,7 +227,7 @@ class FakeAppSync implements GqlRunner {
 
   static const _serverOps = {
     'sendBasket', 'addBasketComment', 'editBasketComment',
-    'removeBasketComment', 'notifyFollow',
+    'removeBasketComment', 'notifyFollow', 'voteBasket',
   };
   int _seq = 0;
   String _id() => 'srv${++_seq}';
@@ -277,15 +281,19 @@ class FakeAppSync implements GqlRunner {
           caller,
           ...recipients,
         }.toList();
-        table('BasketThread')[threadId] = {
-          'threadId': threadId, 'ownerId': caller, 'participantIds': participants,
-        };
-        for (final c in table('BasketComment').values) {
-          if (c['threadId'] == threadId) c['participantIds'] = participants;
-        }
         final items = (jsonDecode(v['items'] as String) as List)
             .map((e) => Map<String, dynamic>.from(e as Map)..remove('memo'))
             .toList();
+        table('BasketThread')[threadId] = {
+          'threadId': threadId, 'ownerId': caller, 'participantIds': participants,
+          'itemIds': {
+            ...((thread?['itemIds'] as List?)?.cast<String>() ?? const []),
+            for (final it in items) '${it['id']}',
+          }.toList(),
+        };
+        for (final c in [...table('BasketComment').values, ...table('BasketVote').values]) {
+          if (c['threadId'] == threadId) c['participantIds'] = participants;
+        }
         for (final r in recipients) {
           final bid = _id();
           table('ReceivedBasket')['$r#$bid'] = {
@@ -366,6 +374,31 @@ class FakeAppSync implements GqlRunner {
         if (row == null) return true;
         if (row['authorId'] != caller) _code('NOT_AUTHOR');
         table('BasketComment').remove(key);
+        return true;
+
+      }
+      case 'voteBasket': {
+        final threadId = v['threadId'] as String;
+        final picked = (v['productIds'] as List).map((e) => '$e').toSet().toList();
+        final thread = table('BasketThread')[threadId];
+        final participants = (thread?['participantIds'] as List?)?.cast<String>() ?? const [];
+        if (thread == null || !participants.contains(caller)) _code('VOTE_NOT_ALLOWED');
+        final allowed = (thread['itemIds'] as List?)?.cast<String>() ?? const [];
+        if (allowed.isNotEmpty && picked.any((id) => !allowed.contains(id))) _code('INVALID_INPUT');
+        final key = '$threadId#$caller';
+        if (picked.isEmpty) {
+          table('BasketVote').remove(key);
+          return true;
+        }
+        final from = _author(caller);
+        table('BasketVote')[key] = {
+          'threadId': threadId, 'voterId': caller, 'participantIds': participants,
+          'data': jsonEncode({
+            'threadId': threadId, 'voterUid': caller, 'voterName': from['name'],
+            'voterHandle': from['handle'], 'voterAvatar': from['avatar'],
+            'productIds': picked, 'updatedAt': now,
+          }),
+        };
         return true;
 
       }
