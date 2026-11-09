@@ -234,6 +234,7 @@ class AccountRepository {
     required List<Product> items,
     required String threadId,
     String memo = '',
+    bool allowVoting = true,
     bool allowMultipleVotes = true,
   }) async {
     if (recipientUids.isEmpty || items.isEmpty || threadId.isEmpty) return;
@@ -242,6 +243,7 @@ class AccountRepository {
       items: items,
       threadId: threadId,
       memo: memo,
+      allowVoting: allowVoting,
       allowMultipleVotes: allowMultipleVotes,
     );
   }
