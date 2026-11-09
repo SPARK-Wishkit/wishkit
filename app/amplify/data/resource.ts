@@ -22,6 +22,28 @@ import { parsingProxy } from '../functions/parsing-proxy/resource';
  *   그리고 메모(memo)는 빼고 돌려준다. (예전엔 로그인만 하면 비공개·메모까지 읽기 가능)
  */
 const schema = a.schema({
+  /**
+   * 태그 찾기 결과 피드백 — 엔진 개선용 익명 기록(사용자가 "맞아요"/"다른 상품이에요"를 누르거나,
+   * 엔진이 못 찾았을 때 앱이 한 줄 남긴다).
+   *
+   * 개인정보를 모으지 않는다: 누가 보냈는지(ownerId·sub), 사진, 메모, 가격은 넣지 않는다.
+   * 앱은 만들기(create)만 할 수 있고 읽기·수정·삭제는 못 한다 — 집계는 운영자가 DynamoDB 콘솔이나
+   * 관리 스크립트로 한다.
+   * answer: 'yes'(맞아요) | 'no'(다른 상품이에요) | 'not_found'(엔진이 못 불러옴)
+   */
+  TagFeedback: a
+    .model({
+      answer: a.string().required(),
+      engineStatus: a.string(), // found | needs_confirm | not_found
+      brand: a.string(),
+      productCode: a.string(),
+      matchUrl: a.string(),
+      matchHost: a.string(),
+      matchVia: a.string(), // qr | search
+      verifiedBy: a.string(),
+    })
+    .authorization((allow) => [allow.authenticated().to(['create'])]),
+
   /** 친구 목록·검색에 보이는 공개 프로필. */
   Profile: a
     .model({

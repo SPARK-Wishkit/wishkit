@@ -154,8 +154,9 @@ def build_search_prompt(tag: dict) -> str:
     def v(key: str) -> str:
         return str(tag.get(key) or "").strip() or "(없음)"
 
-    seller = str(tag.get("seller_hint") or "").strip()
-    seller_line = f"\n이 브랜드는 {seller} 에서 판매합니다. 그 사이트의 상세 페이지가 검색 결과에 있으면 꼭 포함하세요." if seller else ""
+    sellers = [str(d).strip() for d in tag.get("seller_hints") or [] if str(d).strip()]
+    seller_line = (f"\n이 브랜드는 주로 {', '.join(sellers)} 에서 판매합니다. 그 사이트의 상세 페이지가 검색 결과에 "
+                   "있으면 꼭 포함하세요." if sellers else "")
 
     return f"""\
 구글에서 정확히 아래 검색어로 검색하세요.
@@ -224,7 +225,7 @@ MALL_DOMAINS = (
     "musinsa.com", "29cm.co.kr", "wconcept.co.kr", "ssfshop.com", "zigzag.kr", "kakaostyle.com",
     "a-bly.com", "kream.co.kr", "lotteon.com", "ssg.com", "thehyundai.com", "hmall.com",
     "lfmall.co.kr", "elandmall.co.kr", "4910.kr", "queenit.kr", "posty.kr", "coupang.com",
-    "thehandsome.com", "sivillage.com",
+    "thehandsome.com", "sivillage.com", "shinsegaev.com",
 )
 
 # 쇼핑몰 후보를 여는 순서(공식몰은 항상 먼저). 여기 없는 몰은 이 뒤에 검색 결과 순서대로.
@@ -605,7 +606,8 @@ async def identify(
         logger.warning("[identify] 검색 실패: %s", search_res.error)
         return qr.fallback(IdentifyOutcome("not_found", tag, note=_search_fail_note(search_res.error)))
     official, candidates = parse_search_output(
-        search_res.data.get("text", ""), search_res.data.get("sources", []), official_hint=qr.official_domain
+        search_res.data.get("text", ""), search_res.data.get("sources", []),
+        official_hint=qr.official_domain or tag.get("official_domain_hint"),
     )
 
     if verify_by_render is None:
@@ -631,11 +633,13 @@ async def identify(
 # ── 1.5 브랜드 규칙 ─────────────────────────────────────────
 
 def _add_brand_info(tag: dict) -> None:
-    """브랜드 이름 정리(brand_canonical)와 판매처 힌트(seller_hint)를 태그 정보에 더한다. 응답에도 그대로 남아
+    """브랜드 이름 정리(brand_canonical), 찾을 곳(brand_channel·seller_hints·official_domain_hint)을 태그 정보에 더한다. 응답에도 그대로 남아
     로그로 "어떤 브랜드가 규칙에 없나"를 볼 수 있다."""
     rules = brand_rules.load_rules()
     tag["brand_canonical"] = brand_rules.canonical_brand(tag.get("brand"), rules)
-    tag["seller_hint"] = brand_rules.seller_hint(tag, rules)
+    tag["brand_channel"] = brand_rules.channel_of(tag, rules)
+    tag["seller_hints"] = brand_rules.seller_hints(tag, rules)
+    tag["official_domain_hint"] = brand_rules.official_domain(tag, rules)
 
 
 @dataclass

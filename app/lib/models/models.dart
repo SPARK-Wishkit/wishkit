@@ -731,6 +731,21 @@ class ParsedProductInfo {
 /// - [notATag]: 사진에서 상품 태그를 찾지 못했다.
 enum TagIdentifyStatus { found, needsConfirm, notFound, notATag }
 
+/// 태그 찾기 결과에 대한 사용자 반응 — 엔진 개선용 익명 피드백([AwsProductTagStore.sendFeedback]).
+enum TagFeedbackAnswer {
+  /// "맞아요"
+  yes('yes'),
+
+  /// "다른 상품이에요"
+  no('no'),
+
+  /// 엔진이 판매 페이지를 못 찾음(사용자가 누른 게 아니라 결과 자체)
+  notFound('not_found');
+
+  const TagFeedbackAnswer(this.wire);
+  final String wire;
+}
+
 class TagIdentifyResult {
   const TagIdentifyResult({
     required this.status,

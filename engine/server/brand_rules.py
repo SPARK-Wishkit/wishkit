@@ -7,7 +7,8 @@
 
 - canonical_brand(): 태그에서 읽은 브랜드("8 seconds", "에잇세컨즈")를 하나의 이름("8seconds")으로.
 - candidate_urls(): 태그 품번으로 바로 열어 볼 상품 주소들. 규칙이 있는 브랜드·몰만.
-- seller_hint(): 주소 규칙은 아직 없지만 판매처는 아는 경우(LF몰 등) 검색에 줄 힌트.
+- channel_of() / seller_hints() / official_domain(): 브랜드 종류별로 어디서 찾을지.
+  백화점 브랜드 → 모회사 몰, 젊은 브랜드(처음 보는 브랜드 포함) → 무신사·29CM, SPA·글로벌 → 공식몰.
 
 ⚠️ 이 주소들은 우리가 품번으로 "만든" 것이라, 주소에 품번이 있다는 건 증거가 아니다. 반드시 페이지를
 열어 그 안에서 품번을 확인한다(tag_identify._try_brand_rules).
@@ -100,9 +101,31 @@ def candidate_urls(tag: dict, rules: dict | None = None) -> list[RuleUrl]:
     return out
 
 
-def seller_hint(tag: dict, rules: dict | None = None) -> str | None:
-    """주소 규칙과 상관없이, 이 브랜드를 파는 모회사 몰 도메인(검색 힌트용). 모르면 None."""
+def channel_of(tag: dict, rules: dict | None = None) -> str:
+    """이 브랜드를 어디서 찾을지: 'dept'(모회사 몰) | 'youth'(무신사·29CM) | 'official'(공식몰).
+    규칙 파일에 없는 브랜드는 default_channel(youth) — 처음 보는 브랜드는 대개 온라인 편집숍 브랜드다."""
     rules = rules or load_rules()
     brand = canonical_brand(tag.get("brand"), rules)
-    mall_key = (rules["brands"].get(brand) or {}).get("mall") if brand else None
-    return (rules["malls"].get(mall_key) or {}).get("domain") if mall_key else None
+    info = (rules["brands"].get(brand) or {}) if brand else {}
+    return info.get("channel") or rules.get("default_channel") or "youth"
+
+
+def official_domain(tag: dict, rules: dict | None = None) -> str | None:
+    """SPA·글로벌 브랜드의 공식몰 도메인(검색 단계의 공식몰 판단에 쓴다). 모르면 None."""
+    rules = rules or load_rules()
+    brand = canonical_brand(tag.get("brand"), rules)
+    return (rules["brands"].get(brand) or {}).get("official_domain") if brand else None
+
+
+def seller_hints(tag: dict, rules: dict | None = None) -> list[str]:
+    """검색에 줄 판매처 힌트(도메인 목록). 채널에 따라: 모회사 몰 / 무신사·29CM / 공식몰."""
+    rules = rules or load_rules()
+    brand = canonical_brand(tag.get("brand"), rules)
+    info = (rules["brands"].get(brand) or {}) if brand else {}
+    channel = channel_of(tag, rules)
+    if channel == "dept":
+        domain = (rules["malls"].get(info.get("mall")) or {}).get("domain")
+        return [domain] if domain else []
+    if channel == "official":
+        return [info["official_domain"]] if info.get("official_domain") else []
+    return list((rules.get("channels", {}).get(channel) or {}).get("sellers") or [])

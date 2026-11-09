@@ -35,4 +35,25 @@ class AwsProductTagStore {
     }
     return TagIdentifyResult.fromJson(raw.cast<String, dynamic>());
   }
+
+  /// 태그 찾기 결과에 대한 반응을 익명으로 남긴다. 누가 보냈는지·사진·가격은 보내지 않고,
+  /// 엔진이 무엇을 찾았는지와 사용자의 답만 보낸다(빈 값은 아예 안 보냄).
+  Future<void> sendFeedback(TagFeedbackAnswer answer, TagIdentifyResult r) async {
+    final input = <String, dynamic>{
+      'answer': answer.wire,
+      'engineStatus': switch (r.status) {
+        TagIdentifyStatus.found => 'found',
+        TagIdentifyStatus.needsConfirm => 'needs_confirm',
+        TagIdentifyStatus.notFound => 'not_found',
+        TagIdentifyStatus.notATag => 'not_a_tag',
+      },
+      'brand': r.brand,
+      'productCode': r.productCode,
+      'matchUrl': r.matchUrl,
+      'matchHost': r.matchHost,
+      'matchVia': r.matchVia,
+      'verifiedBy': r.verifiedBy,
+    }..removeWhere((_, v) => v == null || (v is String && v.trim().isEmpty));
+    await _gql.mutate(Gql.createTagFeedback, variables: {'input': input});
+  }
 }

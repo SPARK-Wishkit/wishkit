@@ -25,11 +25,18 @@ class _FakeRunner implements GqlRunner {
     return response;
   }
 
+  String? lastMutation;
+  Map<String, dynamic>? lastMutationVariables;
+
   @override
   Future<Map<String, dynamic>> mutate(
     String document, {
     Map<String, dynamic> variables = const {},
-  }) => throw UnimplementedError();
+  }) async {
+    lastMutation = document;
+    lastMutationVariables = variables;
+    return {'createTagFeedback': {'id': 'x'}};
+  }
 }
 
 void main() {
@@ -109,6 +116,41 @@ void main() {
     expect(r.hasMatchDetails, isTrue);
     expect(r.matchPrice, 269100);
     expect(r.matchRegularPrice, 299000);
+  });
+
+  test('피드백은 익명으로, 엔진 결과와 답만 보낸다', () async {
+    final runner = _FakeRunner(const {});
+    final store = AwsProductTagStore(runner: runner);
+    const result = TagIdentifyResult(
+      status: TagIdentifyStatus.needsConfirm,
+      brand: 'BEAKER',
+      productCode: 'QQ6X39EP20',
+      matchUrl: 'https://www.ssfshop.com/BEAKER/GM0026101660266/good',
+      matchHost: 'ssfshop.com',
+      verifiedBy: 'search',
+      tagPrice: 298000,
+    );
+    await store.sendFeedback(TagFeedbackAnswer.no, result);
+
+    expect(runner.lastMutation, Gql.createTagFeedback);
+    final input = runner.lastMutationVariables!['input'] as Map<String, dynamic>;
+    expect(input['answer'], 'no');
+    expect(input['engineStatus'], 'needs_confirm');
+    expect(input['productCode'], 'QQ6X39EP20');
+    // 가격·사용자 정보는 보내지 않고, 빈 값(matchVia)은 아예 빠진다.
+    expect(input.keys, isNot(contains('tagPrice')));
+    expect(input.keys, isNot(contains('ownerId')));
+    expect(input.containsKey('matchVia'), isFalse);
+  });
+
+  test('못 불러옴은 not_found로 보낸다', () async {
+    final runner = _FakeRunner(const {});
+    await AwsProductTagStore(runner: runner).sendFeedback(
+      TagFeedbackAnswer.notFound,
+      const TagIdentifyResult(status: TagIdentifyStatus.notFound, brand: 'PIEDPIPER'),
+    );
+    final input = runner.lastMutationVariables!['input'] as Map<String, dynamic>;
+    expect(input, {'answer': 'not_found', 'engineStatus': 'not_found', 'brand': 'PIEDPIPER'});
   });
 
   test('태그 QR로 찾은 결과는 foundByQr', () {

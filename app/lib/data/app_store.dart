@@ -551,6 +551,15 @@ class AppStore extends ChangeNotifier {
     return _repo.identifyProductFromTag(image, mimeType: mimeType);
   }
 
+  /// 태그 찾기 결과에 대한 반응을 익명으로 남긴다(엔진 개선용). 기다리지 않고, 실패해도 조용히 넘어간다 —
+  /// 피드백 때문에 상품 담기가 늦어지거나 막히면 안 된다.
+  void recordTagFeedback(TagFeedbackAnswer answer, TagIdentifyResult result) {
+    if (!backendReady || uid == null) return;
+    unawaited(
+      _repo.sendTagFeedback(answer, result).catchError((Object _) {}),
+    );
+  }
+
   /// 태그 사진을 저장소에 올리고 주소를 돌려준다. 상품 저장([addParsedProduct]) 전에 부른다.
   Future<String> uploadTagPhoto(
     Uint8List image, {

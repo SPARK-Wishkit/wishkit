@@ -1,7 +1,13 @@
 """brand_rules.py + identify()의 브랜드 규칙 단계 테스트. 실제 규칙 파일(brand_rules.json)을 그대로 읽는다."""
 import asyncio
 
-from brand_rules import candidate_urls, canonical_brand, load_rules, seller_hint
+from brand_rules import (
+    candidate_urls,
+    canonical_brand,
+    channel_of,
+    load_rules,
+    seller_hints,
+)
 from providers import ProviderResult
 from qr_codes import DecodedCodes
 from tag_identify import PageView, build_search_prompt, identify
@@ -40,10 +46,26 @@ def test_new_balance_code_without_color_has_no_url():
     assert candidate_urls({"brand": "NEW BALANCE", "product_code": "NBNQG41923"}) == []
 
 
-def test_unverified_mall_gives_seller_hint_but_no_url():
-    tag = {"brand": "HAZZYS", "product_code": "HSSW5F123"}
+def test_lf_and_handsome_urls_from_code():
+    lf = candidate_urls({"brand": "HAZZYS", "product_code": "JNJU6D701BK"})
+    assert lf[0].url == "https://www.lfmall.co.kr/app/product/JNJU6D701BK"
+    hs = candidate_urls({"brand": "SYSTEM", "product_code": "SY2GBRJC211WM"})
+    assert hs[0].url == "https://www.thehandsome.com/ko/PM/productDetail/SY2GBRJC211WM"
+
+
+def test_si_village_has_no_url_yet_but_hints_seller():
+    tag = {"brand": "VOV", "product_code": "46B6301558"}
     assert candidate_urls(tag) == []
-    assert seller_hint(tag) == "lfmall.co.kr"
+    assert seller_hints(tag) == ["shinsegaev.com"]
+
+
+def test_channels_decide_where_to_look():
+    assert channel_of({"brand": "BEAKER"}) == "dept"
+    assert seller_hints({"brand": "ZARA"}) == ["zara.com"]
+    assert seller_hints({"brand": "PIEDPIPER"}) == ["musinsa.com", "29cm.co.kr"]
+    # 처음 보는 브랜드는 젊은 브랜드로 보고 무신사·29CM부터.
+    assert channel_of({"brand": "처음보는브랜드"}) == "youth"
+    assert seller_hints({"brand": None}) == ["musinsa.com", "29cm.co.kr"]
 
 
 # ── identify()에 붙였을 때 ──
@@ -97,11 +119,18 @@ def test_rule_url_containing_code_is_not_evidence_by_itself():
 
 
 def test_seller_hint_goes_into_search_prompt():
-    tag = {**TAG, "brand": "HAZZYS", "product_code": "HSSW5F123"}
+    tag = {**TAG, "brand": "VOV", "product_code": "46B6301558"}
     out, calls = _run(tag, {})
-    assert calls["render"] == []  # LF몰은 아직 주소 규칙이 없다
-    assert "lfmall.co.kr" in calls["prompt"]
-    assert out.tag["brand_canonical"] == "hazzys"
+    assert calls["render"] == []  # SI빌리지는 아직 주소 규칙이 없다
+    assert "shinsegaev.com" in calls["prompt"]
+    assert out.tag["brand_canonical"] == "vov" and out.tag["brand_channel"] == "dept"
+
+
+def test_official_brand_domain_is_used_as_official_in_search():
+    # 모델이 공식몰을 모른다고 해도, 규칙 파일의 공식몰(zara.com) 상세 페이지를 받아들인다.
+    tag = {**TAG, "brand": "ZARA", "product_code": "0248/707/959"}
+    out, _ = _run(tag, {})
+    assert out.official_domain == "zara.com"
 
 
 def test_low_time_skips_rule_to_leave_room_for_search():

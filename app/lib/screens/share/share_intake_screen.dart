@@ -275,6 +275,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
           }
         }
       case TagIdentifyStatus.notFound:
+        context.read<AppStore>().recordTagFeedback(TagFeedbackAnswer.notFound, result);
         _fillFromTagOnly(result);
     }
   }
@@ -343,6 +344,10 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
   void _answerTagConfirm({required bool same}) {
     final r = tagResult;
     if (r == null) return;
+    context.read<AppStore>().recordTagFeedback(
+      same ? TagFeedbackAnswer.yes : TagFeedbackAnswer.no,
+      r,
+    );
     if (same) {
       setState(() {
         tagConfirmPending = false;

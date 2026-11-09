@@ -13,6 +13,9 @@
 - `identify()`: QR 다음, 검색 전에 규칙 주소를 렌더링해 **페이지 본문에서** 품번 확인(만든 주소 자체는 증거로 안 씀). 검색 시간을 남기려고 시간이 모자라면 건너뜀. `match.via = "brand_rule"`. 응답 tag에 `brand_canonical`, `seller_hint`.
 - 확인된 규칙: SSF `m.ssfshop.com/public/goods/detail/{품번}/sapView`(8seconds QR 리다이렉트로 확인), 뉴발란스 `styleCode/colCode`(실제 테스트로 확인).
 - 테스트: `test_brand_rules.py`.
+- (추가) LF몰 `/app/product/{상품코드}`, 더한섬닷컴 `/ko/PM/productDetail/{상품번호}` 규칙(사용자가 실제 주소로 확인). SI빌리지(shinsegaev.com)는 상품 주소가 내부 번호라 검색 결과 주소 확인 전까지 판매처 힌트만.
+- (추가) 브랜드 채널: 백화점 브랜드 → 모회사 몰, 젊은 브랜드·처음 보는 브랜드 → 무신사·29CM, SPA·글로벌 → 공식몰(`official_domain`을 검색의 공식몰 판단에 사용). tag에 `brand_channel`, `seller_hints`, `official_domain_hint`.
+- (추가) 태그 찾기 피드백(익명): `TagFeedback` 모델(만들기만 허용, ownerId·사진·가격 없음). 앱이 "맞아요"=yes, "다른 상품이에요"=no, 엔진 못 찾음=not_found를 기다리지 않고 남긴다. **Amplify 배포 필요.**
 
 ---
 

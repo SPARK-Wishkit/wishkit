@@ -52,6 +52,10 @@ class AccountRepository {
   }) =>
       _productTags.identify(image, mimeType);
 
+  /// 태그 찾기 결과에 대한 반응(맞아요·다른 상품·못 불러옴)을 익명으로 남긴다.
+  Future<void> sendTagFeedback(TagFeedbackAnswer answer, TagIdentifyResult result) =>
+      _productTags.sendFeedback(answer, result);
+
   /// 회원 탈퇴용: [uid] 의 앱 데이터와 파일을 모두 지운다.
   /// AuthController.deleteAccount → AuthDataHooks.deleteMyData 에서 호출된다.
   /// 아직 로그인된 상태에서 불리므로, 내 파일 폴더에 접근할 수 있다.
