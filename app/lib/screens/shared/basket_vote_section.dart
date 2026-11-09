@@ -53,7 +53,10 @@ class _BasketVoteSectionState extends State<BasketVoteSection> {
   Widget build(BuildContext context) {
     final store = context.watch<AppStore>();
     final items = widget.basket.items;
-    if (_threadId.isEmpty || !store.isLoggedIn || items.isEmpty) {
+    if (_threadId.isEmpty ||
+        !store.isLoggedIn ||
+        items.isEmpty ||
+        !widget.basket.allowVoting) {
       return const SizedBox.shrink();
     }
 
