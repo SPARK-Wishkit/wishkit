@@ -322,6 +322,7 @@ class _ShareBasketButtonState extends State<_ShareBasketButton> {
         picked.friendIds.toList(),
         memo: picked.memo,
         allowMultipleVotes: picked.allowMultipleVotes,
+        voteEnabled: picked.allowVoting,
       );
       if (!sent || !mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

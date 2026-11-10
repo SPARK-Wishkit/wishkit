@@ -1,5 +1,21 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-10 - 살까말까 "투표 보내기" 끄기가 실제로 적용되게 + 투표 버튼 글자
+
+🌟 **쉬운 설명**
+- 보낼 때 순서: **① 투표 보내기(켜기/끄기) → ② 켰을 때만 복수 선택 가능**. 이제 ①을 끄면 받은 친구 화면에 투표 칸이 아예 안 나와요. (전에는 꺼도 투표가 그대로 보였어요)
+- 투표 설정은 처음 보낼 때만 정해요. 마이페이지에서 다시 보내기는 설정을 다시 묻지 않고 처음 그대로 보내요. (전에는 다시 보내면 복수 선택이 몰래 켜졌어요)
+- 검은 "투표하기" 버튼 글자가 검정이라 안 보이던 문제를 고쳤어요.
+
+🔧 **기술 설명**
+- `sendBasket(voteEnabled)` 인자, `BasketThread.voteEnabled` 추가. 처음 만들 때만 저장하고 받은함 데이터에도 넣는다. 투표를 끄면 `allowMultipleVotes`도 false. 다시 보내면 기존 값 유지(서버·앱 둘 다).
+- `voteBasket`: 투표 없는 댓글방에 표를 넣으면 `VOTE_OFF` (빈 목록=취소·탈퇴 정리는 허용).
+- 앱: `SharedBasket.voteEnabled`(없으면 true), `showShareToFriendsSheet(askVoteSettings)` — 다시 보내기는 false. `BasketVoteSection`은 `voteEnabled == false`면 안 그린다. 버튼 글자색을 버튼 색에 맞춤(`DiaryTheme.ui`가 검정 고정).
+- `fake_appsync`에 PR #29의 `allowMultipleVotes`와 `voteEnabled` 반영, `basket_store_test` 2개 추가.
+- 백엔드 스키마 변경 — **배포 필요**.
+
+---
+
 ## 2026-11-09 - 살까말까 투표 (카톡 투표처럼 여러 개 선택)
 
 🌟 **쉬운 설명**

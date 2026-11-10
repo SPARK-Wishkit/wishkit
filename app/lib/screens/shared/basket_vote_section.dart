@@ -53,7 +53,11 @@ class _BasketVoteSectionState extends State<BasketVoteSection> {
   Widget build(BuildContext context) {
     final store = context.watch<AppStore>();
     final items = widget.basket.items;
-    if (_threadId.isEmpty || !store.isLoggedIn || items.isEmpty) {
+    // 투표 없이 보낸 살까말까에는 투표 칸을 아예 안 그린다.
+    if (!widget.basket.voteEnabled ||
+        _threadId.isEmpty ||
+        !store.isLoggedIn ||
+        items.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -439,7 +443,18 @@ class _VoteButton extends StatelessWidget {
               color: DiaryColors.white,
             ),
           )
-        : Text(label, style: DiaryTheme.ui(14, weight: FontWeight.w700));
+        // DiaryTheme.ui 는 글자색을 검정으로 박아 둬서, 검은 버튼 위에선 글자가 안 보였다.
+        // 버튼 색에 맞춰 글자색을 직접 정한다.
+        : Text(
+            label,
+            style: DiaryTheme.ui(
+              14,
+              weight: FontWeight.w700,
+              color: onPressed == null
+                  ? DiaryColors.inkSoft
+                  : (filled ? DiaryColors.white : DiaryColors.ink),
+            ),
+          );
     if (filled) {
       return FilledButton(
         onPressed: onPressed,

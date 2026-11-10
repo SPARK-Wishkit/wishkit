@@ -284,8 +284,18 @@ class FakeAppSync implements GqlRunner {
         final items = (jsonDecode(v['items'] as String) as List)
             .map((e) => Map<String, dynamic>.from(e as Map)..remove('memo'))
             .toList();
+        // 투표 설정은 처음 보낼 때만 정한다 (logic.ts 와 같음).
+        final voteEnabled = thread != null
+            ? thread['voteEnabled'] != false
+            : v['voteEnabled'] != false;
+        final allowMultipleVotes = !voteEnabled
+            ? false
+            : thread != null
+                ? thread['allowMultipleVotes'] != false
+                : v['allowMultipleVotes'] != false;
         table('BasketThread')[threadId] = {
           'threadId': threadId, 'ownerId': caller, 'participantIds': participants,
+          'voteEnabled': voteEnabled, 'allowMultipleVotes': allowMultipleVotes,
           'itemIds': {
             ...((thread?['itemIds'] as List?)?.cast<String>() ?? const []),
             for (final it in items) '${it['id']}',
@@ -304,6 +314,7 @@ class FakeAppSync implements GqlRunner {
               'fromHandle': from['handle'], 'fromAvatar': from['avatar'],
               'items': items, 'createdAt': now, 'channels': ['friends'],
               'memo': v['memo'] ?? '', 'threadId': threadId,
+              'voteEnabled': voteEnabled, 'allowMultipleVotes': allowMultipleVotes,
             }),
           };
           _notify(r, from, 'basket', '${from['name']} 님이 살까말까 장바구니를 보냈어요', threadId);
@@ -383,6 +394,10 @@ class FakeAppSync implements GqlRunner {
         final thread = table('BasketThread')[threadId];
         final participants = (thread?['participantIds'] as List?)?.cast<String>() ?? const [];
         if (thread == null || !participants.contains(caller)) _code('VOTE_NOT_ALLOWED');
+        if (thread['voteEnabled'] == false && picked.isNotEmpty) _code('VOTE_OFF');
+        if (thread['allowMultipleVotes'] == false && picked.length > 1) {
+          _code('MULTIPLE_VOTES_NOT_ALLOWED');
+        }
         final allowed = (thread['itemIds'] as List?)?.cast<String>() ?? const [];
         if (allowed.isNotEmpty && picked.any((id) => !allowed.contains(id))) _code('INVALID_INPUT');
         final key = '$threadId#$caller';

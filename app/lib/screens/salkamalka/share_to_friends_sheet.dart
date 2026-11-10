@@ -12,6 +12,8 @@ Future<({Set<String> friendIds, String memo, bool allowVoting, bool allowMultipl
   String title = '보낼 친구 선택',
   String confirmLabel = '보내기',
   String initialMemo = '',
+  // 투표 설정은 처음 보낼 때만 묻는다. 다시 보내기는 처음 설정 그대로.
+  bool askVoteSettings = true,
 }) async {
   final following = store.friends.where((f) => f.isFollowing).toList();
   if (following.isEmpty) {
@@ -97,8 +99,8 @@ Future<({Set<String> friendIds, String memo, bool allowVoting, bool allowMultipl
                         },
                       ),
                     ),
-                    const Divider(height: 1),
-                    CheckboxListTile(
+                    if (askVoteSettings) const Divider(height: 1),
+                    if (askVoteSettings) CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
                       dense: true,
                       value: allowVoting,
@@ -119,7 +121,7 @@ Future<({Set<String> friendIds, String memo, bool allowVoting, bool allowMultipl
                         style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
                       ),
                     ),
-                    if (allowVoting)
+                    if (askVoteSettings && allowVoting)
                       Padding(
                         padding: const EdgeInsets.only(left: 28),
                         child: CheckboxListTile(

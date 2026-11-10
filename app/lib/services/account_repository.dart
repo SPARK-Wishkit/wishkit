@@ -235,6 +235,7 @@ class AccountRepository {
     required String threadId,
     String memo = '',
     bool allowMultipleVotes = true,
+    bool voteEnabled = true,
   }) async {
     if (recipientUids.isEmpty || items.isEmpty || threadId.isEmpty) return;
     await _baskets.sendBasket(
@@ -243,6 +244,7 @@ class AccountRepository {
       threadId: threadId,
       memo: memo,
       allowMultipleVotes: allowMultipleVotes,
+      voteEnabled: voteEnabled,
     );
   }
 

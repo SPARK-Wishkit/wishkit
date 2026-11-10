@@ -279,6 +279,52 @@ void main() {
       expect(await baskets.loadVotes('sb-5'), hasLength(2));
     });
 
+    test('투표 없이 보내면 받은 사람 화면에 투표가 없고, 서버도 표를 받지 않는다', () async {
+      await baskets.sendBasket(
+        recipientUids: ['bob'],
+        items: [product(1), product(2)],
+        threadId: 'sb-7',
+        voteEnabled: false,
+      );
+      appsync.caller = 'bob';
+      final got = (await baskets.loadReceivedBaskets('bob'))
+          .firstWhere((b) => b.threadId == 'sb-7');
+      expect(got.voteEnabled, isFalse);
+      expect(got.allowMultipleVotes, isFalse);
+      await expectLater(
+        baskets.vote(threadId: 'sb-7', productIds: ['1']),
+        throwsA(predicate((e) => e.toString().contains('투표 없이'))),
+      );
+    });
+
+    test('한 개만 고르기 투표는 2개를 거절하고, 다시 보내도 처음 설정이 유지된다', () async {
+      await baskets.sendBasket(
+        recipientUids: ['bob'],
+        items: [product(1), product(2)],
+        threadId: 'sb-8',
+        allowMultipleVotes: false,
+      );
+      appsync.caller = 'bob';
+      await expectLater(
+        baskets.vote(threadId: 'sb-8', productIds: ['1', '2']),
+        throwsA(predicate((e) => e.toString().contains('한 상품만'))),
+      );
+      await baskets.vote(threadId: 'sb-8', productIds: ['2']);
+
+      appsync.caller = 'amy';
+      await baskets.sendBasket(
+        recipientUids: ['cho'],
+        items: [product(1)],
+        threadId: 'sb-8',
+        allowMultipleVotes: true,
+      );
+      appsync.caller = 'cho';
+      final again = (await baskets.loadReceivedBaskets('cho'))
+          .firstWhere((b) => b.threadId == 'sb-8');
+      expect(again.voteEnabled, isTrue);
+      expect(again.allowMultipleVotes, isFalse);
+    });
+
     test('투표 화면: 내가 투표하면 기다리지 않고 바로 새로 보인다', () async {
       appsync.caller = 'bob';
       final (got, sub) = await listen(baskets.watchVotes('sb-5'));

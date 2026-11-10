@@ -282,6 +282,7 @@ class SharedBasket {
     this.memo = '',
     this.threadId = '',
     this.allowMultipleVotes = true,
+    this.voteEnabled = true,
   });
 
   final String id;
@@ -321,6 +322,10 @@ class SharedBasket {
   /// Defaults to true for baskets created before this setting existed.
   final bool allowMultipleVotes;
 
+  /// Whether the sender attached a poll at all. Fixed at the first send;
+  /// baskets from before this setting count as having one.
+  final bool voteEnabled;
+
   /// Only friend-sent baskets belong in the 내 친구 탭 feed; link / KakaoTalk
   /// shares stay in 마이페이지 > 내가 보낸 살까말까.
   bool get sharedToFriends => channels.contains(SharedChannel.friends);
@@ -348,6 +353,7 @@ class SharedBasket {
     String? memo,
     String? threadId,
     bool? allowMultipleVotes,
+    bool? voteEnabled,
   }) {
     return SharedBasket(
       id: id,
@@ -368,6 +374,7 @@ class SharedBasket {
       memo: memo ?? this.memo,
       threadId: threadId ?? this.threadId,
       allowMultipleVotes: allowMultipleVotes ?? this.allowMultipleVotes,
+      voteEnabled: voteEnabled ?? this.voteEnabled,
     );
   }
 
@@ -390,6 +397,7 @@ class SharedBasket {
         'memo': memo,
         'threadId': threadId,
         'allowMultipleVotes': allowMultipleVotes,
+        'voteEnabled': voteEnabled,
       };
 
   factory SharedBasket.fromJson(Map<String, dynamic> json) => SharedBasket(
@@ -426,6 +434,7 @@ class SharedBasket {
         memo: json['memo'] as String? ?? '',
         threadId: json['threadId'] as String? ?? '',
         allowMultipleVotes: json['allowMultipleVotes'] as bool? ?? true,
+        voteEnabled: json['voteEnabled'] as bool? ?? true,
       );
 }
 
