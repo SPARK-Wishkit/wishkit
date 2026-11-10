@@ -176,7 +176,14 @@ function withDefaults(env: Env): Required<Env> {
 export async function sendBasket(
   envIn: Env,
   caller: string,
-  args: { threadId: string; recipientIds: string[]; items: unknown; memo?: string | null; allowMultipleVotes?: boolean },
+  args: {
+    threadId: string;
+    recipientIds: string[];
+    items: unknown;
+    memo?: string | null;
+    allowMultipleVotes?: boolean | null;
+    voteEnabled?: boolean | null;
+  },
 ): Promise<number> {
   const env = withDefaults(envIn);
   const now = env.now().toISOString();
@@ -208,11 +215,27 @@ export async function sendBasket(
       ...items.map((it) => String(it.id)),
     ]),
   ];
+  // 투표 설정은 처음 보낼 때 정하고 그대로 둔다 — 다시 보내도 이미 받은 사람과 화면이 같게.
+  // 투표를 안 보내면 복수 선택도 의미가 없으니 false 로 맞춘다.
+  const voteEnabled = thread ? thread.voteEnabled !== false : args.voteEnabled !== false;
+  const allowMultipleVotes = !voteEnabled
+    ? false
+    : thread
+      ? thread.allowMultipleVotes !== false
+      : args.allowMultipleVotes !== false;
   await env.db.put(
     'BasketThread',
     stamp(
       'BasketThread',
-      { threadId: args.threadId, ownerId: caller, participantIds: participants, memo, itemIds, allowMultipleVotes: args.allowMultipleVotes ?? true },
+      {
+        threadId: args.threadId,
+        ownerId: caller,
+        participantIds: participants,
+        memo,
+        itemIds,
+        allowMultipleVotes,
+        voteEnabled,
+      },
       now,
       thread,
     ),
@@ -252,7 +275,8 @@ export async function sendBasket(
             channels: ['friends'],
             memo,
             threadId: args.threadId,
-            allowMultipleVotes: args.allowMultipleVotes ?? true,
+            allowMultipleVotes,
+            voteEnabled,
           },
         },
         now,
@@ -427,6 +451,8 @@ export async function voteBasket(
   const thread = await env.db.get('BasketThread', { threadId: args.threadId });
   const participants = (thread?.participantIds as string[] | undefined) ?? [];
   if (!thread || !participants.includes(caller)) fail('VOTE_NOT_ALLOWED');
+  // 투표 없이 보낸 살까말까. 빈 목록(취소·탈퇴 정리)은 그대로 받는다.
+  if (thread.voteEnabled === false && picked.length > 0) fail('VOTE_OFF');
   if (thread.allowMultipleVotes === false && picked.length > 1) fail('MULTIPLE_VOTES_NOT_ALLOWED');
   const allowed = thread.itemIds as string[] | undefined;
   if (allowed && allowed.length > 0 && picked.some((id) => !allowed.includes(id))) {

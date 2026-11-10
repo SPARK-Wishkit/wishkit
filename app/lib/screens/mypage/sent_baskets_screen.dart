@@ -148,6 +148,7 @@ Future<void> showSentBasketShareSheet(
     title: '다시 보낼 친구',
     confirmLabel: '다시 보내기',
     initialMemo: basket.memo,
+    askVoteSettings: false,
   );
   if (picked == null || picked.friendIds.isEmpty || !context.mounted) return;
   try {

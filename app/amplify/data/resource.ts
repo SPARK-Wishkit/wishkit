@@ -196,6 +196,9 @@ const schema = a.schema({
       itemIds: a.string().array(),
       // Existing threads without this field default to allowing multiple choices.
       allowMultipleVotes: a.boolean(),
+      // 투표를 같이 보냈는지. 없으면(예전 댓글방) 보낸 것으로 본다.
+      // 두 값 모두 처음 보낼 때 정하고, 다시 보내도 바뀌지 않는다.
+      voteEnabled: a.boolean(),
     })
     .identifier(['threadId'])
     .authorization((allow) => [
@@ -261,6 +264,7 @@ const schema = a.schema({
       items: a.json().required(), // Product.toJson() 목록
       memo: a.string(),
       allowMultipleVotes: a.boolean(),
+      voteEnabled: a.boolean(),
     })
     .returns(a.integer().required())
     .authorization((allow) => [allow.authenticated()])

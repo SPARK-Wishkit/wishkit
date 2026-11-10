@@ -94,6 +94,7 @@ class AwsBasketStore {
     required String threadId,
     String memo = '',
     bool allowMultipleVotes = true,
+    bool voteEnabled = true,
   }) async {
     final data = await _call(() => _gql.mutate(Gql.sendBasket, variables: {
           'threadId': threadId,
@@ -101,6 +102,7 @@ class AwsBasketStore {
           'items': jsonEncode(items.map((p) => p.toJson()).toList()),
           'memo': memo,
           'allowMultipleVotes': allowMultipleVotes,
+          'voteEnabled': voteEnabled,
         }));
     _hub.refresh(_commentsKey(threadId));
     return (data['sendBasket'] as num?)?.toInt() ?? 0;
@@ -340,6 +342,7 @@ class AwsBasketStore {
         'NOT_PARTICIPANT' => '이 살까말까에 참여한 사람만 댓글을 쓸 수 있어요.',
         'VOTE_NOT_ALLOWED' => '이 살까말까를 받은 사람만 투표할 수 있어요.',
         'MULTIPLE_VOTES_NOT_ALLOWED' => '이 투표는 한 상품만 선택할 수 있어요.',
+        'VOTE_OFF' => '투표 없이 보낸 살까말까예요.',
         'NOT_AUTHOR' => '내 댓글만 고치거나 지울 수 있어요.',
         'COMMENT_NOT_FOUND' => '댓글을 찾을 수 없어요.',
         'TOO_LONG' => '글이 너무 길어요.',

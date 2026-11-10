@@ -1268,6 +1268,7 @@ class AppStore extends ChangeNotifier {
     bool touchSharedAt = false,
     String memo = '',
     bool allowMultipleVotes = true,
+    bool voteEnabled = true,
   }) async {
     final now = DateTime.now();
     final id = existingId ?? 'sb-${now.millisecondsSinceEpoch}';
@@ -1299,7 +1300,10 @@ class AppStore extends ChangeNotifier {
       publicUrlExpiresAt: existing?.publicUrlExpiresAt,
       memo: memo.isNotEmpty ? memo : (existing?.memo ?? ''),
       threadId: existing?.threadId.isNotEmpty == true ? existing!.threadId : id,
-      allowMultipleVotes: allowMultipleVotes,
+      // 투표 설정은 처음 정한 대로 (서버도 처음 값만 쓴다).
+      voteEnabled: existing?.voteEnabled ?? voteEnabled,
+      allowMultipleVotes: existing?.allowMultipleVotes ??
+          (voteEnabled && allowMultipleVotes),
     );
     sharedBaskets[id] = shared;
     await _persistShared();
@@ -1330,12 +1334,14 @@ class AppStore extends ChangeNotifier {
     List<String> friendIds, {
     String memo = '',
     bool allowMultipleVotes = true,
+    bool voteEnabled = true,
   }) async {
     return resendBasketToFriends(
       items: _selectedBasketProducts(),
       friendIds: friendIds,
       memo: memo,
       allowMultipleVotes: allowMultipleVotes,
+      voteEnabled: voteEnabled,
     );
   }
 
@@ -1363,6 +1369,7 @@ class AppStore extends ChangeNotifier {
     String? existingId,
     String memo = '',
     bool allowMultipleVotes = true,
+    bool voteEnabled = true,
   }) async {
     if (items.isEmpty) {
       throw Exception('공유할 상품을 선택해 주세요.');
@@ -1388,7 +1395,10 @@ class AppStore extends ChangeNotifier {
         items: items,
         threadId: threadId,
         memo: memo,
-        allowMultipleVotes: allowMultipleVotes,
+        // 다시 보낼 때는 처음 설정을 그대로 보낸다.
+        allowMultipleVotes:
+            existingBasket?.allowMultipleVotes ?? allowMultipleVotes,
+        voteEnabled: existingBasket?.voteEnabled ?? voteEnabled,
       );
       final names = [
         for (final id in friendIds) friendById(id)?.name ?? '',
@@ -1403,6 +1413,7 @@ class AppStore extends ChangeNotifier {
         touchSharedAt: true,
         memo: memo,
         allowMultipleVotes: allowMultipleVotes,
+        voteEnabled: voteEnabled,
       );
       // Re-sending a basket that was X-ed out of the friends feed brings it back.
       // Covers both re-used ids (마이페이지 > 다시 보내기) and freshly minted ones.
