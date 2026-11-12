@@ -27,7 +27,12 @@ class _WishlistScreenState extends State<WishlistScreen> {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppStore>();
-    final tab = store.selectedTab;
+    final selected = store.selectedTab;
+    // 폴더 목록이 비어 있으면(불러오는 중이거나 실패) 폴더 줄 대신 로딩을, 본문엔 로딩/실패 안내를 보여 준다.
+    if (selected == null) {
+      return _buildWithoutTabs(store);
+    }
+    final tab = selected;
     final products = store.displayedProducts;
     final adFeed = AdFeed(products.length, every: AdsConfig.feedEvery);
 
@@ -166,6 +171,114 @@ class _WishlistScreenState extends State<WishlistScreen> {
                         ],
                       ),
                     ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWithoutTabs(AppStore store) {
+    final failed = store.tabsLoadFailed;
+    const radius = Radius.circular(DiaryTheme.radius);
+    return Scaffold(
+      backgroundColor: DiaryColors.canvas,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: WishkitLogo(size: 30),
+              ),
+            ),
+            // 폴더 줄 자리: 불러오는 중이면 '전체' 탭 모양의 로딩 칩을 보여 준다.
+            SizedBox(
+              height: 46,
+              child: failed
+                  ? null
+                  : Align(
+                      alignment: Alignment.bottomLeft,
+                      child: Container(
+                        margin: const EdgeInsets.only(left: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 22,
+                          vertical: 12,
+                        ),
+                        decoration: const BoxDecoration(
+                          color: DiaryColors.paper,
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(12),
+                          ),
+                        ),
+                        child: const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: DiaryColors.ink,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: DiaryColors.paper,
+                    borderRadius: BorderRadius.only(
+                      topLeft: failed ? radius : Radius.zero,
+                      topRight: radius,
+                    ),
+                  ),
+                  child: Center(
+                    child: failed
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 32),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '폴더를 불러오지 못했어요',
+                                  textAlign: TextAlign.center,
+                                  style: DiaryTheme.ui(
+                                    16,
+                                    color: DiaryColors.ink,
+                                    weight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '인터넷 연결을 확인해 주세요',
+                                  textAlign: TextAlign.center,
+                                  style: DiaryTheme.ui(
+                                    14,
+                                    color: DiaryColors.inkMuted,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                FilledButton(
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: DiaryColors.ink,
+                                    foregroundColor: DiaryColors.white,
+                                  ),
+                                  onPressed: store.retryLoadTabs,
+                                  child: const Text('다시 시도'),
+                                ),
+                              ],
+                            ),
+                          )
+                        : const CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: DiaryColors.ink,
+                          ),
                   ),
                 ),
               ),
@@ -569,7 +682,8 @@ class _TabsRowState extends State<_TabsRow> {
   Widget build(BuildContext context) {
     final store = widget.store;
     final custom = store.customTabs;
-    final allTab = store.tabs.first;
+    final allTab = store.allTab ?? store.tabs.firstOrNull;
+    if (allTab == null) return const SizedBox.shrink();
     final validIds = {allTab.id, ...custom.map((t) => t.id)};
     _chipKeys.removeWhere((id, _) => !validIds.contains(id));
     return ReorderableListView.builder(
@@ -680,70 +794,78 @@ class _FolderTab extends StatelessWidget {
       child: InkWell(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
         onTap: onTap,
-        child: AnimatedContainer(
+        // 위 여백(margin)만 따로 움직인다. easeOutBack 은 끝값을 잠깐 지나쳐서
+        // 6→0 일 때 음수가 되는데, margin 은 음수가 될 수 없어 0 으로 막는다.
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(end: selected || highlighted ? 0 : 6),
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutBack,
-          padding: EdgeInsets.symmetric(horizontal: highlighted ? 34 : 22),
-          // Idle tabs sit a little lower, so the selected one reads as the
-          // front folder tab merging into the white sheet below.
-          margin: EdgeInsets.only(top: selected || highlighted ? 0 : 6),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
+          builder: (context, top, child) => Padding(
+            padding: EdgeInsets.only(top: top < 0 ? 0 : top),
+            child: child,
           ),
-          child: AnimatedScale(
-            scale: highlighted ? 1.22 : 1,
+          child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             curve: Curves.easeOutBack,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (tab.id != 'all') ...[
-                  Icon(
-                    tab.isPublic ? Icons.public : Icons.lock_outline,
-                    size: 13,
-                    color: fg,
+            padding: EdgeInsets.symmetric(horizontal: highlighted ? 34 : 22),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
+            ),
+            child: AnimatedScale(
+              scale: highlighted ? 1.22 : 1,
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOutBack,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (tab.id != 'all') ...[
+                    Icon(
+                      tab.isPublic ? Icons.public : Icons.lock_outline,
+                      size: 13,
+                      color: fg,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    tab.name,
+                    style: DiaryTheme.ui(
+                      15,
+                      weight: strong ? FontWeight.w700 : FontWeight.w500,
+                      color: fg,
+                    ),
                   ),
-                  const SizedBox(width: 4),
-                ],
-                Text(
-                  tab.name,
-                  style: DiaryTheme.ui(
-                    15,
-                    weight: strong ? FontWeight.w700 : FontWeight.w500,
-                    color: fg,
+                  const SizedBox(width: 6),
+                  Text(
+                    '$count',
+                    style: DiaryTheme.ui(
+                      15,
+                      weight: FontWeight.w500,
+                      color: countColor,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '$count',
-                  style: DiaryTheme.ui(
-                    15,
-                    weight: FontWeight.w500,
-                    color: countColor,
-                  ),
-                ),
-                if (selected && !highlighted && onEdit != null)
-                  // 탭 글자보다 넉넉한 누름 영역(약 30×30)을 둔다.
-                  Semantics(
-                    button: true,
-                    label: '${tab.name} 폴더 설정',
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onEdit,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
-                        // 편집 창 안의 "이름 변경"(연필)과 겹치지 않게, 탭은 "더보기(⋯)".
-                        child: Icon(
-                          Icons.more_horiz,
-                          size: 18,
-                          color: fg,
+                  if (selected && !highlighted && onEdit != null)
+                    // 탭 글자보다 넉넉한 누름 영역(약 30×30)을 둔다.
+                    Semantics(
+                      button: true,
+                      label: '${tab.name} 폴더 설정',
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onEdit,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
+                          // 편집 창 안의 "이름 변경"(연필)과 겹치지 않게, 탭은 "더보기(⋯)".
+                          child: Icon(
+                            Icons.more_horiz,
+                            size: 18,
+                            color: fg,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

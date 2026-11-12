@@ -81,6 +81,9 @@ class AppStore extends ChangeNotifier {
   bool notificationsEnabled = true;
 
   List<WishlistTab> tabs = [];
+
+  /// 폴더 목록 불러오기가 끝내 실패했는지. tabs 가 비어 있고 이 값이 false 면 "불러오는 중".
+  bool tabsLoadFailed = false;
   List<Product> products = [];
   List<BasketItem> basket = [];
   List<Friend> friends = [];
@@ -153,13 +156,27 @@ class AppStore extends ChangeNotifier {
 
   /// 데이터 불러오기가 실패해도 로그인 자체는 막지 않는다.
   Future<void> _hydrateSessionSafely(AuthUserInfo user) async {
+    tabsLoadFailed = false;
     try {
       await _hydrateSession(user);
+      backendError = null;
     } catch (e) {
       debugPrint('AppStore: 데이터 불러오기 실패 (${e.runtimeType})');
       backendError = '데이터를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
       isLoggedIn = true;
+      // 폴더 목록을 못 채운 채 끝났다면 로딩이 아니라 실패 상태로 본다.
+      tabsLoadFailed = tabs.isEmpty;
     }
+  }
+
+  /// 폴더 목록 불러오기가 실패한 뒤 "다시 시도" — 데이터 불러오기를 처음부터 다시 한다.
+  Future<void> retryLoadTabs() async {
+    final user = _auth?.user;
+    if (user == null) return;
+    tabsLoadFailed = false;
+    notifyListeners();
+    await _hydrateSessionSafely(user);
+    notifyListeners();
   }
 
   Future<void> _hydrateSession(AuthUserInfo fresh) async {
@@ -289,6 +306,7 @@ class AppStore extends ChangeNotifier {
     _stopInboxWatch();
     isLoggedIn = false;
     tabs = [];
+    tabsLoadFailed = false;
     products = [];
     basket = [];
     friends = [];
@@ -375,8 +393,12 @@ class AppStore extends ChangeNotifier {
     return products.where((p) => p.listId == selectedTabId).toList();
   }
 
-  WishlistTab get selectedTab =>
-      tabs.firstWhere((t) => t.id == selectedTabId, orElse: () => tabs.first);
+  /// 폴더 목록이 비어 있으면 null (불러오는 중이거나 실패).
+  WishlistTab? get selectedTab =>
+      tabs.where((t) => t.id == selectedTabId).firstOrNull ?? tabs.firstOrNull;
+
+  /// 고정 '전체' 탭. 아직 없으면 null.
+  WishlistTab? get allTab => tabs.where((t) => t.id == 'all').firstOrNull;
 
   List<WishlistTab> get customTabs => tabs.where((t) => t.id != 'all').toList();
 
@@ -406,14 +428,15 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> reorderTabs(int oldIndex, int newIndex) async {
-    final allTab = tabs.firstWhere((t) => t.id == 'all');
+    final all = allTab;
+    if (all == null) return;
     final rest = tabs.where((t) => t.id != 'all').toList();
     if (oldIndex < 0 || oldIndex >= rest.length) return;
     final target = newIndex;
     if (target < 0 || target >= rest.length) return;
     final item = rest.removeAt(oldIndex);
     rest.insert(target, item);
-    tabs = [allTab, ...rest];
+    tabs = [all, ...rest];
     await _persistTabs();
     notifyListeners();
   }
@@ -437,12 +460,16 @@ class AppStore extends ChangeNotifier {
   Future<void> _persistTabs() async {
     final id = uid;
     if (id == null) return;
+    // 목록이 비었거나 불러오기에 실패한 상태로 저장하면 서버의 실제 폴더를 덮어쓸 수 있다.
+    if (tabs.isEmpty || tabsLoadFailed) return;
     await _repo.saveTabs(id, tabs);
   }
 
   /// Returns false when another list is already being created.
   Future<bool> addTab(String name, {bool isPublic = false}) async {
     final created = await _withLock('addTab', () async {
+      // 폴더 목록을 못 불러온 상태에서 만들면 새 폴더만 저장돼 기존 폴더를 덮어쓸 수 있다.
+      if (tabsLoadFailed) return false;
       final color = nextFileColor();
       final hex =
           '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
