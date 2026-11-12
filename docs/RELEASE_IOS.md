@@ -38,7 +38,8 @@
 - **알림 권한은 필요할 때(4.8):** 로그인 직후가 아니라 살까말까를 처음 보냈을 때·댓글을 처음 달았을 때·마이페이지에서 알림을 켰을 때 묻는다.
 - **영어 권한 문구(5.2):** `ios/Runner/en.lproj/InfoPlist.strings` (영어 기기 — 심사팀), `ko.lproj` (한국어). 문구를 바꾸면 Info.plist 와 두 파일을 같이 고친다.
 - **영어 개인정보처리방침(5.1):** `<SITE>/privacy-en.html`, 한국어 페이지 위에 링크.
-- 남은 다듬기: 표시 이름(wishkit / WishKit), 런치 화면(지금은 흰 화면).
+- **표시 이름(1.18):** 홈 화면·공유창 이름을 `WishKit` 으로 (iOS Runner·Share Extension, Android). 앱 안 로고와 글자는 그대로 소문자 wishkit.
+- **런치 화면(4.10):** 흰 배경 가운데에 wishkit 로고(150pt). 로고를 바꾸면 `assets/brand/wishkit-logo.png` 로 LaunchImage(1x·2x·3x)를 다시 만든다.
 
 ## 2. AdMob
 

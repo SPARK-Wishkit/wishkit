@@ -1,5 +1,17 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-12 - 앱 이름 WishKit, 런치 화면에 로고
+
+🌟 **쉬운 설명**
+- 홈 화면 아이콘 아래 이름과 공유창에 보이는 이름이 **WishKit** 으로 바뀌었어요 (아이폰·안드로이드). 앱 안 로고는 그대로예요.
+- 앱을 켤 때 잠깐 나오는 화면에 흰 바탕 + wishkit 로고가 나와요 (예전엔 그냥 흰 화면).
+
+🔧 **기술 설명**
+- `CFBundleDisplayName`·`CFBundleName` (Runner), `CFBundleDisplayName` (Share Extension), `android:label` → `WishKit`.
+- `LaunchImage.imageset` 를 `assets/brand/wishkit-logo.png` 로 다시 만듦(150×41pt, 1x·2x·3x), `LaunchScreen.storyboard` 이미지 크기 갱신.
+
+---
+
 ## 2026-11-12 - 알림 권한은 필요할 때 묻기, 영어 권한 문구, 영어 개인정보처리방침
 
 🌟 **쉬운 설명**

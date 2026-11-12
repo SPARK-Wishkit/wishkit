@@ -6,7 +6,7 @@
 
 | 칸 | 값 |
 |---|---|
-| 이름 | wishkit |
+| 이름 | WishKit |
 | 부제(30자) | 흩어진 찜 목록을 한곳에, 살까 말까는 친구에게 |
 | 카테고리 | 기본: 쇼핑 · 보조: 소셜 네트워킹 |
 | 개인정보 처리방침 URL | `<SITE>/privacy.html` |
@@ -93,7 +93,7 @@ Contact / support: 마이페이지 → 고객 문의 (hi.wishkit@gmail.com).
 
 Tracking: The App Tracking Transparency prompt appears on first launch, before any ad is requested. If declined, only non-personalized ads are shown.
 
-Adding a product: share a product page from Safari or a shopping app to "wishkit", or paste a link on the 담기 screen.
+Adding a product: share a product page from Safari or a shopping app to "WishKit", or paste a link on the 담기 screen.
 ```
 
 ### 연락처
