@@ -1,5 +1,19 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-12 - 안내 문구를 화면 가운데 반투명 카드로 + 살까말까 보내기 창 정리
+
+🌟 **쉬운 설명**
+- 앱의 모든 안내 문구("보냈어요", "담았어요", 에러 등)가 **화면 가운데 반투명 카드**(짙은 회색 50% + 뒤 흐림)로 잠깐 떠요. 아래쪽 버튼·탭 바, 위쪽 제목을 가리지 않아요.
+- 보통 문구는 한 줄로 떠요. 아주 긴 안내·에러만 줄바꿈돼요.
+- 1.8초 뒤 사라지고(에러는 3.5초), 화면을 어둡게 덮지 않아 뒤 화면을 그대로 누를 수 있어요.
+- 친구에게 보내기 창: "투표 보내기"와 "복수 선택 가능"이 버튼 바로 위 같은 자리에 항상 보여요. 복수 선택은 투표를 켰을 때만 누를 수 있고, 밑의 설명 줄은 없앴어요.
+- 보내기 창이 닫힐 때 나던 오류, 키보드를 올리면 화면이 넘치던 문제를 고쳤어요.
+
+🔧 **기술 설명**
+- `lib/widgets/top_toast.dart`: `showTopToast(context, msg, {error, icon, duration})`, `showTopError(context, e, {prefix})`, 비동기 전에 잡아 두는 `TopToast.of(context)`. 루트 Overlay 에 한 번에 하나만, 가운데에 반투명 카드로 띄우고 터치는 통과시킨다.
+- `ScaffoldMessenger.showSnackBar` 38곳을 모두 바꿈(15개 파일, 신고·차단·문의 포함).
+- `moderation_sheets.dart` 신고 대화상자: 닫히는 애니메이션 뒤에 메모 컨트롤러를 정리(같은 dispose 오류 예방).
+- `share_to_friends_sheet.dart`: StatefulWidget 으로 바꿔 메모 컨트롤러를 시트 dispose 에서 정리. 메모·친구 목록은 스크롤, 투표 설정·보내기 버튼은 아래 고정, 키보드 높이에 맞춰 시트 높이 조절.
 ## 2026-11-12 - Google Play 출시 필수 수정 (Android): 업로드 키 서명, cleartext, 계정 삭제 페이지, 차단 검사·투표 삭제 보강
 
 PR #28(chore/play-release-requirements)의 Android 전용 부분을 지금 main(#32·#33 iOS 작업) 위에 옮긴 것. 신고·차단·약관·처리방침은

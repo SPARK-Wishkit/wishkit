@@ -6,6 +6,7 @@ import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 import '../salkamalka/share_to_friends_sheet.dart';
 import '../share/share_link.dart';
 
@@ -159,13 +160,9 @@ Future<void> showSentBasketShareSheet(
       memo: picked.memo,
     );
     if (!sent || !context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${picked.friendIds.length}명의 친구에게 다시 보냈어요')),
-    );
+    showTopToast(context, '${picked.friendIds.length}명의 친구에게 다시 보냈어요');
   } catch (e) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-    );
+    showTopError(context, e);
   }
 }

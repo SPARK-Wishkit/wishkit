@@ -13,6 +13,7 @@ import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../theme/list_card.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({super.key});
@@ -186,9 +187,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
       await store.moveProduct(product.id, tab.id);
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('이동에 실패했어요: $e')));
+      showTopError(context, e, prefix: '이동에 실패했어요: ');
     }
   }
 

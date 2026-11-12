@@ -5,6 +5,7 @@ import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 import '../share/share_link.dart';
 import 'basket_picker_sheet.dart';
 import 'share_to_friends_sheet.dart';
@@ -247,9 +248,7 @@ class SalkamalkaScreen extends StatelessWidget {
     if (ok != true) return;
     final removed = await store.removeSelectedFromBasket();
     if (!context.mounted || removed == 0) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$removed개를 살까말까에서 뺐어요')),
-    );
+    showTopToast(context, '$removed개를 살까말까에서 뺐어요');
   }
 
   Future<void> _openPickFromWishlistSheet(
@@ -264,9 +263,7 @@ class SalkamalkaScreen extends StatelessWidget {
     if (picked == null || picked.isEmpty) return;
     await store.addManyToBasket(picked);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${picked.length}개를 담았어요')));
+    showTopToast(context, '${picked.length}개를 담았어요');
   }
 }
 
@@ -325,12 +322,13 @@ class _ShareBasketButtonState extends State<_ShareBasketButton> {
         voteEnabled: picked.allowVoting,
       );
       if (!sent || !mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${picked.friendIds.length}명의 친구에게 살까말까를 보냈어요')),
+      showTopToast(
+        context,
+        '${picked.friendIds.length}명의 친구에게 살까말까를 보냈어요',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      showTopError(context, e);
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
