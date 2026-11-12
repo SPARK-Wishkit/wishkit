@@ -84,6 +84,7 @@ class CognitoAuthService implements AuthService {
     required String password,
     required String name,
     required String handle,
+    required String termsVersion,
   }) =>
       _guard(() async {
         final normalizedEmail = AuthValidators.normalizeEmail(email);
@@ -97,6 +98,9 @@ class CognitoAuthService implements AuthService {
                 AuthUserAttributeKey.name: name.trim(),
               AuthUserAttributeKey.preferredUsername:
                   AuthValidators.normalizeHandle(handle),
+              // 동의한 약관 버전 → 서버(pre-sign-up)가 없으면 가입을 막는다.
+              CognitoUserAttributeKey.custom('terms_version'):
+                  termsVersion,
             },
           ),
         );

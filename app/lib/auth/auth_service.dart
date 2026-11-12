@@ -19,6 +19,7 @@ abstract interface class AuthService {
     required String password,
     required String name,
     required String handle,
+    required String termsVersion,
   });
 
   /// 인증 코드 확인.

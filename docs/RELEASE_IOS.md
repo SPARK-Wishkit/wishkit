@@ -6,7 +6,7 @@
 |---|---|---|---|
 | 1 | 개인정보 매니페스트 (1.7행) | `ios/Runner/PrivacyInfo.xcprivacy`, `ios/Share Extension/PrivacyInfo.xcprivacy` (UserDefaults 사유 CA92.1 · 1C8F.1, 수집 데이터) — 두 타깃의 Resources 에 등록 | ☐ Xcode 로 한 번 열어 두 파일이 각 타깃에 들어갔는지 확인 |
 | 2 | 댓글·바구니 관리: 금칙어 · 신고 · 차단 (2.2–2.4행) | 서버 금칙어 필터(`moderation.ts`), `reportContent` · `blockUser` 서버 함수, 앱의 ⋯ 메뉴(댓글 · 받은 살까말까 · 친구 화면, 친구 목록 길게 누르기), 마이페이지 → 차단한 사용자 | ☐ 처리 방법 숙지: `docs/MODERATION.md` |
-| 3 | 가입 시 약관 동의 (2.6행) | 회원가입 화면에 [필수] 이용약관(불쾌한 콘텐츠 무관용 문구 포함) · 개인정보 · 만 14세 이상 체크. 안 하면 가입 버튼이 꺼진다 | — |
+| 3 | 가입 시 약관 동의 (2.6행) | 회원가입 화면에 [필수] 이용약관(불쾌한 콘텐츠 무관용 문구 포함) · 개인정보 · 만 14세 이상 체크. 안 하면 가입 버튼이 꺼진다. 동의한 약관 버전이 Cognito `custom:terms_version` 에 기록되고, 없으면 서버(pre-sign-up)가 가입을 막는다 | — |
 | 4 | 고객 연락처 (2.5, 2.7행) | 마이페이지 → 고객 문의(hi.wishkit@gmail.com 메일 · 고객센터 페이지) | — |
 | 5 | 개인정보처리방침 (5.1행) | `app/site/` 의 privacy · terms · support 페이지를 백엔드가 CloudFront 로 올림 → 앱 마이페이지·가입 화면에서 연결 | ☐ App Store Connect 에 URL 입력 (아래) · ☐ 내용(리전, 위탁사) 사실과 맞는지 확인 |
 | 6 | 탈퇴 시 공유 콘텐츠 삭제 (5.5행) | 서버 함수 `deleteMyContent` — 내가 쓴 댓글, 친구 받은함의 내 살까말까, 내가 만든 댓글방(+댓글·투표) 삭제 → 그다음 기존 탈퇴 순서 | — |
@@ -16,6 +16,7 @@
 
 ## 1. 운영 백엔드 만들기 (한 번만, 백엔드 담당)
 
+0. AWS 콘솔 오른쪽 위 리전을 **아시아 태평양(서울) ap-northeast-2** 로 맞춘다. 개인정보처리방침에 "서울 리전에 저장"이라고 적혀 있다.
 1. AWS 콘솔 → **Amplify** → **새 앱 생성** → GitHub → `SPARK-Wishkit/SPARK_Wishkit`, 브랜치 `main`.
 2. "My app is a monorepo" 체크 → 경로 `app` (환경 변수 `AMPLIFY_MONOREPO_APP_ROOT=app`). 빌드 설정은 레포의 `amplify.yml` 을 쓴다.
 3. 환경 변수: 엔진 서버 값 `ENGINE_VPC_ID`, `ENGINE_PRIVATE_SUBNET_IDS`, `ENGINE_LAMBDA_SG_ID`, `ENGINE_BASE_URL` (`app/amplify/backend.ts` 주석 참고).
@@ -39,6 +40,8 @@ scripts/build_ios_release.sh
 테스트 ID 이거나 운영 주소록을 못 받으면 빌드 전에 멈춘다. 끝나면 `app/build/ios/ipa/*.ipa` 를 Transporter 로 올린다.
 
 ## 4. App Store Connect 에 넣을 것
+
+복사해서 붙여 넣을 글(설명, 키워드, 앱 개인정보 답, 영어 심사 메모, 데모 계정 만드는 법)은 **`docs/APP_STORE_SUBMISSION.md`** 에 있다. 요약:
 
 - **개인정보 처리방침 URL:** `<siteBaseUrl>/privacy.html` (빌드 스크립트 마지막 줄에 주소가 나온다)
 - **지원 URL:** `<siteBaseUrl>/support.html`

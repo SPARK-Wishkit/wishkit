@@ -6,7 +6,7 @@
 - 남의 댓글, 받은 살까말까, 친구 화면에 **⋯ 메뉴**가 생겼어요. **신고**하거나 그 사람을 **차단**할 수 있어요. 친구 목록에서는 이름을 길게 누르면 돼요.
 - 차단하면 서로 살까말까를 못 보내고, 그 사람의 살까말까·댓글·알림이 바로 안 보여요. **마이페이지 → 차단한 사용자**에서 풀 수 있어요.
 - 욕설 같은 말은 댓글·살까말까 메모에 **쓸 수 없어요**(서버가 막아요).
-- **회원가입** 때 이용약관(불쾌한 콘텐츠 무관용) · 개인정보 · 만 14세 이상에 동의해야 해요.
+- **회원가입** 때 이용약관(불쾌한 콘텐츠 무관용) · 개인정보 · 만 14세 이상에 동의해야 해요. 동의한 약관 버전은 계정에 기록돼요.
 - 마이페이지에 **고객 문의(hi.wishkit@gmail.com) · 이용약관 · 개인정보처리방침**이 생겼어요.
 - **탈퇴**하면 친구에게 보냈던 살까말까, 남의 살까말까에 쓴 댓글, 내가 만든 댓글방까지 지워져요.
 - 아이폰에서 처음 켜면 **광고 추적 허용** 팝업이 떠요. 거부해도 다 쓸 수 있고, 맞춤이 아닌 광고만 나와요.
@@ -17,7 +17,9 @@
 - `backend.ts`: 약관·고객센터 페이지(`app/site/`)를 전용 S3 + CloudFront 로 배포, `custom.siteBaseUrl` 출력. 신고 알림 SNS 주제(이메일 구독 확인 필요).
 - 앱: `AccountRepository` 에 `loadBlockedIds` · `blockUser` · `unblockUser` · `reportContent` 추가, `deleteUserData` 는 `deleteMyContent` 를 먼저 부른다. `AppStore.blockedUids` 로 받은함·댓글·알림·친구 목록을 거른다. `lib/widgets/moderation_sheets.dart`, `BlockedUsersScreen`, `lib/support/support_info.dart`.
 - iOS: `PrivacyInfo.xcprivacy` 2개(Runner, Share Extension), `NSUserTrackingUsageDescription`, `SKAdNetworkItems`, AdMob 앱 ID 는 `ios/Flutter/AdMob.xcconfig`. 광고는 ATT 다음에 `AdsConsent.ready` 후 로드(`app_tracking_transparency` 추가). Android AdMob 앱 ID 는 `gradle.properties`.
-- `scripts/build_ios_release.sh`, `docs/RELEASE_IOS.md`, `docs/MODERATION.md`. `fake_appsync` 에 신고·차단·탈퇴 정리 반영, `basket_store_test` 3개 추가.
+- 가입 동의 기록: Cognito 사용자 속성 `custom:terms_version`(앱이 `SupportInfo.termsVersion` 을 보냄), pre-sign-up 이 형식(YYYY-MM-DD)이 아니면 `PSU_TERMS_REQUIRED` 로 거절. `AuthService.signUp` / `AuthController.register` 에 `termsVersion` 인자 추가.
+- Info.plist `ITSAppUsesNonExemptEncryption = NO`.
+- `scripts/build_ios_release.sh`, `docs/RELEASE_IOS.md`, `docs/MODERATION.md`, `docs/APP_STORE_SUBMISSION.md`(스토어 문구·앱 개인정보 답·영어 심사 메모). `fake_appsync` 에 신고·차단·탈퇴 정리 반영, `basket_store_test` 3개 추가.
 - 백엔드 스키마 변경 — **배포 필요**. `flutter pub get` 필요(새 패키지).
 
 ---

@@ -80,6 +80,9 @@ AuthFailure _fromPreSignUp(String message) {
   if (message.contains('PSU_NAME_TOO_LONG')) {
     return AuthFailure(invalid, AuthValidators.name('x' * 999)!);
   }
+  if (message.contains('PSU_TERMS_REQUIRED')) {
+    return const AuthFailure(invalid, '이용약관과 개인정보 수집·이용에 동의해 주세요.');
+  }
   if (message.contains('PSU_EMAIL_REQUIRED')) {
     return const AuthFailure(invalid, '이메일을 입력해 주세요.');
   }

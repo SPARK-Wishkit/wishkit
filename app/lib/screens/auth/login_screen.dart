@@ -66,6 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
           password: passwordCtrl.text,
           name: nameCtrl.text,
           handle: handleCtrl.text,
+          termsVersion: SupportInfo.termsVersion,
         );
       } else {
         await auth.login(email: emailCtrl.text, password: passwordCtrl.text);
