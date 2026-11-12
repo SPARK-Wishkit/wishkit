@@ -3,9 +3,11 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/app_store.dart';
+import '../../models/moderation.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/moderation_sheets.dart';
 import '../product/product_detail_screen.dart';
 
 class FriendsScreen extends StatefulWidget {
@@ -233,6 +235,7 @@ class _FollowingList extends StatelessWidget {
             handle: f.username,
             avatarUrl: f.avatar,
             subtitle: '공개 폴더 ${f.wishlistCount}  ·  아이템 ${f.itemCount}',
+            onLongPress: () => _safety(context, f.id, f.name),
             trailing: _FollowButton(
               isFollowing: true,
               onPressed: () => _toggle(context, f),
@@ -252,6 +255,7 @@ class _FollowingList extends StatelessWidget {
               handle: f.username,
               avatarUrl: f.avatar,
               subtitle: '공개 폴더 ${f.wishlistCount}  ·  아이템 ${f.itemCount}',
+              onLongPress: () => _safety(context, f.id, f.name),
               trailing: _FollowButton(
                 isFollowing: false,
                 onPressed: () => _toggle(context, f),
@@ -308,6 +312,7 @@ class _FollowersList extends StatelessWidget {
           name: u.name,
           handle: u.handle,
           avatarUrl: u.avatarUrl,
+          onLongPress: () => _safety(context, u.uid, u.name),
           trailing: OutlinedButton(
             onPressed: () => _confirmRemove(context, u),
             style: OutlinedButton.styleFrom(
@@ -367,6 +372,15 @@ class _FollowersList extends StatelessWidget {
       ).showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
     }
   }
+}
+
+/// 친구 목록에서 길게 누르면: 사용자 신고 · 차단.
+void _safety(BuildContext context, String userId, String name) {
+  if (userId.isEmpty) return;
+  showSafetySheet(
+    context,
+    target: UserReportTarget(userId: userId, userName: name),
+  );
 }
 
 /// Instagram-style: following = outlined "팔로잉", not following = filled "팔로우".

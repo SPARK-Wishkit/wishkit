@@ -10,6 +10,7 @@ import '../../data/app_store.dart';
 import '../../theme/avatar_presets.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../support/support_info.dart';
 
 class MyPageScreen extends StatefulWidget {
   const MyPageScreen({super.key});
@@ -234,6 +235,40 @@ class _MyPageScreenState extends State<MyPageScreen> {
             ),
             MenuRow(
               height: 66,
+              label: '차단한 사용자',
+              icon: Icons.block,
+              trailing: store.blockedUids.isEmpty
+                  ? null
+                  : Text(
+                      '${store.blockedUids.length}명',
+                      style: DiaryTheme.ui(14, color: DiaryColors.inkSoft),
+                    ),
+              onTap: () => context.push('/blocked-users'),
+            ),
+            MenuRow(
+              height: 66,
+              label: '고객 문의',
+              icon: Icons.mail_outline,
+              trailing: Text(
+                SupportInfo.email,
+                style: DiaryTheme.ui(13, color: DiaryColors.inkSoft),
+              ),
+              onTap: () => _openSupport(context),
+            ),
+            MenuRow(
+              height: 66,
+              label: '이용약관',
+              icon: Icons.description_outlined,
+              onTap: () => openSupportPage(context, SupportInfo.termsPage),
+            ),
+            MenuRow(
+              height: 66,
+              label: '개인정보처리방침',
+              icon: Icons.privacy_tip_outlined,
+              onTap: () => openSupportPage(context, SupportInfo.privacyPage),
+            ),
+            MenuRow(
+              height: 66,
               label: '앱 정보',
               icon: Icons.info_outline,
               onTap: () {
@@ -274,6 +309,58 @@ class _MyPageScreenState extends State<MyPageScreen> {
         ),
       ),
     );
+  }
+
+  /// 고객 문의: 메일 쓰기 또는 고객센터 웹 페이지.
+  Future<void> _openSupport(BuildContext context) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: DiaryColors.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('고객 문의', style: DiaryTheme.body(16, weight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(
+                '궁금한 점, 불편한 점, 신고는 ${SupportInfo.email} 로 보내 주세요.',
+                style: DiaryTheme.body(13, color: DiaryColors.inkMuted),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.mail_outline),
+                title: Text('메일로 문의하기', style: DiaryTheme.body(14)),
+                onTap: () => Navigator.pop(ctx, 'mail'),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.help_outline),
+                title: Text('고객센터 (자주 묻는 질문 · 신고 · 탈퇴 안내)',
+                    style: DiaryTheme.body(14)),
+                onTap: () => Navigator.pop(ctx, 'web'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!context.mounted) return;
+    if (action == 'mail') {
+      final store = context.read<AppStore>();
+      await openSupportEmail(
+        context,
+        body: '\n\n---\n아이디: ${store.currentUser.handle}\n앱 버전: 1.0.0',
+      );
+    } else if (action == 'web') {
+      await openSupportPage(context, SupportInfo.supportPage);
+    }
   }
 
   Future<void> _openAccountSettings(
@@ -370,7 +457,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '탈퇴하면 계정과 wishkit이 삭제되고 되돌릴 수 없어요.',
+                      '탈퇴하면 계정과 wishkit, 친구에게 보낸 살까말까, 내가 쓴 댓글·투표가 '
+                      '모두 삭제되고 되돌릴 수 없어요.',
                       style: DiaryTheme.body(13, color: DiaryColors.inkMuted),
                     ),
                     const SizedBox(height: 12),

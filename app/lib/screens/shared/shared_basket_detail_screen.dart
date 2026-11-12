@@ -3,9 +3,11 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/app_store.dart';
+import '../../models/moderation.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/moderation_sheets.dart';
 import '../mypage/sent_baskets_screen.dart';
 import '../product/product_detail_screen.dart';
 import '../wishlist/wishlist_screen.dart';
@@ -78,6 +80,24 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
               tooltip: '공유하기',
               onPressed: () => showSentBasketShareSheet(context, store, basket),
               icon: const Icon(Icons.ios_share),
+            ),
+          // 친구에게 받은 살까말까: 신고 · 보낸 사람 차단
+          if (!isMine && store.isLoggedIn && basket.fromUid.isNotEmpty)
+            IconButton(
+              tooltip: '신고 · 차단',
+              onPressed: () async {
+                final blocked = await showSafetySheet(
+                  context,
+                  target: BasketReportTarget(
+                    basketId: basket.id,
+                    userId: basket.fromUid,
+                    userName: basket.ownerName,
+                  ),
+                );
+                // 차단하면 이 살까말까는 받은함에서 사라지므로 화면을 닫는다.
+                if (blocked && context.mounted) context.pop();
+              },
+              icon: const Icon(Icons.more_horiz),
             ),
         ],
       ),
@@ -277,6 +297,19 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
     SharedBasket basket,
     BasketComment comment,
   ) async {
+    // 남이 쓴 댓글: 신고 · 작성자 차단
+    if (comment.authorUid != store.uid) {
+      await showSafetySheet(
+        context,
+        target: CommentReportTarget(
+          threadId: basket.commentThreadId,
+          commentId: comment.id,
+          userId: comment.authorUid,
+          userName: comment.authorName,
+        ),
+      );
+      return;
+    }
     final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: DiaryColors.paper,
@@ -529,7 +562,8 @@ class _CommentTile extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(left: indented ? 36 : 0, bottom: 12),
       child: GestureDetector(
-        onLongPress: isMine ? onManage : null,
+        // 내 댓글: 수정·삭제, 남의 댓글: 신고·차단
+        onLongPress: onManage,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -580,9 +614,9 @@ class _CommentTile extends StatelessWidget {
                 ],
               ),
             ),
-            if (isMine)
+            if (onManage != null)
               IconButton(
-                tooltip: '댓글 관리',
+                tooltip: isMine ? '댓글 관리' : '신고 · 차단',
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),

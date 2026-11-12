@@ -4,6 +4,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../theme/diary_theme.dart';
 import '../theme/list_card.dart';
 import 'ads_config.dart';
+import 'ads_consent.dart';
 
 /// 상품 카드 사이에 들어가는 광고 카드.
 ///
@@ -35,9 +36,16 @@ class _NativeAdCardState extends State<NativeAdCard>
   void initState() {
     super.initState();
     if (!AdsConfig.supported) return;
+    // 추적 동의(ATT)와 광고 SDK 준비가 끝난 뒤에 불러온다 (ads_consent.dart).
+    AdsConsent.ready.then((_) {
+      if (mounted) _load();
+    });
+  }
+
+  void _load() {
     _ad = NativeAd(
       adUnitId: AdsConfig.nativeUnitId,
-      request: const AdRequest(),
+      request: AdsConsent.request(),
       nativeTemplateStyle: NativeTemplateStyle(
         templateType: TemplateType.small,
         mainBackgroundColor: NativeAdCard.background,
@@ -76,6 +84,7 @@ class _NativeAdCardState extends State<NativeAdCard>
         },
       ),
     )..load();
+    updateKeepAlive();
   }
 
   @override

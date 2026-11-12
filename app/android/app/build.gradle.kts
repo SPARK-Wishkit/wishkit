@@ -31,6 +31,10 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // AdMob 앱 ID: android/gradle.properties 의 admobAndroidAppId. 없으면 구글 테스트 앱 ID.
+        manifestPlaceholders["admobAppId"] =
+            (project.findProperty("admobAndroidAppId") as String?)
+                ?: "ca-app-pub-3940256099942544~3347511713"
     }
 
     buildTypes {

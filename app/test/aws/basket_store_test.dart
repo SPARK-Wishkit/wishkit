@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:figmadesign/models/moderation.dart';
 import 'package:figmadesign/models/models.dart';
 import 'package:figmadesign/services/aws/basket_store.dart';
 import 'package:figmadesign/services/aws/gql_runner.dart';
@@ -378,5 +379,105 @@ void main() {
     }
     expect(appsync.table('SentBasket'), isEmpty);
     expect(appsync.table('BasketVote'), isEmpty);
+  });
+
+  group('신고 · 차단 · 탈퇴 정리 (App Store 1.2 · 5.1.1)', () {
+    test('댓글·받은 살까말까·사용자를 신고할 수 있고, 내 것·없는 것은 신고할 수 없다', () async {
+      appsync.caller = 'bob';
+      await baskets.sendBasket(recipientUids: ['amy'], items: [product(1)], threadId: 'sb-r');
+      await baskets.addComment(threadId: 'sb-r', text: '이거 어때?');
+      final comment = appsync.table('BasketComment').values.single;
+      final received = appsync.table('ReceivedBasket').values.single;
+
+      appsync.caller = 'amy';
+      await baskets.report(
+        CommentReportTarget(
+          threadId: 'sb-r',
+          commentId: comment['commentId'] as String,
+          userId: 'bob',
+          userName: '밥',
+        ),
+        reason: ReportReason.abuse,
+      );
+      await baskets.report(
+        BasketReportTarget(
+          basketId: received['basketId'] as String,
+          userId: 'bob',
+          userName: '밥',
+        ),
+        reason: ReportReason.spam,
+        detail: '광고 같아요',
+      );
+      await baskets.report(
+        const UserReportTarget(userId: 'bob', userName: '밥'),
+        reason: ReportReason.other,
+      );
+      expect(appsync.table('ContentReport').length, 3);
+      expect(
+        appsync.table('ContentReport').values.map((r) => r['targetUserId']).toSet(),
+        {'bob'},
+      );
+
+      await expectLater(
+        baskets.report(
+          const BasketReportTarget(basketId: 'nope', userId: 'bob', userName: '밥'),
+          reason: ReportReason.spam,
+        ),
+        throwsA(isA<Exception>()),
+      );
+      await expectLater(
+        baskets.report(
+          const UserReportTarget(userId: 'amy', userName: '에이미'),
+          reason: ReportReason.spam,
+        ),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('차단하면 서로 살까말까를 보낼 수 없고, 해제하면 다시 보낼 수 있다', () async {
+      appsync.caller = 'amy';
+      await social.blockUser(myUid: 'amy', targetUid: 'bob');
+      expect(await social.blockedIds('amy'), {'bob'});
+
+      appsync.caller = 'bob';
+      await expectLater(
+        baskets.sendBasket(recipientUids: ['amy'], items: [product(1)], threadId: 'sb-b1'),
+        throwsA(isA<Exception>()),
+      );
+      appsync.caller = 'amy';
+      await expectLater(
+        baskets.sendBasket(recipientUids: ['bob'], items: [product(1)], threadId: 'sb-b2'),
+        throwsA(isA<Exception>()),
+      );
+
+      await social.unblockUser(myUid: 'amy', targetUid: 'bob');
+      expect(await social.blockedIds('amy'), isEmpty);
+      appsync.caller = 'bob';
+      expect(
+        await baskets.sendBasket(recipientUids: ['amy'], items: [product(1)], threadId: 'sb-b3'),
+        1,
+      );
+    });
+
+    test('탈퇴 정리: 내가 남에게 남긴 댓글·살까말까·댓글방이 지워진다', () async {
+      // amy 가 bob 에게 보낸 살까말까 + bob 이 amy 에게 보낸 살까말까에 amy 가 쓴 댓글
+      appsync.caller = 'amy';
+      await baskets.sendBasket(recipientUids: ['bob'], items: [product(1)], threadId: 'sb-amy');
+      appsync.caller = 'bob';
+      await baskets.sendBasket(recipientUids: ['amy'], items: [product(2)], threadId: 'sb-bob');
+      await baskets.addComment(threadId: 'sb-amy', text: '좋아 보여');
+      appsync.caller = 'amy';
+      await baskets.addComment(threadId: 'sb-bob', text: '사!');
+
+      await baskets.deleteMyContent();
+
+      // bob 받은함에 있던 amy 의 살까말까, amy 가 만든 댓글방과 그 안의 bob 댓글까지 지워진다
+      expect(appsync.table('ReceivedBasket').values.where((r) => r['fromUid'] == 'amy'), isEmpty);
+      expect(appsync.table('BasketThread').containsKey('sb-amy'), isFalse);
+      expect(appsync.table('BasketComment').values.where((c) => c['threadId'] == 'sb-amy'), isEmpty);
+      // bob 의 댓글방에 amy 가 쓴 댓글도 지워지고, bob 의 댓글방 자체는 남는다
+      expect(appsync.table('BasketComment').values.where((c) => c['authorId'] == 'amy'), isEmpty);
+      expect(appsync.table('BasketThread').containsKey('sb-bob'), isTrue);
+    });
   });
 }

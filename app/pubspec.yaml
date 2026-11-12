@@ -52,6 +52,8 @@ dependencies:
   amplify_storage_s3: ^2.15.0
   # 상품 카드 사이 네이티브 광고 (lib/ads/). 9.1.0 = 2026-08 릴리스, Flutter 3.38.1+ / iOS 13+ / Android minSdk 24+
   google_mobile_ads: ^9.1.0
+  # iOS 광고 추적 동의(ATT) 팝업. 광고 SDK 시작 전에 띄운다 (lib/ads/ads_consent.dart).
+  app_tracking_transparency: ^2.0.6
   # 살까말까 링크를 카카오톡·인스타그램 등으로 보내는 휴대폰 공유창.
   # 13.x 는 Android Gradle Plugin 8.12.1·Gradle 8.13·Kotlin 2.2.0 이상이 필요하다(android/ 설정을 그에 맞춤).
   # 11.x 는 다른 패키지와 버전이 충돌해서 설치되지 않았다(2026-10-24 flutter pub get).

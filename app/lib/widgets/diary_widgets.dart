@@ -226,6 +226,7 @@ class PersonRow extends StatelessWidget {
     required this.handle,
     required this.avatarUrl,
     this.onTap,
+    this.onLongPress,
     this.subtitle,
     this.trailing,
   });
@@ -234,11 +235,20 @@ class PersonRow extends StatelessWidget {
   final String handle;
   final String avatarUrl;
   final VoidCallback? onTap;
+
+  /// 길게 누르기 (친구 목록: 신고 · 차단).
+  final VoidCallback? onLongPress;
   final String? subtitle;
   final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
+    final card = _card();
+    if (onLongPress == null) return card;
+    return GestureDetector(onLongPress: onLongPress, child: card);
+  }
+
+  Widget _card() {
     return WhiteProductCard(
       onTap: onTap,
       child: Row(

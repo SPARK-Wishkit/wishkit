@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
 
+import '../models/moderation.dart';
 import '../models/models.dart';
 import 'aws/basket_store.dart';
 import 'aws/file_store.dart';
@@ -56,6 +57,8 @@ class AccountRepository {
   /// AuthController.deleteAccount → AuthDataHooks.deleteMyData 에서 호출된다.
   /// 아직 로그인된 상태에서 불리므로, 내 파일 폴더에 접근할 수 있다.
   Future<void> deleteUserData(String uid) async {
+    // 먼저 다른 사람 공간에 남은 내 댓글·살까말까·댓글방을 서버가 지운다 (App Store 5.1.1(v)).
+    await _baskets.deleteMyContent();
     await _files.deleteAll();
     await _baskets.deleteAll(uid);
     await _social.deleteAllFollows(uid);
@@ -197,6 +200,26 @@ class AccountRepository {
     required String followerUid,
   }) =>
       _social.removeFollower(myUid: myUid, followerUid: followerUid);
+
+  // ── 신고 · 차단 (App Store 심사 1.2) ──
+
+  /// 내가 차단한 사람들의 uid.
+  Future<Set<String>> loadBlockedIds(String uid) => _social.blockedIds(uid);
+
+  /// 차단 (서로의 팔로우도 끊는다).
+  Future<void> blockUser({required String myUid, required String targetUid}) =>
+      _social.blockUser(myUid: myUid, targetUid: targetUid);
+
+  Future<void> unblockUser({required String myUid, required String targetUid}) =>
+      _social.unblockUser(myUid: myUid, targetUid: targetUid);
+
+  /// 댓글·살까말까·사용자 신고.
+  Future<void> reportContent(
+    ReportTarget target, {
+    required ReportReason reason,
+    String detail = '',
+  }) =>
+      _baskets.report(target, reason: reason, detail: detail);
 
   Future<List<FriendWishlist>> loadFriendWishlists(
     List<Friend> followingFriends,

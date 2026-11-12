@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 
 import '../auth/auth_controller.dart';
 import '../auth/auth_models.dart';
+import '../models/moderation.dart';
 import '../models/models.dart';
 import '../services/account_repository.dart';
 import '../services/parsing_bridge.dart';
@@ -88,6 +89,10 @@ class AppStore extends ChangeNotifier {
   List<AppNotification> notifications = [];
   List<SharedBasket> receivedBaskets = [];
   final Map<String, SharedBasket> sharedBaskets = {};
+
+  /// 내가 차단한 사람들의 uid. 이 사람들의 살까말까·댓글·알림·프로필은 화면에서 바로 숨긴다.
+  /// (서버도 서로 살까말까를 보내지 못하게 막는다 — social-actions/logic.ts)
+  Set<String> blockedUids = {};
 
   /// Baskets the user X-ed out of the 내 친구 탭 feed. The profile doc is the
   /// source of truth; this is the local cache the UI reads, kept so nothing
@@ -172,11 +177,19 @@ class AppStore extends ChangeNotifier {
     tabs = await _repo.loadTabs(fresh.uid);
     products = await _repo.loadProducts(fresh.uid);
 
+    // 차단 목록 — 친구·받은함을 불러오기 전에 읽어 둬야 차단한 사람이 잠깐이라도 보이지 않는다.
+    try {
+      blockedUids = await _repo.loadBlockedIds(fresh.uid);
+    } catch (e) {
+      debugPrint('AppStore: 차단 목록 불러오기 실패 (${e.runtimeType})');
+    }
+
     // 친구·팔로우 — 불러오기가 실패해도 내 데이터 화면은 쓸 수 있게 한다.
     try {
       final following = (await _repo.followingIds(fresh.uid)).toSet();
-      friends =
-          await _repo.loadDirectory(myUid: fresh.uid, following: following);
+      friends = _withoutBlockedFriends(
+        await _repo.loadDirectory(myUid: fresh.uid, following: following),
+      );
       friendWishlists = await _repo.loadFriendWishlists(friends);
       followerUsers =
           await _repo.loadUsers(await _repo.followerIds(fresh.uid));
@@ -223,7 +236,8 @@ class AppStore extends ChangeNotifier {
       notifications = [];
     }
     try {
-      receivedBaskets = await _repo.loadReceivedBaskets(userId);
+      receivedBaskets =
+          _withoutBlockedBaskets(await _repo.loadReceivedBaskets(userId));
     } catch (_) {
       receivedBaskets = [];
     }
@@ -282,6 +296,7 @@ class AppStore extends ChangeNotifier {
     followerUsers = [];
     notifications = [];
     receivedBaskets = [];
+    blockedUids = {};
     _hiddenFeedIds = {};
     _pendingHideIds = {};
     _pendingUnhideIds = {};
@@ -868,7 +883,8 @@ class AppStore extends ChangeNotifier {
   /// OS banner (see _watchInbox), not the in-app list.
   List<AppNotification> get visibleNotifications => notifications.where((n) {
     return n.type != AppNotificationType.review &&
-        n.type != AppNotificationType.list;
+        n.type != AppNotificationType.list &&
+        !blockedUids.contains(n.fromUid);
   }).toList();
 
   List<FriendSalkamalka> get friendSalkamalkaGroups {
@@ -1025,7 +1041,9 @@ class AppStore extends ChangeNotifier {
     final userId = uid;
     if (userId == null) return;
     final following = (await _repo.followingIds(userId)).toSet();
-    friends = await _repo.loadDirectory(myUid: userId, following: following);
+    friends = _withoutBlockedFriends(
+      await _repo.loadDirectory(myUid: userId, following: following),
+    );
     friendWishlists = await _repo.loadFriendWishlists(friends);
     followerUsers = await _repo.loadUsers(await _repo.followerIds(userId));
     await _loadInboxSafely(userId);
@@ -1137,6 +1155,71 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── 신고 · 차단 (App Store 심사 1.2) ──────────────────────────
+
+  bool isBlocked(String userId) => blockedUids.contains(userId);
+
+  List<Friend> _withoutBlockedFriends(List<Friend> list) => [
+        for (final f in list)
+          if (!blockedUids.contains(f.id)) f,
+      ];
+
+  List<SharedBasket> _withoutBlockedBaskets(List<SharedBasket> list) => [
+        for (final b in list)
+          if (b.fromUid.isEmpty || !blockedUids.contains(b.fromUid)) b,
+      ];
+
+  /// 댓글·살까말까·사용자 신고. 운영팀이 24시간 안에 확인한다.
+  Future<void> reportContent(
+    ReportTarget target, {
+    required ReportReason reason,
+    String detail = '',
+  }) async {
+    _ensureBackend();
+    if (uid == null) throw Exception('로그인된 계정이 없어요.');
+    await _repo.reportContent(target, reason: reason, detail: detail);
+  }
+
+  /// 사용자 차단: 그 사람의 살까말까·댓글·알림을 바로 숨기고, 서로의 팔로우를 끊는다.
+  Future<void> blockUser(String targetUid) async {
+    _ensureBackend();
+    final userId = uid;
+    if (userId == null) throw Exception('로그인된 계정이 없어요.');
+    if (targetUid.isEmpty || targetUid == userId) return;
+    await _repo.blockUser(myUid: userId, targetUid: targetUid);
+    blockedUids = {...blockedUids, targetUid};
+    friends = _withoutBlockedFriends(friends);
+    friendWishlists =
+        friendWishlists.where((w) => w.friendId != targetUid).toList();
+    followerUsers = followerUsers.where((u) => u.uid != targetUid).toList();
+    receivedBaskets = _withoutBlockedBaskets(receivedBaskets);
+    currentUser = currentUser.copyWith(
+      followers: followerUsers.length,
+      following: friends.where((f) => f.isFollowing).length,
+    );
+    notifyListeners();
+    unawaited(refreshSocialCounts());
+  }
+
+  /// 차단 해제. 친구 목록에 다시 보이도록 새로 불러온다(팔로우는 저절로 돌아오지 않는다).
+  Future<void> unblockUser(String targetUid) async {
+    _ensureBackend();
+    final userId = uid;
+    if (userId == null) throw Exception('로그인된 계정이 없어요.');
+    await _repo.unblockUser(myUid: userId, targetUid: targetUid);
+    blockedUids = {...blockedUids}..remove(targetUid);
+    notifyListeners();
+    try {
+      await refreshFriends();
+    } catch (_) {}
+  }
+
+  /// 차단한 사람들의 프로필 (탈퇴한 사람은 빠진다).
+  Future<List<AppUser>> loadBlockedUsers() async {
+    if (uid == null || blockedUids.isEmpty) return [];
+    return _repo.loadUsers(blockedUids.toList());
+  }
+
   Future<void> setNotificationsEnabled(bool value) async {
     notificationsEnabled = value;
     await _persistNotificationPrefs();
@@ -1159,7 +1242,8 @@ class AppStore extends ChangeNotifier {
         for (final n in list) {
           if (!seen.contains(n.id) &&
               n.type != AppNotificationType.review &&
-              n.type != AppNotificationType.list) {
+              n.type != AppNotificationType.list &&
+              !blockedUids.contains(n.fromUid)) {
             if (notificationsEnabled) {
               unawaited(PushNotificationService.instance.showInboxBanner(n));
             }
@@ -1174,7 +1258,7 @@ class AppStore extends ChangeNotifier {
       notifyListeners();
     }, onError: (_) {});
     _receivedBasketSub = _repo.watchReceivedBaskets(userId).listen((list) {
-      receivedBaskets = list;
+      receivedBaskets = _withoutBlockedBaskets(list);
       notifyListeners();
     }, onError: (_) {});
   }
@@ -1427,7 +1511,13 @@ class AppStore extends ChangeNotifier {
     if (threadId.isEmpty || !_backendConfigured || uid == null) {
       return Stream.value(const []);
     }
-    return _repo.watchBasketComments(threadId);
+    // 차단한 사람의 댓글은 보이지 않게 거른다.
+    return _repo.watchBasketComments(threadId).map(
+          (list) => [
+            for (final c in list)
+              if (!blockedUids.contains(c.authorUid)) c,
+          ],
+        );
   }
 
   /// Returns false when a comment on this thread is already being posted.
