@@ -11,6 +11,7 @@ import '../../theme/avatar_presets.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
 import '../../support/support_info.dart';
+import '../../widgets/top_toast.dart';
 
 class MyPageScreen extends StatefulWidget {
   const MyPageScreen({super.key});
@@ -34,31 +35,16 @@ class _MyPageScreenState extends State<MyPageScreen> {
     final next = !store.notificationsEnabled;
     await store.setNotificationsEnabled(next);
     if (!context.mounted) return;
-    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 4),
-        content: Row(
-          children: [
-            Icon(
-              next
-                  ? Icons.notifications_active_outlined
-                  : Icons.notifications_off_outlined,
-              color: DiaryColors.white,
-              size: 20,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                next
-                    ? '알림을 켰어요. 팔로우·살까말까 같은 새 소식이 휴대폰 상단 배너로 와요. '
-                        '(휴대폰 설정에서 wishkit 알림이 허용돼 있어야 해요)'
-                    : '알림을 껐어요. 배너로는 오지 않고, 새 소식은 앱의 알림 목록에서 볼 수 있어요.',
-              ),
-            ),
-          ],
-        ),
-      ),
+    showTopToast(
+      context,
+      next
+          ? '알림을 켰어요. 팔로우·살까말까 같은 새 소식이 휴대폰 상단 배너로 와요. '
+              '(휴대폰 설정에서 wishkit 알림이 허용돼 있어야 해요)'
+          : '알림을 껐어요. 배너로는 오지 않고, 새 소식은 앱의 알림 목록에서 볼 수 있어요.',
+      icon: next
+          ? Icons.notifications_active_outlined
+          : Icons.notifications_off_outlined,
+      duration: const Duration(seconds: 4),
     );
   }
 
@@ -509,15 +495,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
     try {
       await store.deleteAccount(password: passwordCtrl.text);
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('탈퇴가 완료되었어요')));
+        showTopToast(context, '탈퇴가 완료되었어요');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-        );
+        showTopError(context, e);
       }
     }
   }
@@ -665,15 +647,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
         newPassword: nextCtrl.text,
       );
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('비밀번호를 변경했어요')));
+        showTopToast(context, '비밀번호를 변경했어요');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-        );
+        showTopError(context, e);
       }
     }
   }
@@ -866,9 +844,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
     );
 
     if (saved == true && context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('프로필을 저장했어요')));
+      showTopToast(context, '프로필을 저장했어요');
     }
   }
 }

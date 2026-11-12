@@ -6,6 +6,7 @@ import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 
 enum FollowListKind { followers, following }
 
@@ -161,14 +162,10 @@ class _FollowListScreenState extends State<FollowListScreen> {
         _users = _users?.where((u) => u.uid != user.uid).toList();
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${user.name} 님을 팔로워에서 삭제했어요')),
-      );
+      showTopToast(context, '${user.name} 님을 팔로워에서 삭제했어요');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('삭제 실패: $e')),
-      );
+      showTopError(context, e, prefix: '삭제 실패: ');
     }
   }
 }

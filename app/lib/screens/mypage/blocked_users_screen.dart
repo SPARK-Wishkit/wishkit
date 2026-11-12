@@ -6,6 +6,7 @@ import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 
 /// 마이페이지 → 차단한 사용자. 차단 해제만 할 수 있다 (App Store 심사 1.2).
 class BlockedUsersScreen extends StatefulWidget {
@@ -45,14 +46,10 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
       await context.read<AppStore>().unblockUser(user.uid);
       if (!mounted) return;
       setState(() => _users = _users?.where((u) => u.uid != user.uid).toList());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${user.name}님 차단을 해제했어요.')),
-      );
+      showTopToast(context, '${user.name}님 차단을 해제했어요.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      showTopError(context, e);
     } finally {
       _busy.remove(user.uid);
       if (mounted) setState(() {});

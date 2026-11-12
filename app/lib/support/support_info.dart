@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../widgets/top_toast.dart';
+
 /// 고객 문의 · 약관 · 개인정보처리방침 (App Store 심사 1.5, 5.1.1).
 ///
 /// 웹 페이지(app/site/*.html)는 백엔드가 CloudFront 로 올리고(amplify/backend.ts 의 SiteCdn),
@@ -37,12 +39,10 @@ Future<void> openSupportPage(BuildContext context, String page) async {
     }
   }
   if (!ok && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          '페이지를 열 수 없어요. 문의는 ${SupportInfo.email} 로 보내 주세요.',
-        ),
-      ),
+    showTopToast(
+      context,
+      '페이지를 열 수 없어요. 문의는 ${SupportInfo.email} 로 보내 주세요.',
+      error: true,
     );
   }
 }
@@ -67,10 +67,11 @@ Future<void> openSupportEmail(
   if (ok || !context.mounted) return;
   await Clipboard.setData(const ClipboardData(text: SupportInfo.email));
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('메일 앱을 열 수 없어서 주소(${SupportInfo.email})를 복사했어요.'),
-    ),
+  showTopToast(
+    context,
+    '메일 앱을 열 수 없어서 주소(${SupportInfo.email})를 복사했어요.',
+    icon: Icons.mail_outline,
+    duration: const Duration(seconds: 4),
   );
 }
 

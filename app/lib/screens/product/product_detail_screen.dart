@@ -7,6 +7,7 @@ import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 
 /// Detail route for a product that may belong to someone else.
 /// IDs collide across owners, so friend/basket/friend scopes must travel
@@ -119,16 +120,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     if (listId == null || !context.mounted) return;
     final result = await store.addToMyWishkit(product, listId: listId);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result.alreadyHad
-              ? '이미 내 wishkit에 있는 상품이에요'
-              : result.product == null
-                  ? '담지 못했어요. 잠시 후 다시 시도해 주세요'
-                  : '내 wishkit에 담았어요',
-        ),
-      ),
+    showTopToast(
+      context,
+      result.alreadyHad
+          ? '이미 내 wishkit에 있는 상품이에요'
+          : result.product == null
+              ? '담지 못했어요. 잠시 후 다시 시도해 주세요'
+              : '내 wishkit에 담았어요',
+      error: !result.alreadyHad && result.product == null,
     );
   }
 
@@ -170,9 +169,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       PriceRefreshStatus.unavailable => '상품 링크가 없어 새로고침할 수 없어요',
       PriceRefreshStatus.needsConfirm => '가격을 확인하지 못했어요',
     };
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showTopToast(context, message);
   }
 
   Future<bool> _confirmUncertainPrice(PriceRefreshResult result) async {
@@ -418,11 +415,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       onPressed: () async {
                                         await store.addToBasket(product);
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            const SnackBar(
-                                              content: Text('살까말까 바구니에 담았어요'),
-                                            ),
+                                          showTopToast(
+                                            context,
+                                            '살까말까 바구니에 담았어요',
                                           );
                                         }
                                       },

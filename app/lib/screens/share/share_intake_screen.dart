@@ -15,6 +15,7 @@ import '../../services/share_input.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/add_folder_dialog.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 
 /// Shown when another app shares a product URL into this app.
 class ShareIntakeScreen extends StatefulWidget {
@@ -550,15 +551,16 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
       }
       store.setPendingShareUrl(null);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(switch ((clothesPhotoFailed, tagPhotoFailed)) {
-              (true, true) => '${product.name} 을(를) 저장했어요. 옷 사진과 태그 사진은 저장하지 못했어요',
-              (true, false) => '${product.name} 을(를) 저장했어요. 옷 사진은 저장하지 못했어요',
-              (false, true) => '${product.name} 을(를) 저장했어요. 태그 사진은 저장하지 못했어요',
-              (false, false) => '${product.name} 을(를) 저장했어요',
-            }),
-          ),
+        final photoFailed = clothesPhotoFailed || tagPhotoFailed;
+        showTopToast(
+          context,
+          switch ((clothesPhotoFailed, tagPhotoFailed)) {
+            (true, true) => '${product.name} 을(를) 저장했어요. 옷 사진과 태그 사진은 저장하지 못했어요',
+            (true, false) => '${product.name} 을(를) 저장했어요. 옷 사진은 저장하지 못했어요',
+            (false, true) => '${product.name} 을(를) 저장했어요. 태그 사진은 저장하지 못했어요',
+            (false, false) => '${product.name} 을(를) 저장했어요',
+          },
+          duration: Duration(seconds: photoFailed ? 4 : 2),
         );
         context.go('/');
       }

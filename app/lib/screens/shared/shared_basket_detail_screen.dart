@@ -8,6 +8,7 @@ import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
 import '../../widgets/moderation_sheets.dart';
+import '../../widgets/top_toast.dart';
 import '../mypage/sent_baskets_screen.dart';
 import '../product/product_detail_screen.dart';
 import '../wishlist/wishlist_screen.dart';
@@ -414,9 +415,7 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      showTopError(context, e);
     }
   }
 
@@ -533,9 +532,7 @@ class _SharedBasketDetailScreenState extends State<SharedBasketDetailScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      showTopError(context, e);
     } finally {
       if (mounted) setState(() => _sending = false);
     }

@@ -7,6 +7,7 @@ import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 
 /// 살까말까 상품 목록 밑의 투표 (카톡 투표처럼 여러 개 선택).
 ///
@@ -178,9 +179,7 @@ class _BasketVoteSectionState extends State<BasketVoteSection> {
       if (ok && mounted) setState(() => _draft = null);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      showTopError(context, e);
     } finally {
       if (mounted) setState(() => _sending = false);
     }

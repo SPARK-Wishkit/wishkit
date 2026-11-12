@@ -8,6 +8,7 @@ import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
 import '../../widgets/moderation_sheets.dart';
+import '../../widgets/top_toast.dart';
 import '../product/product_detail_screen.dart';
 
 class FriendsScreen extends StatefulWidget {
@@ -271,19 +272,14 @@ class _FollowingList extends StatelessWidget {
     try {
       final changed = await onToggleFollow(f);
       if (!changed || !context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            willFollow ? '${f.name} 님을 팔로우했어요' : '${f.name} 님 팔로우를 취소했어요',
-          ),
-          duration: const Duration(seconds: 1),
-        ),
+      showTopToast(
+        context,
+        willFollow ? '${f.name} 님을 팔로우했어요' : '${f.name} 님 팔로우를 취소했어요',
+        duration: const Duration(milliseconds: 1500),
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('팔로우 실패: $e')));
+      showTopError(context, e, prefix: '팔로우 실패: ');
     }
   }
 }
@@ -362,14 +358,10 @@ class _FollowersList extends StatelessWidget {
     try {
       await onRemove(user);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${user.name} 님을 팔로워에서 삭제했어요')));
+      showTopToast(context, '${user.name} 님을 팔로워에서 삭제했어요');
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
+      showTopError(context, e, prefix: '삭제 실패: ');
     }
   }
 }
@@ -725,9 +717,7 @@ class _SalkamalkaFeedPane extends StatelessWidget {
     if (ok != true) return;
     await store.hideFromSalkamalkaFeed(e.basket.id);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('목록에서 숨겼어요')));
+    showTopToast(context, '목록에서 숨겼어요');
   }
 
   String _salkamalkaSubtitle(SalkamalkaFeedEntry e) {
