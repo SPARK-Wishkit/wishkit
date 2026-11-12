@@ -42,11 +42,13 @@ cp app/android/key.properties.example app/android/key.properties   # 값 채우�
 cd app
 npx ampx generate outputs --app-id d10l8u76nc8eda --branch main --format dart --out-dir lib   # 운영 백엔드 주소록
 flutter build appbundle --release \
+  --build-number="$(git rev-list --count HEAD)" \
   --dart-define=ADMOB_NATIVE_ANDROID=ca-app-pub-…/… \
   --dart-define=ADMOB_BANNER_ANDROID=ca-app-pub-…/…
 # → build/app/outputs/bundle/release/app-release.aab
 ```
-업로드마다 `pubspec.yaml` 의 `version: 1.0.0+N` 의 N 을 올린다.
+버전 코드(빌드 번호)는 git 커밋 수로 정해서 업로드마다 저절로 커진다 — `pubspec.yaml` 의 `+N` 은 안 고쳐도 된다.
+같은 커밋으로 다시 올려야 하면 `--build-number` 에 이전보다 큰 숫자를 직접 넣는다.
 
 ## 4. Play Console 입력
 

@@ -10,6 +10,8 @@
 #    (AWS 자격 증명이 필요: npx ampx configure profile 로 한 번 설정)
 # 2) AdMob 앱 ID(ios/Flutter/AdMob.xcconfig)와 광고 단위 ID가 구글 테스트 값이 아닌지 확인한다.
 # 3) flutter build ipa → build/ios/ipa/*.ipa 를 Transporter 앱으로 올린다.
+#    빌드 번호는 git 커밋 수로 자동으로 정한다(업로드마다 저절로 커진다). pubspec.yaml 의 +N 은 손대지 않아도 된다.
+#    같은 커밋으로 다시 올려야 하면 BUILD_NUMBER=… 로 직접 정한다(이전 업로드보다 커야 함).
 # 자세한 순서: docs/RELEASE_IOS.md
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -39,8 +41,14 @@ flutter pub get
 flutter analyze --no-fatal-infos
 flutter test
 
+# 빌드 번호 (App Store Connect 는 같은 버전 안에서 매번 더 큰 번호를 요구한다)
+git -C "$ROOT" rev-parse --is-shallow-repository | grep -q true && fail "얕은 클론이라 커밋 수를 셀 수 없어요. git fetch --unshallow 후 다시 실행하세요."
+BUILD_NUMBER="${BUILD_NUMBER:-$(git -C "$ROOT" rev-list --count HEAD)}"
+echo "▶ 빌드 번호: $BUILD_NUMBER"
+
 echo "▶ iOS 빌드"
 flutter build ipa --release \
+  --build-number="$BUILD_NUMBER" \
   --dart-define=ADMOB_NATIVE_IOS="$ADMOB_NATIVE_IOS" \
   --dart-define=ADMOB_BANNER_IOS="$ADMOB_BANNER_IOS"
 
