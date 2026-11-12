@@ -74,6 +74,8 @@ Future<void> shareBasketLink({
   required Future<String> Function() publish,
   required String message,
   Rect? origin,
+  // 화면 아래에 버튼 줄이 있는 화면(살까말까)은 안내 문구를 그 위로 띄운다.
+  EdgeInsetsGeometry? snackBarMargin,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
   final navigator = Navigator.of(context, rootNavigator: true);
@@ -87,7 +89,9 @@ Future<void> shareBasketLink({
     url = await publish();
   } catch (e) {
     navigator.pop();
-    messenger.showSnackBar(SnackBar(content: Text(_errorText(e))));
+    messenger.showSnackBar(
+      SnackBar(content: Text(_errorText(e)), margin: snackBarMargin),
+    );
     return;
   }
   navigator.pop();
@@ -99,7 +103,10 @@ Future<void> shareBasketLink({
   } catch (_) {
     await Clipboard.setData(ClipboardData(text: url));
     messenger.showSnackBar(
-      const SnackBar(content: Text('공유창을 열 수 없어서 링크를 복사했어요. 원하는 곳에 붙여 넣어 주세요')),
+      SnackBar(
+        content: const Text('공유창을 열 수 없어서 링크를 복사했어요. 원하는 곳에 붙여 넣어 주세요'),
+        margin: snackBarMargin,
+      ),
     );
   }
 }

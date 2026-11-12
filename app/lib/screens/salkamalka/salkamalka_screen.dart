@@ -9,6 +9,22 @@ import '../share/share_link.dart';
 import 'basket_picker_sheet.dart';
 import 'share_to_friends_sheet.dart';
 
+/// 화면 아래 "상품 추가하기 · 공유하기" 줄의 높이 (위 테두리 1 + 위아래 여백 10·10 + 버튼 52).
+const double _actionBarHeight = 73;
+
+const _aboveActionsMargin = EdgeInsets.fromLTRB(16, 0, 16, _actionBarHeight + 8);
+
+/// 이 화면은 탭 화면(HomeShell) 안에 있어서 안내 문구가 탭 바로 위,
+/// 즉 "상품 추가하기 · 공유하기" 버튼 위를 덮었다. 버튼 줄 위로 띄워 보여 준다.
+void _showAboveActions(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(message),
+      margin: _aboveActionsMargin,
+    ),
+  );
+}
+
 class SalkamalkaScreen extends StatelessWidget {
   const SalkamalkaScreen({super.key});
 
@@ -247,9 +263,7 @@ class SalkamalkaScreen extends StatelessWidget {
     if (ok != true) return;
     final removed = await store.removeSelectedFromBasket();
     if (!context.mounted || removed == 0) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$removed개를 살까말까에서 뺐어요')),
-    );
+    _showAboveActions(context, '$removed개를 살까말까에서 뺐어요');
   }
 
   Future<void> _openPickFromWishlistSheet(
@@ -264,9 +278,7 @@ class SalkamalkaScreen extends StatelessWidget {
     if (picked == null || picked.isEmpty) return;
     await store.addManyToBasket(picked);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${picked.length}개를 담았어요')));
+    _showAboveActions(context, '${picked.length}개를 담았어요');
   }
 }
 
@@ -310,6 +322,7 @@ class _ShareBasketButtonState extends State<_ShareBasketButton> {
           publish: widget.store.publishSelectedBasketLink,
           message: '${widget.store.currentUser.name}님이 살까말까를 공유했어요. 어떤 게 나을까요?',
           origin: origin,
+          snackBarMargin: _aboveActionsMargin,
         );
         return;
       }
@@ -325,12 +338,13 @@ class _ShareBasketButtonState extends State<_ShareBasketButton> {
         voteEnabled: picked.allowVoting,
       );
       if (!sent || !mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${picked.friendIds.length}명의 친구에게 살까말까를 보냈어요')),
+      _showAboveActions(
+        context,
+        '${picked.friendIds.length}명의 친구에게 살까말까를 보냈어요',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      _showAboveActions(context, '$e');
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
