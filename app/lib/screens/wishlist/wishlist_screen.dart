@@ -794,70 +794,78 @@ class _FolderTab extends StatelessWidget {
       child: InkWell(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
         onTap: onTap,
-        child: AnimatedContainer(
+        // 위 여백(margin)만 따로 움직인다. easeOutBack 은 끝값을 잠깐 지나쳐서
+        // 6→0 일 때 음수가 되는데, margin 은 음수가 될 수 없어 0 으로 막는다.
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(end: selected || highlighted ? 0 : 6),
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutBack,
-          padding: EdgeInsets.symmetric(horizontal: highlighted ? 34 : 22),
-          // Idle tabs sit a little lower, so the selected one reads as the
-          // front folder tab merging into the white sheet below.
-          margin: EdgeInsets.only(top: selected || highlighted ? 0 : 6),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
+          builder: (context, top, child) => Padding(
+            padding: EdgeInsets.only(top: top < 0 ? 0 : top),
+            child: child,
           ),
-          child: AnimatedScale(
-            scale: highlighted ? 1.22 : 1,
+          child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             curve: Curves.easeOutBack,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (tab.id != 'all') ...[
-                  Icon(
-                    tab.isPublic ? Icons.public : Icons.lock_outline,
-                    size: 13,
-                    color: fg,
+            padding: EdgeInsets.symmetric(horizontal: highlighted ? 34 : 22),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(DiaryTheme.radius)),
+            ),
+            child: AnimatedScale(
+              scale: highlighted ? 1.22 : 1,
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOutBack,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (tab.id != 'all') ...[
+                    Icon(
+                      tab.isPublic ? Icons.public : Icons.lock_outline,
+                      size: 13,
+                      color: fg,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    tab.name,
+                    style: DiaryTheme.ui(
+                      15,
+                      weight: strong ? FontWeight.w700 : FontWeight.w500,
+                      color: fg,
+                    ),
                   ),
-                  const SizedBox(width: 4),
-                ],
-                Text(
-                  tab.name,
-                  style: DiaryTheme.ui(
-                    15,
-                    weight: strong ? FontWeight.w700 : FontWeight.w500,
-                    color: fg,
+                  const SizedBox(width: 6),
+                  Text(
+                    '$count',
+                    style: DiaryTheme.ui(
+                      15,
+                      weight: FontWeight.w500,
+                      color: countColor,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '$count',
-                  style: DiaryTheme.ui(
-                    15,
-                    weight: FontWeight.w500,
-                    color: countColor,
-                  ),
-                ),
-                if (selected && !highlighted && onEdit != null)
-                  // 탭 글자보다 넉넉한 누름 영역(약 30×30)을 둔다.
-                  Semantics(
-                    button: true,
-                    label: '${tab.name} 폴더 설정',
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onEdit,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
-                        // 편집 창 안의 "이름 변경"(연필)과 겹치지 않게, 탭은 "더보기(⋯)".
-                        child: Icon(
-                          Icons.more_horiz,
-                          size: 18,
-                          color: fg,
+                  if (selected && !highlighted && onEdit != null)
+                    // 탭 글자보다 넉넉한 누름 영역(약 30×30)을 둔다.
+                    Semantics(
+                      button: true,
+                      label: '${tab.name} 폴더 설정',
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onEdit,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
+                          // 편집 창 안의 "이름 변경"(연필)과 겹치지 않게, 탭은 "더보기(⋯)".
+                          child: Icon(
+                            Icons.more_horiz,
+                            size: 18,
+                            color: fg,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
