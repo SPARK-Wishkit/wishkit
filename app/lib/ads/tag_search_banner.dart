@@ -3,6 +3,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../theme/diary_theme.dart';
 import 'ads_config.dart';
+import 'ads_consent.dart';
 
 /// 태그 찾기를 기다리는 동안(10~25초) 버튼 **아래에** 보여 주는 큰 배너 광고.
 ///
@@ -33,12 +34,19 @@ class _TagSearchBannerAdState extends State<TagSearchBannerAd> {
     if (_requested || !AdsConfig.supported) return;
     _requested = true;
     final screen = MediaQuery.sizeOf(context);
+    // 추적 동의(ATT)와 광고 SDK 준비가 끝난 뒤에 불러온다 (ads_consent.dart).
+    AdsConsent.ready.then((_) {
+      if (mounted) _load(screen);
+    });
+  }
+
+  void _load(Size screen) {
     final width = (screen.width - 40).floor(); // 화면 좌우 여백 20씩
     final maxHeight = (screen.height * widget.heightRatio).floor();
     final ad = BannerAd(
       adUnitId: AdsConfig.bannerUnitId,
       size: AdSize.getInlineAdaptiveBannerAdSize(width, maxHeight),
-      request: const AdRequest(),
+      request: AdsConsent.request(),
       listener: BannerAdListener(
         onAdLoaded: (loaded) async {
           // 적응형이라 실제 높이는 광고마다 다르다 — 받은 크기 그대로 칸을 잡는다.

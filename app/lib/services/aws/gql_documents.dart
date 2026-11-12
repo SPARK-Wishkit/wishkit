@@ -243,6 +243,31 @@ mutation NotifyFollow(\$targetId: ID!) {
   notifyFollow(targetId: \$targetId)
 }''';
 
+  // ── 신고 · 차단 · 탈퇴 정리 (서버 함수 social-actions) ──
+  static const reportContent = '''
+mutation ReportContent(\$targetType: String!, \$targetUserId: ID, \$threadId: String, \$commentId: String, \$basketId: String, \$reason: String!, \$detail: String) {
+  reportContent(targetType: \$targetType, targetUserId: \$targetUserId, threadId: \$threadId, commentId: \$commentId, basketId: \$basketId, reason: \$reason, detail: \$detail)
+}''';
+  static const blockUser = '''
+mutation BlockUser(\$targetId: ID!) {
+  blockUser(targetId: \$targetId)
+}''';
+  static const listBlocks = '''
+query ListBlocks(\$ownerId: ID!, \$limit: Int, \$nextToken: String) {
+  listBlocks(blockerId: \$ownerId, limit: \$limit, nextToken: \$nextToken) {
+    items { blockerId blockedId }
+    nextToken
+  }
+}''';
+  static const deleteBlock = '''
+mutation DeleteBlock(\$input: DeleteBlockInput!) {
+  deleteBlock(input: \$input) { blockerId blockedId }
+}''';
+  static const deleteMyContent = '''
+mutation DeleteMyContent {
+  deleteMyContent
+}''';
+
   // ── AI 엔진: 상품 URL 읽기 (서버 함수 parsing-proxy → 엔진 /extract) ──
   static const extractProduct = '''
 query ExtractProduct(\$url: String!) {
@@ -278,6 +303,7 @@ query IdentifyProductTag(\$imageBase64: String!, \$mimeType: String!) {
     removeBasketComment,
     listBasketVotes, voteBasket,
     listNotifications, markNotificationRead, deleteNotification, notifyFollow,
+    reportContent, blockUser, listBlocks, deleteBlock, deleteMyContent,
     extractProduct, identifyProductTag,
   ];
 }

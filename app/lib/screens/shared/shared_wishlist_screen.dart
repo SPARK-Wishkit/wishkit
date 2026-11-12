@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import '../../ads/ad_feed.dart';
 import '../../ads/ads_config.dart';
 import '../../ads/native_ad_card.dart';
+import '../../models/moderation.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/moderation_sheets.dart';
 import '../product/product_detail_screen.dart';
 import '../wishlist/wishlist_screen.dart';
 
@@ -24,6 +26,8 @@ class SharedWishlistScreen extends StatelessWidget {
     this.wishlistId,
     this.basketId,
     this.friendId,
+    this.safetyUserId,
+    this.friendName,
   });
 
   final String title;
@@ -35,6 +39,10 @@ class SharedWishlistScreen extends StatelessWidget {
   final String? wishlistId;
   final String? basketId;
   final String? friendId;
+
+  /// 친구 화면일 때 신고·차단 메뉴(⋯)를 띄울 사용자 uid와 이름.
+  final String? safetyUserId;
+  final String? friendName;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +67,22 @@ class SharedWishlistScreen extends StatelessWidget {
               tooltip: '다시 보내기',
               onPressed: onShare,
               icon: const Icon(Icons.ios_share),
+            ),
+          // 친구의 wishkit · 살까말까: 사용자 신고 · 차단
+          if (safetyUserId != null && safetyUserId!.isNotEmpty)
+            IconButton(
+              tooltip: '신고 · 차단',
+              onPressed: () async {
+                final blocked = await showSafetySheet(
+                  context,
+                  target: UserReportTarget(
+                    userId: safetyUserId!,
+                    userName: friendName ?? title,
+                  ),
+                );
+                if (blocked && context.mounted) context.pop();
+              },
+              icon: const Icon(Icons.more_horiz),
             ),
         ],
       ),

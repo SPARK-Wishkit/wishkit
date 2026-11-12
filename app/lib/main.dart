@@ -6,8 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
-import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'ads/ads_config.dart';
+import 'ads/ads_consent.dart';
 import 'auth/amplify_setup.dart';
 import 'auth/auth_controller.dart';
 import 'auth/auth_routes.dart';
@@ -16,6 +15,7 @@ import 'data/app_store.dart';
 import 'services/push_notification_service.dart';
 import 'screens/friends/friends_screen.dart';
 import 'screens/friends/notifications_screen.dart';
+import 'screens/mypage/blocked_users_screen.dart';
 import 'screens/mypage/follow_list_screen.dart';
 import 'screens/mypage/mypage_screen.dart';
 import 'screens/mypage/sent_baskets_screen.dart';
@@ -46,8 +46,7 @@ Future<void> main() async {
   auth.hooks = store.authHooks;
   await store.init();
 
-  // 4) 광고 SDK 준비 — 기다리지 않는다(광고가 늦게 떠도 앱 시작은 막지 않음).
-  if (AdsConfig.supported) unawaited(MobileAds.instance.initialize());
+  // 4) 광고 SDK 준비는 첫 화면이 뜬 뒤 ATT(광고 추적 동의) 팝업 다음에 한다 → _WishlistAppState.initState
 
   runApp(WishlistApp(auth: auth, store: store));
 }
@@ -81,6 +80,10 @@ class _WishlistAppState extends State<WishlistApp> {
       router.go('/notifications');
     };
     _listenShares();
+    // 광고 추적 동의(ATT) → 광고 SDK 시작. iOS는 앱 화면이 떠 있어야 팝업을 띄운다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(AdsConsent.start());
+    });
   }
 
   void _listenNativeShareText() {
@@ -216,6 +219,8 @@ GoRouter _buildRouter(AuthController auth, AppStore store) {
             products: list.items,
             accentColor: DiaryColors.folderPink,
             wishlistId: list.id,
+            safetyUserId: list.friendId,
+            friendName: list.friendName,
           );
         },
       ),
@@ -232,6 +237,10 @@ GoRouter _buildRouter(AuthController auth, AppStore store) {
       GoRoute(
         path: '/sent-baskets',
         builder: (context, state) => const SentBasketsScreen(),
+      ),
+      GoRoute(
+        path: '/blocked-users',
+        builder: (context, state) => const BlockedUsersScreen(),
       ),
       GoRoute(
         path: '/notifications',
@@ -261,6 +270,8 @@ GoRouter _buildRouter(AuthController auth, AppStore store) {
             accentColor: DiaryColors.folderPeach,
             emptyMessage: '보낸 상품이 없어요',
             friendId: friendId,
+            safetyUserId: friendId,
+            friendName: group.friendName,
           );
         },
       ),

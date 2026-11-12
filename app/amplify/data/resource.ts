@@ -181,6 +181,10 @@ const schema = a.schema({
       data: a.json().required(),
     })
     .identifier(['recipientId', 'basketId'])
+    // 탈퇴할 때 내가 보낸 살까말까가 친구들 받은함에 남은 사본을 서버가 찾아 지운다 (deleteMyContent).
+    .secondaryIndexes((index) => [
+      index('fromUid').name('byFromUid').queryField('listReceivedBasketsByFromUid'),
+    ])
     .authorization((allow) => [
       allow.ownerDefinedIn('recipientId').identityClaim('sub').to(['read', 'delete']),
     ]),
@@ -201,6 +205,10 @@ const schema = a.schema({
       voteEnabled: a.boolean(),
     })
     .identifier(['threadId'])
+    // 탈퇴할 때 내가 만든 댓글방을 서버가 찾아 지운다 (deleteMyContent).
+    .secondaryIndexes((index) => [
+      index('ownerId').name('byOwnerId').queryField('listBasketThreadsByOwnerId'),
+    ])
     .authorization((allow) => [
       allow.ownersDefinedIn('participantIds').identityClaim('sub').to(['read']),
     ]),
@@ -220,6 +228,10 @@ const schema = a.schema({
       data: a.json().required(),
     })
     .identifier(['threadId', 'commentId'])
+    // 탈퇴할 때 내가 쓴 댓글(남의 댓글방 포함)을 서버가 찾아 지운다 (deleteMyContent).
+    .secondaryIndexes((index) => [
+      index('authorId').name('byAuthorId').queryField('listBasketCommentsByAuthorId'),
+    ])
     .authorization((allow) => [
       allow.ownersDefinedIn('participantIds').identityClaim('sub').to(['read']),
     ]),
@@ -254,6 +266,75 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.ownerDefinedIn('recipientId').identityClaim('sub').to(['read', 'update', 'delete']),
     ]),
+
+  // ── 신고 · 차단 (App Store 심사 1.2) ────────────────────────
+
+  /**
+   * 차단 한 줄 = "blockerId 가 blockedId 를 차단했다".
+   * 만들기는 서버만(blockUser: 운영팀 알림도 같이), 본인은 목록 읽기·해제(삭제)만.
+   * 서버는 이 표를 보고 차단 관계인 사람끼리 살까말까·알림을 막는다.
+   */
+  Block: a
+    .model({
+      blockerId: a.id().required(),
+      blockedId: a.id().required(),
+    })
+    .identifier(['blockerId', 'blockedId'])
+    .authorization((allow) => [
+      allow.ownerDefinedIn('blockerId').identityClaim('sub').to(['read', 'delete']),
+    ]),
+
+  /**
+   * 신고 기록. 서버만 쓴다(reportContent). 운영팀은 AWS 콘솔(DynamoDB)과 신고 메일로 확인한다.
+   * 신고한 사람은 자기 신고만 읽을 수 있다. 처리 방법: docs/MODERATION.md
+   */
+  ContentReport: a
+    .model({
+      reportId: a.string().required(),
+      reporterId: a.id().required(),
+      targetType: a.string().required(), // 'comment' | 'basket' | 'user'
+      targetUserId: a.id().required(),
+      targetKey: a.string().required(), // 댓글: threadId/commentId, 살까말까: basketId, 사용자: uid
+      reason: a.string().required(), // 'spam' | 'abuse' | 'sexual' | 'hate' | 'other'
+      detail: a.string(),
+      snapshot: a.json(), // 신고한 순간의 내용(나중에 지워져도 검토 가능)
+      status: a.string().required(), // 'open' → 운영팀이 'resolved' 로 바꾼다
+    })
+    .identifier(['reportId'])
+    .authorization((allow) => [
+      allow.ownerDefinedIn('reporterId').identityClaim('sub').to(['read']),
+    ]),
+
+  /** 댓글·살까말까·사용자 신고. */
+  reportContent: a
+    .mutation()
+    .arguments({
+      targetType: a.string().required(),
+      targetUserId: a.id(),
+      threadId: a.string(),
+      commentId: a.string(),
+      basketId: a.string(),
+      reason: a.string().required(),
+      detail: a.string(),
+    })
+    .returns(a.boolean().required())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(socialActions)),
+
+  /** 사용자 차단. 해제는 앱이 Block 행을 직접 지운다. */
+  blockUser: a
+    .mutation()
+    .arguments({ targetId: a.id().required() })
+    .returns(a.boolean().required())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(socialActions)),
+
+  /** 탈퇴 첫 단계: 다른 사람 공간에 남은 내 댓글·살까말까·댓글방을 지운다. 지운 개수를 돌려준다. */
+  deleteMyContent: a
+    .mutation()
+    .returns(a.integer().required())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(socialActions)),
 
   /** 살까말까 보내기: 댓글방 준비 → 받은 사람마다 받은함 + 알림. 받은 사람 수를 돌려준다. */
   sendBasket: a

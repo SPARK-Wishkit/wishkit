@@ -1,5 +1,27 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-12 - iOS 출시 준비: 신고·차단·금칙어, 약관 동의, 고객 문의, ATT, 개인정보 매니페스트
+
+🌟 **쉬운 설명**
+- 남의 댓글, 받은 살까말까, 친구 화면에 **⋯ 메뉴**가 생겼어요. **신고**하거나 그 사람을 **차단**할 수 있어요. 친구 목록에서는 이름을 길게 누르면 돼요.
+- 차단하면 서로 살까말까를 못 보내고, 그 사람의 살까말까·댓글·알림이 바로 안 보여요. **마이페이지 → 차단한 사용자**에서 풀 수 있어요.
+- 욕설 같은 말은 댓글·살까말까 메모에 **쓸 수 없어요**(서버가 막아요).
+- **회원가입** 때 이용약관(불쾌한 콘텐츠 무관용) · 개인정보 · 만 14세 이상에 동의해야 해요.
+- 마이페이지에 **고객 문의(hi.wishkit@gmail.com) · 이용약관 · 개인정보처리방침**이 생겼어요.
+- **탈퇴**하면 친구에게 보냈던 살까말까, 남의 살까말까에 쓴 댓글, 내가 만든 댓글방까지 지워져요.
+- 아이폰에서 처음 켜면 **광고 추적 허용** 팝업이 떠요. 거부해도 다 쓸 수 있고, 맞춤이 아닌 광고만 나와요.
+
+🔧 **기술 설명**
+- 스키마: `Block`(서버만 생성, 본인 읽기·삭제), `ContentReport`(서버만), 뮤테이션 `reportContent` · `blockUser` · `deleteMyContent`. GSI 3개: `BasketComment.byAuthorId`, `ReceivedBasket.byFromUid`, `BasketThread.byOwnerId`.
+- `social-actions`: 금칙어(`moderation.ts`, 오류 `BANNED_WORD`), 차단 관계면 `sendBasket` 대상에서 빼고 댓글·팔로우 알림 안 보냄, 신고·차단은 SNS 주제 → hi.wishkit@gmail.com.
+- `backend.ts`: 약관·고객센터 페이지(`app/site/`)를 전용 S3 + CloudFront 로 배포, `custom.siteBaseUrl` 출력. 신고 알림 SNS 주제(이메일 구독 확인 필요).
+- 앱: `AccountRepository` 에 `loadBlockedIds` · `blockUser` · `unblockUser` · `reportContent` 추가, `deleteUserData` 는 `deleteMyContent` 를 먼저 부른다. `AppStore.blockedUids` 로 받은함·댓글·알림·친구 목록을 거른다. `lib/widgets/moderation_sheets.dart`, `BlockedUsersScreen`, `lib/support/support_info.dart`.
+- iOS: `PrivacyInfo.xcprivacy` 2개(Runner, Share Extension), `NSUserTrackingUsageDescription`, `SKAdNetworkItems`, AdMob 앱 ID 는 `ios/Flutter/AdMob.xcconfig`. 광고는 ATT 다음에 `AdsConsent.ready` 후 로드(`app_tracking_transparency` 추가). Android AdMob 앱 ID 는 `gradle.properties`.
+- `scripts/build_ios_release.sh`, `docs/RELEASE_IOS.md`, `docs/MODERATION.md`. `fake_appsync` 에 신고·차단·탈퇴 정리 반영, `basket_store_test` 3개 추가.
+- 백엔드 스키마 변경 — **배포 필요**. `flutter pub get` 필요(새 패키지).
+
+---
+
 ## 2026-11-10 - 살까말까 "투표 보내기" 끄기가 실제로 적용되게 + 투표 버튼 글자
 
 🌟 **쉬운 설명**

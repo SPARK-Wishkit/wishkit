@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../../models/moderation.dart';
 import '../../models/models.dart';
 import 'gql_documents.dart';
 import 'gql_runner.dart';
@@ -275,10 +276,43 @@ class AwsBasketStore {
     }
   }
 
+  // ── 신고 (App Store 심사 1.2) ────────────────────────────────
+
+  /// 댓글·살까말까·사용자를 신고한다. 서버가 그 순간의 내용을 복사해 두고 운영팀에 알린다.
+  Future<void> report(
+    ReportTarget target, {
+    required ReportReason reason,
+    String detail = '',
+  }) async {
+    final vars = <String, dynamic>{
+      'targetType': target.typeCode,
+      'targetUserId': target.userId.isEmpty ? null : target.userId,
+      'reason': reason.code,
+      'detail': detail.trim().isEmpty ? null : detail.trim(),
+    };
+    switch (target) {
+      case CommentReportTarget(:final threadId, :final commentId):
+        vars['threadId'] = threadId;
+        vars['commentId'] = commentId;
+      case BasketReportTarget(:final basketId):
+        vars['basketId'] = basketId;
+      case UserReportTarget():
+        break;
+    }
+    await _call(() => _gql.mutate(Gql.reportContent, variables: vars));
+  }
+
   // ── 회원 탈퇴 ─────────────────────────────────────────────
 
+  /// 회원 탈퇴 첫 단계: 다른 사람 공간에 남은 내 콘텐츠(내가 쓴 댓글, 친구들 받은함에 남은
+  /// 내 살까말까, 내가 만든 댓글방)를 서버가 지운다. 실패하면 탈퇴를 멈춘다(콘텐츠가 남지 않게).
+  Future<void> deleteMyContent() async {
+    await _call(() => _gql.mutate(Gql.deleteMyContent));
+  }
+
   /// 내 알림 · 받은 살까말까 · 보낸 살까말까 기록 · 내 투표를 지운다.
-  /// (남의 댓글방에 쓴 내 댓글은 대화 흐름을 위해 남긴다 — 기존 동작과 같음)
+  /// 남의 댓글방에 쓴 내 댓글과 친구 받은함의 내 살까말까는 [deleteMyContent] 가 먼저 지운다
+  /// (App Store 5.1.1(v) — 예전에는 대화 흐름을 위해 남겨 뒀다).
   Future<void> deleteAll(String uid) async {
     final notes =
         await _listAll(Gql.listNotifications, 'listNotifications', uid);
@@ -346,6 +380,8 @@ class AwsBasketStore {
         'NOT_AUTHOR' => '내 댓글만 고치거나 지울 수 있어요.',
         'COMMENT_NOT_FOUND' => '댓글을 찾을 수 없어요.',
         'TOO_LONG' => '글이 너무 길어요.',
+        'BANNED_WORD' => '부적절한 표현이 들어 있어요. 고쳐서 다시 써 주세요.',
+        'TARGET_NOT_FOUND' => '신고할 내용을 찾을 수 없어요. 이미 지워졌을 수 있어요.',
         'PROFILE_MISSING' => '프로필 정보를 찾지 못했어요. 다시 로그인해 주세요.',
         'INVALID_INPUT' => '입력한 내용을 다시 확인해 주세요.',
         _ => null,
