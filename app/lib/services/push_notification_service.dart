@@ -53,10 +53,22 @@ class PushNotificationService {
     }
   }
 
-  /// 로그인 직후 호출. 지금은 배너 표시 권한만 요청한다.
+  /// 로그인 직후 호출. 배너를 쓸 준비만 하고, 알림 권한은 여기서 묻지 않는다.
+  /// (App Store 4.5.4: 권한은 첫 실행이 아니라 필요한 순간에 — [requestPermission])
   /// (이름·인자는 5단계 푸시에서 그대로 쓰려고 유지)
   Future<void> register(String uid, AccountRepository repo) async {
     if (kIsWeb) return;
+    await init();
+  }
+
+  bool _askedThisSession = false;
+
+  /// 알림이 실제로 쓸모 있어지는 순간에 권한을 묻는다:
+  /// 살까말까를 처음 보냈을 때, 댓글을 처음 달았을 때, 마이페이지에서 알림을 켰을 때 (AppStore).
+  /// iOS 는 처음 한 번만 팝업을 띄우고, 그 뒤로는 저장된 선택을 그대로 쓴다.
+  Future<void> requestPermission() async {
+    if (kIsWeb || _askedThisSession) return;
+    _askedThisSession = true;
     await init();
     if (!_ready) return;
     try {

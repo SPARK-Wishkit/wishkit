@@ -1,5 +1,47 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-12 - 앱 이름 WishKit, 런치 화면에 로고
+
+🌟 **쉬운 설명**
+- 홈 화면 아이콘 아래 이름과 공유창에 보이는 이름이 **WishKit** 으로 바뀌었어요 (아이폰·안드로이드). 앱 안 로고는 그대로예요.
+- 앱을 켤 때 잠깐 나오는 화면에 흰 바탕 + wishkit 로고가 나와요 (예전엔 그냥 흰 화면).
+
+🔧 **기술 설명**
+- `CFBundleDisplayName`·`CFBundleName` (Runner), `CFBundleDisplayName` (Share Extension), `android:label` → `WishKit`.
+- `LaunchImage.imageset` 를 `assets/brand/wishkit-logo.png` 로 다시 만듦(150×41pt, 1x·2x·3x), `LaunchScreen.storyboard` 이미지 크기 갱신.
+
+---
+
+## 2026-11-12 - 알림 권한은 필요할 때 묻기, 영어 권한 문구, 영어 개인정보처리방침
+
+🌟 **쉬운 설명**
+- 알림 권한 팝업이 로그인하자마자 뜨지 않아요. 살까말까를 처음 보내거나 댓글을 처음 달 때, 또는 마이페이지에서 알림을 켤 때 떠요.
+- 휴대폰 언어가 영어면 사진·카메라·광고 추적 팝업 문구가 영어로 나와요(애플 심사팀용).
+- 개인정보처리방침 영어 페이지(`privacy-en.html`)를 추가했어요.
+
+🔧 **기술 설명**
+- `PushNotificationService.register` 는 준비만, 권한은 `requestPermission()` (세션당 한 번). `AppStore._askNotificationPermission` 을 `sendBasketToFriends` · `postBasketComment` 성공 후, `setNotificationsEnabled(true)` 에서 호출.
+- `ios/Runner/{en,ko}.lproj/InfoPlist.strings` + Xcode 프로젝트에 변형 그룹 등록, `knownRegions` 에 `ko` 추가.
+- `app/site/privacy-en.html` (한국어판 우선), 한국어판·첫 페이지에 링크.
+
+---
+
+## 2026-11-12 - iOS 체크리스트 남은 항목: ATS 설정 정리, iPhone 전용, 차단한 사람의 재팔로우 정리, 공유·가격 안내
+
+🌟 **쉬운 설명**
+- 아이폰 전용 앱으로 바꿨어요(아이패드에서는 설치 안 됨).
+- 링크로 공유할 때 "링크를 받은 누구나 28일 동안 볼 수 있어요 (상품 메모 포함)"라고 알려 줘요.
+- 상품 화면에 "가격은 판매처 기준이며 실제 결제 가격과 다를 수 있어요"가 보여요.
+- 차단한 사람이 나를 다시 팔로우해도, 내 앱이 열릴 때 그 팔로우를 지우고 팔로워 목록에서 빼요.
+
+🔧 **기술 설명**
+- Info.plist: `NSAppTransportSecurity`, `UISupportedInterfaceOrientations~ipad` 삭제. `TARGETED_DEVICE_FAMILY = 1`. 푸시 설정(`UIBackgroundModes`, `aps-environment`)은 그대로 둔다.
+- `AppStore._followerIdsWithoutBlocked`: 팔로워 목록·숫자에서 차단한 사람을 빼고 그 Follow 행을 지운다.
+- 개인정보처리방침: 링크 공유 페이지는 누구나 볼 수 있고 상품 메모가 들어간다는 내용 추가.
+- `docs/APP_STORE_SUBMISSION.md`: 키워드에서 쇼핑몰 이름 제거, 앱 개인정보 표에 AdMob 항목 보강, 출시 국가·콘텐츠 권리·Xcode·TestFlight·AdMob 등급. `docs/RELEASE_IOS.md`: 운영 백엔드는 이미 있음.
+
+---
+
 ## 2026-11-12 - iOS 출시 준비: 신고·차단·금칙어, 약관 동의, 고객 문의, ATT, 개인정보 매니페스트
 
 🌟 **쉬운 설명**

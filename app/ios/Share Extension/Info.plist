@@ -5,7 +5,7 @@
 	<key>AppGroupId</key>
 	<string>$(CUSTOM_GROUP_ID)</string>
 	<key>CFBundleDisplayName</key>
-	<string>wishkit</string>
+	<string>WishKit</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleVersion</key>
