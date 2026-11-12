@@ -249,6 +249,10 @@ const schema = a.schema({
       data: a.json().required(),
     })
     .identifier(['threadId', 'voterId'])
+    // 탈퇴할 때 내가 남의 살까말까에 한 투표(이름·사진이 들어 있음)를 서버가 찾아 지운다 (deleteMyContent).
+    .secondaryIndexes((index) => [
+      index('voterId').name('byVoterId').queryField('listBasketVotesByVoterId'),
+    ])
     .authorization((allow) => [
       allow.ownersDefinedIn('participantIds').identityClaim('sub').to(['read']),
     ]),

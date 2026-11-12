@@ -381,6 +381,7 @@ class AwsBasketStore {
         'COMMENT_NOT_FOUND' => '댓글을 찾을 수 없어요.',
         'TOO_LONG' => '글이 너무 길어요.',
         'BANNED_WORD' => '부적절한 표현이 들어 있어요. 고쳐서 다시 써 주세요.',
+        'BLOCKED' => '이 살까말까에는 댓글이나 투표를 남길 수 없어요.',
         'TARGET_NOT_FOUND' => '신고할 내용을 찾을 수 없어요. 이미 지워졌을 수 있어요.',
         'PROFILE_MISSING' => '프로필 정보를 찾지 못했어요. 다시 로그인해 주세요.',
         'INVALID_INPUT' => '입력한 내용을 다시 확인해 주세요.',

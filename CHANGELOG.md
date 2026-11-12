@@ -1,5 +1,27 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-12 - Google Play 출시 필수 수정 (Android): 업로드 키 서명, cleartext, 계정 삭제 페이지, 차단 검사·투표 삭제 보강
+
+PR #28(chore/play-release-requirements)의 Android 전용 부분을 지금 main(#32·#33 iOS 작업) 위에 옮긴 것. 신고·차단·약관·처리방침은
+main 에 이미 있어 그대로 쓰고, 겹치는 모델·화면은 새로 만들지 않았다.
+
+🌟 **쉬운 설명**
+- 출시용 안드로이드 빌드가 우리 팀 업로드 키로 서명돼요 (`android/key.properties`). 없으면 경고가 뜨고 Play 에 올릴 수 없는 빌드가 돼요.
+- 암호화 안 된 http 통신은 개발 빌드에서만 허용해요.
+- 앱 없이도 계정 삭제를 요청할 수 있는 페이지(`account-deletion.html`)를 만들었어요. Play Console 데이터 보안 양식에 이 주소를 넣어요.
+- 차단하면 상대가 내 살까말까에 댓글·투표를 새로 남길 수 없고, 내 공개 위시리스트도 안 보여요. 차단한 사람의 투표도 화면에서 숨겨요.
+- 탈퇴하면 남의 살까말까에 한 내 투표도 지워져요.
+
+🔧 **기술 설명**
+- `build.gradle.kts`: `key.properties` 로 release 서명(없으면 debug + 경고), AdMob 테스트 ID 경고. `key.properties.example`. `usesCleartextTraffic` 은 `src/debug/AndroidManifest.xml` 로.
+- 스키마: `BasketVote` GSI `byVoterId`. `public-wishlist` 함수에 Block 표 읽기 권한.
+- `social-actions`: `addComment`·`voteBasket` 는 댓글방 주인과 차단 관계면 `BLOCKED`(투표 취소는 허용), `deleteMyContent` 가 내 투표(`byVoterId`)도 지움. `publicWishlist` 는 차단 관계면 null.
+- 앱: `BLOCKED` 문구, `watchBasketVotes` 가 차단한 사람 투표를 거름. `fake_appsync`·`basket_store_test` 2개 추가.
+- 사이트: `account-deletion.html`, 처리방침(한·영)·고객센터·첫 페이지에 링크, 탈퇴 시 투표 삭제 명시. `docs/play-release/README.md`.
+- 백엔드 스키마 변경 — **배포 필요** (BasketVote 인덱스 1개).
+
+---
+
 ## 2026-11-12 - 앱 이름 WishKit, 런치 화면에 로고
 
 🌟 **쉬운 설명**

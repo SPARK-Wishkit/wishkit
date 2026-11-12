@@ -4,8 +4,7 @@
     <application
         android:label="WishKit"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:icon="@mipmap/ic_launcher">
         <!-- AdMob 앱 ID: android/gradle.properties 의 admobAndroidAppId (app/build.gradle.kts 가 넣어 줌).
              광고 단위 ID는 lib/ads/ads_config.dart 참고. 이 값이 없으면 앱이 시작하자마자 죽는다. -->
         <meta-data

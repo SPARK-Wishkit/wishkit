@@ -26,6 +26,7 @@ export const INDEX = {
   commentsByAuthor: 'byAuthorId', // BasketComment.authorId
   receivedByFrom: 'byFromUid', // ReceivedBasket.fromUid
   threadsByOwner: 'byOwnerId', // BasketThread.ownerId
+  votesByVoter: 'byVoterId', // BasketVote.voterId
 } as const;
 
 export interface Db {
@@ -381,6 +382,8 @@ export async function addComment(
   }
   const participants = (thread.participantIds as string[]) ?? [];
   if (!participants.includes(caller)) fail('NOT_PARTICIPANT');
+  // 댓글방 주인과 차단 관계(어느 쪽이든)면 댓글을 달 수 없다. 차단 사실은 알리지 않는다.
+  if (await eitherBlocked(env, caller, String(thread.ownerId ?? ''))) fail('BLOCKED');
 
   const existing = await env.db.query('BasketComment', 'threadId', args.threadId);
   const parentId = flattenParent(String(args.parentId ?? ''), existing);
@@ -493,6 +496,10 @@ export async function voteBasket(
   const thread = await env.db.get('BasketThread', { threadId: args.threadId });
   const participants = (thread?.participantIds as string[] | undefined) ?? [];
   if (!thread || !participants.includes(caller)) fail('VOTE_NOT_ALLOWED');
+  // 댓글방 주인과 차단 관계면 새로 투표할 수 없다. 빈 목록(내 투표 취소·탈퇴 정리)은 허용한다.
+  if (picked.length > 0 && (await eitherBlocked(env, caller, String(thread.ownerId ?? '')))) {
+    fail('BLOCKED');
+  }
   // 투표 없이 보낸 살까말까. 빈 목록(취소·탈퇴 정리)은 그대로 받는다.
   if (thread.voteEnabled === false && picked.length > 0) fail('VOTE_OFF');
   if (thread.allowMultipleVotes === false && picked.length > 1) fail('MULTIPLE_VOTES_NOT_ALLOWED');
@@ -713,8 +720,9 @@ async function safeAlert(env: Required<Env>, subject: string, message: string) {
  * - 내가 쓴 댓글 (남의 살까말까에 쓴 것 포함)
  * - 내가 보낸 살까말까가 친구들 받은함에 남은 사본
  * - 내가 만든 댓글방 + 그 안의 댓글·투표 (방장이 없어지면 방도 없앤다)
+ * - 남의 살까말까에 한 내 투표 (이름·사진이 들어 있음)
  * - 내가 한 차단 목록
- * 내 투표 취소, 내 받은함·보낸함·알림·위시리스트·프로필은 앱이 이어서 지운다(basket_store.dart 등).
+ * 내 받은함·보낸함·알림·위시리스트·프로필은 앱이 이어서 지운다(basket_store.dart 등).
  * 몇 개를 지웠는지 돌려준다.
  */
 export async function deleteMyContent(envIn: Env, caller: string): Promise<number> {
@@ -739,6 +747,10 @@ export async function deleteMyContent(envIn: Env, caller: string): Promise<numbe
       await env.db.del('BasketVote', { threadId, voterId: v.voterId });
     }
     await env.db.del('BasketThread', { threadId });
+    removed++;
+  }
+  for (const v of await env.db.queryIndex('BasketVote', INDEX.votesByVoter, 'voterId', caller)) {
+    await env.db.del('BasketVote', { threadId: v.threadId, voterId: caller });
     removed++;
   }
   for (const b of await env.db.query('Block', 'blockerId', caller)) {

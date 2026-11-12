@@ -1648,7 +1648,13 @@ class AppStore extends ChangeNotifier {
     if (threadId.isEmpty || !_backendConfigured || uid == null) {
       return Stream.value(const []);
     }
-    return _repo.watchBasketVotes(threadId);
+    // 차단한 사람의 투표는 보이지 않게 거른다(댓글과 같음).
+    return _repo.watchBasketVotes(threadId).map(
+          (list) => [
+            for (final v in list)
+              if (!blockedUids.contains(v.voterUid)) v,
+          ],
+        );
   }
 
   /// 살까말까 투표 (여러 개 선택). 빈 목록이면 내 투표를 취소한다.

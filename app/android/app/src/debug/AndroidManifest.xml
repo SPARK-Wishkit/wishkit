@@ -4,4 +4,6 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 암호화되지 않은 http 통신은 개발(debug) 빌드에서만 허용한다. 출시 빌드는 HTTPS 만 (Play 체크리스트 2.8). -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>
