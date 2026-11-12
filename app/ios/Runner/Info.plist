@@ -42,6 +42,10 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<!-- AdMob 앱 ID: ios/Flutter/AdMob.xcconfig 의 ADMOB_IOS_APP_ID. 출시 전에 실제 앱 ID로 바꿀 것. 없으면 앱이 바로 죽는다. -->
 	<key>GADApplicationIdentifier</key>
 	<string>$(ADMOB_IOS_APP_ID)</string>

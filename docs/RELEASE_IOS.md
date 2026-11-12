@@ -31,7 +31,7 @@
 ## 심사 전에 해두면 좋은 것 (체크리스트 1.14 · 1.16 · 1.17 · 5.10 · 5.12) — 반영함
 
 - **ATS 예외 제거(1.14):** Info.plist 의 `NSAppTransportSecurity`(`NSAllowsLocalNetworking`) 삭제. 앱은 HTTPS 만 쓴다.
-- **안 쓰는 푸시 설정 제거(1.16):** `UIBackgroundModes`(remote-notification), `aps-environment` 삭제. 원격 푸시(5단계)를 만들 때 다시 넣는다. 앱 안 알림 배너는 그대로 동작.
+- **푸시 설정(1.16): 그대로 둠.** `UIBackgroundModes`(remote-notification)와 `aps-environment` 가 남아 있다. 원격 푸시는 아직 없으므로 ① 개발자 포털에서 App ID 의 Push Notifications 를 켜야 서명이 되고 ② 심사에서 "안 쓰는 백그라운드 모드"(2.5.4)로 지적받을 수 있다. 지적받으면 둘 다 지운다.
 - **iPhone 전용(1.17):** `TARGETED_DEVICE_FAMILY = 1`. iPad 화면 테스트·스크린샷이 필요 없어진다.
 - **링크 공유 안내(5.10):** "링크를 받은 누구나 28일 동안 볼 수 있어요 (상품 메모 포함)". 개인정보처리방침에도 같은 내용.
 - **판매처 안내(5.12):** 상품 화면에 "가격과 상품 정보는 ○○ 기준이며 실제 결제 가격과 다를 수 있어요".
