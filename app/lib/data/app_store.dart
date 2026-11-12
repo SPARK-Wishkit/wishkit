@@ -1238,6 +1238,14 @@ class AppStore extends ChangeNotifier {
     notificationsEnabled = value;
     await _persistNotificationPrefs();
     notifyListeners();
+    if (value) _askNotificationPermission();
+  }
+
+  /// 알림 권한은 필요한 순간에 묻는다(App Store 4.5.4) — 살까말까를 보냈을 때, 댓글을 달았을 때,
+  /// 알림을 켰을 때. 알림을 꺼 둔 사람에게는 묻지 않는다.
+  void _askNotificationPermission() {
+    if (!notificationsEnabled) return;
+    unawaited(PushNotificationService.instance.requestPermission());
   }
 
   void _watchInbox(String userId) {
@@ -1434,13 +1442,16 @@ class AppStore extends ChangeNotifier {
     bool allowMultipleVotes = true,
     bool voteEnabled = true,
   }) async {
-    return resendBasketToFriends(
+    final sent = await resendBasketToFriends(
       items: _selectedBasketProducts(),
       friendIds: friendIds,
       memo: memo,
       allowMultipleVotes: allowMultipleVotes,
       voteEnabled: voteEnabled,
     );
+    // 친구의 댓글·투표 알림을 받을 수 있게 이때 알림 권한을 묻는다.
+    if (sent) _askNotificationPermission();
+    return sent;
   }
 
   /// 장바구니에서 고른 상품으로 살까말까를 만들고, 링크로 볼 수 있는 공유 페이지를 올려 주소를 돌려준다.
@@ -1566,6 +1577,8 @@ class AppStore extends ChangeNotifier {
       );
       return true;
     });
+    // 답글 알림을 받을 수 있게 이때 알림 권한을 묻는다.
+    if (posted == true) _askNotificationPermission();
     return posted ?? false;
   }
 

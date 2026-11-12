@@ -1,5 +1,19 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-12 - 알림 권한은 필요할 때 묻기, 영어 권한 문구, 영어 개인정보처리방침
+
+🌟 **쉬운 설명**
+- 알림 권한 팝업이 로그인하자마자 뜨지 않아요. 살까말까를 처음 보내거나 댓글을 처음 달 때, 또는 마이페이지에서 알림을 켤 때 떠요.
+- 휴대폰 언어가 영어면 사진·카메라·광고 추적 팝업 문구가 영어로 나와요(애플 심사팀용).
+- 개인정보처리방침 영어 페이지(`privacy-en.html`)를 추가했어요.
+
+🔧 **기술 설명**
+- `PushNotificationService.register` 는 준비만, 권한은 `requestPermission()` (세션당 한 번). `AppStore._askNotificationPermission` 을 `sendBasketToFriends` · `postBasketComment` 성공 후, `setNotificationsEnabled(true)` 에서 호출.
+- `ios/Runner/{en,ko}.lproj/InfoPlist.strings` + Xcode 프로젝트에 변형 그룹 등록, `knownRegions` 에 `ko` 추가.
+- `app/site/privacy-en.html` (한국어판 우선), 한국어판·첫 페이지에 링크.
+
+---
+
 ## 2026-11-12 - iOS 체크리스트 남은 항목: ATS 설정 정리, iPhone 전용, 차단한 사람의 재팔로우 정리, 공유·가격 안내
 
 🌟 **쉬운 설명**
