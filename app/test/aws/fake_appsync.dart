@@ -350,6 +350,8 @@ class FakeAppSync implements GqlRunner {
         }
         final participants = (thread['participantIds'] as List).cast<String>();
         if (!participants.contains(caller)) _code('NOT_PARTICIPANT');
+        final owner = thread['ownerId'] as String;
+        if (_blocked(owner, caller) || _blocked(caller, owner)) _code('BLOCKED');
         final existing = table('BasketComment').values.where((c) => c['threadId'] == threadId).toList();
         var parentId = (v['parentId'] as String?) ?? '';
         final parent = existing.where((c) => c['commentId'] == parentId).firstOrNull;
@@ -408,6 +410,10 @@ class FakeAppSync implements GqlRunner {
         final thread = table('BasketThread')[threadId];
         final participants = (thread?['participantIds'] as List?)?.cast<String>() ?? const [];
         if (thread == null || !participants.contains(caller)) _code('VOTE_NOT_ALLOWED');
+        final owner = thread['ownerId'] as String;
+        if (picked.isNotEmpty && (_blocked(owner, caller) || _blocked(caller, owner))) {
+          _code('BLOCKED');
+        }
         if (thread['voteEnabled'] == false && picked.isNotEmpty) _code('VOTE_OFF');
         if (thread['allowMultipleVotes'] == false && picked.length > 1) {
           _code('MULTIPLE_VOTES_NOT_ALLOWED');
@@ -494,6 +500,11 @@ class FakeAppSync implements GqlRunner {
           table('BasketThread').remove(t);
           removed++;
         }
+        table('BasketVote').removeWhere((_, x) {
+          final mine = x['voterId'] == caller;
+          if (mine) removed++;
+          return mine;
+        });
         table('Block').removeWhere((_, b) => b['blockerId'] == caller);
         return removed;
       }

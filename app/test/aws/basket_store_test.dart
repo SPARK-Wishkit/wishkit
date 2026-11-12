@@ -480,4 +480,39 @@ void main() {
       expect(appsync.table('BasketThread').containsKey('sb-bob'), isTrue);
     });
   });
+
+  group('차단 관계 서버 검사 · 탈퇴 시 투표 삭제 (Play UGC · 계정 삭제)', () {
+    test('댓글방 주인이 차단하면 상대는 댓글·투표를 새로 남길 수 없고, 투표 취소는 된다', () async {
+      appsync.caller = 'amy';
+      await baskets.sendBasket(recipientUids: ['bob'], items: [product(1)], threadId: 'sb-blk');
+      appsync.caller = 'bob';
+      await baskets.vote(threadId: 'sb-blk', productIds: ['1']);
+      appsync.caller = 'amy';
+      await social.blockUser(myUid: 'amy', targetUid: 'bob');
+
+      appsync.caller = 'bob';
+      await expectLater(
+        baskets.addComment(threadId: 'sb-blk', text: '안녕'),
+        throwsA(isA<Exception>()),
+      );
+      await expectLater(
+        baskets.vote(threadId: 'sb-blk', productIds: ['1']),
+        throwsA(isA<Exception>()),
+      );
+      await baskets.vote(threadId: 'sb-blk', productIds: []);
+      expect(appsync.table('BasketVote'), isEmpty);
+    });
+
+    test('탈퇴 정리: 남의 살까말까에 한 내 투표도 지워진다', () async {
+      appsync.caller = 'bob';
+      await baskets.sendBasket(recipientUids: ['amy'], items: [product(1)], threadId: 'sb-v');
+      appsync.caller = 'amy';
+      await baskets.vote(threadId: 'sb-v', productIds: ['1']);
+      expect(appsync.table('BasketVote').values.where((v) => v['voterId'] == 'amy'), isNotEmpty);
+
+      await baskets.deleteMyContent();
+      expect(appsync.table('BasketVote').values.where((v) => v['voterId'] == 'amy'), isEmpty);
+      expect(appsync.table('BasketThread').containsKey('sb-v'), isTrue);
+    });
+  });
 }

@@ -55,6 +55,8 @@ function grantTables(fn: FunctionHandle, grants: TableGrant[]) {
 grantTables(backend.publicWishlist, [
   { table: 'WishTab', env: 'WISH_TAB_TABLE' },
   { table: 'WishProduct', env: 'WISH_PRODUCT_TABLE' },
+  // 차단 관계(어느 쪽이든)면 공개 위시리스트를 보여 주지 않는다 (Play UGC 정책 · App Store 1.2).
+  { table: 'Block', env: 'BLOCK_TABLE' },
 ]);
 
 // 살까말까·댓글·투표·알림 함수: 프로필·팔로우는 읽기만, 댓글방·댓글·투표·받은함·알림은 읽고 쓰기.
