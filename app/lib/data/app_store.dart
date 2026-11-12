@@ -192,7 +192,7 @@ class AppStore extends ChangeNotifier {
       );
       friendWishlists = await _repo.loadFriendWishlists(friends);
       followerUsers =
-          await _repo.loadUsers(await _repo.followerIds(fresh.uid));
+          await _repo.loadUsers(await _followerIdsWithoutBlocked(fresh.uid));
       currentUser = currentUser.copyWith(
         following: following.length,
         followers: followerUsers.length,
@@ -1024,7 +1024,7 @@ class AppStore extends ChangeNotifier {
   Future<List<AppUser>> loadFollowers() async {
     final id = uid;
     if (id == null) return [];
-    final ids = await _repo.followerIds(id);
+    final ids = await _followerIdsWithoutBlocked(id);
     followerUsers = await _repo.loadUsers(ids);
     notifyListeners();
     return followerUsers;
@@ -1045,7 +1045,8 @@ class AppStore extends ChangeNotifier {
       await _repo.loadDirectory(myUid: userId, following: following),
     );
     friendWishlists = await _repo.loadFriendWishlists(friends);
-    followerUsers = await _repo.loadUsers(await _repo.followerIds(userId));
+    followerUsers =
+        await _repo.loadUsers(await _followerIdsWithoutBlocked(userId));
     await _loadInboxSafely(userId);
     _syncFriendCounts();
     final profile = await _repo.loadProfile(userId);
@@ -1063,7 +1064,7 @@ class AppStore extends ChangeNotifier {
     if (userId == null) return;
     try {
       final following = await _repo.followingIds(userId);
-      final followers = await _repo.followerIds(userId);
+      final followers = await _followerIdsWithoutBlocked(userId);
       currentUser = currentUser.copyWith(
         following: following.length,
         followers: followers.length,
@@ -1163,6 +1164,19 @@ class AppStore extends ChangeNotifier {
         for (final f in list)
           if (!blockedUids.contains(f.id)) f,
       ];
+
+  /// 나를 팔로우하는 사람 uid. 차단한 사람이 다시 팔로우했으면 그 팔로우를 지우고 목록에서 뺀다.
+  /// (팔로우는 앱이 직접 만드는 표라 서버가 막지 못한다 → 차단한 쪽 앱이 열릴 때마다 정리)
+  Future<List<String>> _followerIdsWithoutBlocked(String myUid) async {
+    final ids = await _repo.followerIds(myUid);
+    final blocked = [for (final id in ids) if (blockedUids.contains(id)) id];
+    for (final id in blocked) {
+      unawaited(
+        _repo.removeFollower(myUid: myUid, followerUid: id).catchError((_) {}),
+      );
+    }
+    return [for (final id in ids) if (!blockedUids.contains(id)) id];
+  }
 
   List<SharedBasket> _withoutBlockedBaskets(List<SharedBasket> list) => [
         for (final b in list)

@@ -41,7 +41,8 @@ Future<ShareMethod?> pickShareMethod(BuildContext context) {
               ShareMethod.link,
               Icons.link,
               '링크로 공유',
-              '앱이 없는 친구에게도 카카오톡·인스타그램 등으로 보낼 수 있어요 (링크는 28일 동안 열려요)',
+              '앱이 없는 친구에게도 카카오톡·인스타그램 등으로 보낼 수 있어요. '
+                  '링크를 받은 누구나 28일 동안 볼 수 있어요 (상품 메모 포함).',
             ),
           ])
             ListTile(

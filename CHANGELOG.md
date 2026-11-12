@@ -1,5 +1,21 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-12 - iOS 체크리스트 남은 항목: 푸시·ATS 설정 정리, iPhone 전용, 차단한 사람의 재팔로우 정리, 공유·가격 안내
+
+🌟 **쉬운 설명**
+- 아이폰 전용 앱으로 바꿨어요(아이패드에서는 설치 안 됨).
+- 링크로 공유할 때 "링크를 받은 누구나 28일 동안 볼 수 있어요 (상품 메모 포함)"라고 알려 줘요.
+- 상품 화면에 "가격은 판매처 기준이며 실제 결제 가격과 다를 수 있어요"가 보여요.
+- 차단한 사람이 나를 다시 팔로우해도, 내 앱이 열릴 때 그 팔로우를 지우고 팔로워 목록에서 빼요.
+
+🔧 **기술 설명**
+- Info.plist: `UIBackgroundModes`(remote-notification), `NSAppTransportSecurity`, `UISupportedInterfaceOrientations~ipad` 삭제. `Runner.entitlements`: `aps-environment` 삭제(원격 푸시 만들 때 다시). `TARGETED_DEVICE_FAMILY = 1`.
+- `AppStore._followerIdsWithoutBlocked`: 팔로워 목록·숫자에서 차단한 사람을 빼고 그 Follow 행을 지운다.
+- 개인정보처리방침: 링크 공유 페이지는 누구나 볼 수 있고 상품 메모가 들어간다는 내용 추가.
+- `docs/APP_STORE_SUBMISSION.md`: 키워드에서 쇼핑몰 이름 제거, 앱 개인정보 표에 AdMob 항목 보강, 출시 국가·콘텐츠 권리·Xcode·TestFlight·AdMob 등급. `docs/RELEASE_IOS.md`: 운영 백엔드는 이미 있음.
+
+---
+
 ## 2026-11-12 - iOS 출시 준비: 신고·차단·금칙어, 약관 동의, 고객 문의, ATT, 개인정보 매니페스트
 
 🌟 **쉬운 설명**
