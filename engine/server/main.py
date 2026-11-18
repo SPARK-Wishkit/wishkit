@@ -18,20 +18,23 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import json
 import logging
 import urllib.parse
 from contextlib import asynccontextmanager
 from functools import partial
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
-from playwright.async_api import async_playwright
-from pydantic import BaseModel, HttpUrl
-
+import brand_rules
 import config
+import failure_report
+import failure_store
 from compare import grounding_check
+from fastapi import FastAPI, HTTPException
 from metrics import PeakRSSSampler, now_ms
+from playwright.async_api import async_playwright
 from providers import ProviderResult, call_gemini, call_gemini_vision
+from pydantic import BaseModel, HttpUrl
 from qr_codes import decode_codes, resolve_qr_url
 from render import launch_browser, render
 from share_links import resolve_share_link
@@ -42,10 +45,12 @@ from tag_identify import (
     call_gemini_search,
     call_gemini_tag,
     identify,
+    search_query,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("extract-server")
+_background: set = set()  # 백그라운드 작업 참조 보관(가비지 컬렉션 방지)
 
 class ExtractRequest(BaseModel):
     url: HttpUrl
@@ -187,7 +192,8 @@ async def _render_for_identify(url: str, budget_s: float) -> PageView:
     # 품번 확인용 글자에는 메타 태그 글자도 넣는다(/extract 의 grounding 체크는 본문만 그대로 쓴다).
     text = f"{r.meta_text} {r.raw_text}".strip()
     return PageView(ok=r.ok, final_url=r.final_url or url, raw_text=text, error=r.error,
-                    code_hints=r.code_hints, body_chars=len(r.raw_text.strip()) if r.ok else None)
+                    code_hints=r.code_hints, body_chars=len(r.raw_text.strip()) if r.ok else None,
+                    html=r.cleaned_html if r.ok else "")
 
 
 def _decode_image(image_base64: str) -> bytes:
@@ -239,6 +245,7 @@ async def identify_tag(req: IdentifyTagRequest):
                 time_left=time_left,
                 # QR·바코드 디코딩과 QR 주소 따라가기는 동기 함수라 스레드에서 돈다.
                 read_codes=lambda img: timed("qr_decode", asyncio.to_thread(decode_codes, img)),
+                rule_urls=brand_rules.candidate_urls,
                 resolve_url=lambda url: timed("qr_resolve", asyncio.to_thread(
                     resolve_qr_url, url, total_timeout=max(1.0, min(4.0, time_left() - 8.0)))),
             ),
@@ -265,7 +272,21 @@ async def identify_tag(req: IdentifyTagRequest):
         {k: (outcome.match or {}).get(k) for k in ("url", "verified_by", "via", "name", "price", "regular_price")}
         if outcome.match else None,
     )
-    return {**outcome.to_dict(), "metrics": {"total_elapsed_ms": total_ms, "stages_ms": stages}}
+    body = outcome.to_dict()
+    trace_id = failure_report.new_trace_id()
+    report = failure_report.build_report(
+        body, trace_id=trace_id, stages=stages, total_ms=total_ms,
+        search_query=search_query(outcome.tag) if outcome.tag.get("is_product_tag") else None,
+    )
+    # 분석용 기록 한 줄(JSON) — tools/learn_from_feedback.py가 이 줄들을 모아 원인별로 정리한다.
+    logger.info("[identify-report] %s", json.dumps(report, ensure_ascii=False))
+    # 못 찾은 태그는 사진(메타데이터 제거)과 기록을 보관한다 — 켜져 있을 때만, 응답을 기다리게 하지 않고.
+    if failure_store.enabled():
+        task = asyncio.create_task(asyncio.to_thread(failure_store.save, image, report))
+        _background.add(task)
+        task.add_done_callback(_background.discard)
+    return {**body, "trace_id": trace_id, "cause": report["cause"],
+            "metrics": {"total_elapsed_ms": total_ms, "stages_ms": stages}}
 
 
 @app.get("/healthz")

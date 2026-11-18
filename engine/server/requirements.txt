@@ -8,3 +8,4 @@ psutil>=6.0
 pydantic>=2.7
 zxing-cpp>=3.0  # 태그 사진 속 QR·바코드 디코딩(qr_codes.py). 휠에 네이티브 코드가 들어 있어 apt 설치 불필요
 pillow>=10.0  # 디코더에 넘길 사진 열기·회전 보정
+boto3>=1.34  # 실패 태그 보관(failure_store.py)을 S3로 할 때만 쓴다

@@ -391,10 +391,10 @@ class HomeShell extends StatelessWidget {
                 extendedIconLabelSpacing: 6,
                 onPressed: () => context.push('/share'),
                 label: Text(
-                  '공유 담기',
+                  '상품 추가',
                   style: DiaryTheme.ui(14, weight: FontWeight.w700),
                 ),
-                icon: const Icon(Icons.link, size: 18),
+                icon: const Icon(Icons.add, size: 18),
               ),
             )
           : null,
