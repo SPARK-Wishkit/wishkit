@@ -788,6 +788,24 @@ class ParsedProductInfo {
 /// - [notATag]: 사진에서 상품 태그를 찾지 못했다.
 enum TagIdentifyStatus { found, needsConfirm, notFound, notATag }
 
+/// 태그 찾기 결과에 대한 사용자 반응 — 엔진 개선용 익명 피드백([AwsProductTagStore.sendFeedback]).
+enum TagFeedbackAnswer {
+  /// "맞아요"
+  yes('yes'),
+
+  /// "다른 상품이에요"
+  no('no'),
+
+  /// 엔진이 판매 페이지를 못 찾음(사용자가 누른 게 아니라 결과 자체)
+  notFound('not_found'),
+
+  /// 못 찾은 뒤 사용자가 직접 판매 주소를 넣어 저장함 — 엔진이 배울 수 있는 가장 값진 정답
+  userLink('user_link');
+
+  const TagFeedbackAnswer(this.wire);
+  final String wire;
+}
+
 class TagIdentifyResult {
   const TagIdentifyResult({
     required this.status,
@@ -807,6 +825,9 @@ class TagIdentifyResult {
     this.matchRegularPrice,
     this.matchImage,
     this.matchVia,
+    this.skipReason,
+    this.traceId,
+    this.cause,
   });
 
   final TagIdentifyStatus status;
@@ -837,6 +858,24 @@ class TagIdentifyResult {
 
   /// 'qr'(태그에 인쇄된 QR이 가리킨 페이지로 찾음) | 'search'(품번·브랜드 검색으로 찾음). 링크가 없으면 null.
   final String? matchVia;
+
+  /// 엔진이 일부러 찾지 않은 이유. 'no_brand_no_code' = 태그에 브랜드·품번이 없음.
+  final String? skipReason;
+
+  /// 엔진 기록과 피드백을 잇는 무작위 id(사용자와 무관).
+  final String? traceId;
+
+  /// 엔진이 진단한 원인(ok, search_empty, page_blocked …).
+  final String? cause;
+
+  /// 태그에 브랜드·품번이 없어서 찾지 않았는지(무인양품처럼). 엔진 실패가 아니다.
+  bool get skippedNoBrand => skipReason == 'no_brand_no_code';
+
+  /// 엔진이 일부러 찾지 않았는지(브랜드나 품번 중 하나라도 없음 — QR이 없을 땐 둘 다 있어야 찾는다).
+  bool get skipped =>
+      skipReason == 'no_brand_no_code' ||
+      skipReason == 'no_brand' ||
+      skipReason == 'no_code';
 
   /// 태그 QR로 찾은 결과인지 — 안내 문구를 고르는 데 쓴다.
   bool get foundByQr => hasMatch && matchVia == 'qr';
@@ -920,6 +959,9 @@ class TagIdentifyResult {
           ? s('matchImage')
           : null,
       matchVia: s('matchVia'),
+      skipReason: s('skipReason'),
+      traceId: s('traceId'),
+      cause: s('cause'),
     );
   }
 }

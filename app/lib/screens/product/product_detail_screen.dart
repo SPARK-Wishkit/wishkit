@@ -294,16 +294,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   ],
                                 ],
                               ),
-                              // 가격·상품 정보는 쇼핑몰에서 읽어 온 것 (App Store 5.2: 출처를 밝히고 제휴로 오해하지 않게)
-                              const SizedBox(height: 4),
-                              Text(
-                                '가격과 상품 정보는 ${product.platform.isEmpty ? '판매처' : product.platform} 기준이며, '
-                                '실제 결제 가격과 다를 수 있어요.',
-                                style: DiaryTheme.body(
-                                  11,
-                                  color: DiaryColors.inkSoft,
+                              // 가격·상품 정보는 쇼핑몰에서 읽어 온 것 (App Store 5.2: 출처를 밝히고 제휴로 오해하지 않게).
+                              // 매장에서 본 옷을 직접 기록한 상품(판매 페이지 주소 없음)은 사용자가 쓴 값이라 띄우지 않는다.
+                              if (product.productUrl?.trim().isNotEmpty ?? false) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  '가격과 상품 정보는 ${product.platform.isEmpty ? '판매처' : product.platform} 기준이며, '
+                                  '실제 결제 가격과 다를 수 있어요.',
+                                  style: DiaryTheme.body(
+                                    11,
+                                    color: DiaryColors.inkSoft,
+                                  ),
                                 ),
-                              ),
+                              ],
                               if (product.discount != null) ...[
                                 const SizedBox(height: 8),
                                 Container(

@@ -52,3 +52,7 @@ __MACOSX/
 .idea/
 .vscode/
 *.iml
+
+# 태그 찾기 테스트 결과·실패 보관(로컬)
+engine/tools/tag_identify_result.json
+tag-failures/

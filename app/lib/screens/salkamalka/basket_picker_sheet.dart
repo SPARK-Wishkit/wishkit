@@ -52,13 +52,13 @@ class _BasketPickerSheetState extends State<BasketPickerSheet> {
         color: store.tabs.isEmpty
             ? DiaryColors.fileCream
             : store.tabColor(store.tabs.first),
-        products: store.products,
+        products: store.productsNewestFirst,
       ),
       for (final tab in store.customTabs)
         _PickerCategory(
           label: tab.name,
           color: store.tabColor(tab),
-          products: store.products.where((p) => p.listId == tab.id).toList(),
+          products: store.productsNewestFirst.where((p) => p.listId == tab.id).toList(),
         ),
     ];
   }

@@ -1,0 +1,1320 @@
+{
+  "_설명": [
+    "태그 찾기의 '어디서 찾을지'를 정하는 데이터. 코드를 고치지 않고 이 파일만 바꿔서 규칙을 추가·수정한다.",
+    "categories: 백화점 층 구성 기준을 빌린 브랜드 분류(백화점 브랜드만이 아니라 길거리·온라인 브랜드 전부에 쓴다). 분류마다 찾는 순서(order)가 있다.",
+    "  order 토큰: official=브랜드 공식몰, parent_mall=모회사 몰(mall), dept_store=백화점 공통 몰(롯데온·SSG·더현대), editshop=온라인 편집숍(무신사·29CM·4910·W컨셉).",
+    "brands: 별칭(aliases), 분류(category), 모회사 몰(mall), 공식몰 도메인(official_domain), 브랜드 전용 주소 규칙(rules).",
+    "malls: 모회사 몰별 주소 규칙. rules가 비면 검색 힌트로만 쓴다.",
+    "rule: url(상품 주소) 또는 search_url+product_id_pattern+product_url(검색 결과 → 첫 상품). 자리표시자 {code} {code_compact} 및 code_pattern 그룹.",
+    "companies: 태그에 인쇄된 판매자·제조자·수입자 회사명 → 모회사 몰.",
+    "editshop_brands: 편집숍별 입점 브랜드(규칙 키). 여기 있으면 그 편집숍을 먼저 찾는다. tools/import_mall_brands.py로 채운다.",
+    "목록에 없는 브랜드는 unknown 분류: 공식몰을 먼저 찾고, 그다음 편집숍.",
+    "verified: 언제 무엇으로 확인했는지. 확인 안 된 주소 규칙은 넣지 않는다.",
+    "code_brands: 태그에서 브랜드를 못 읽었거나 잘못 읽었을 때(예: 'NBA') 품번 모양으로 브랜드를 정한다.",
+    "code_format(브랜드): 그 브랜드 품번의 모양. 태그의 품번 칸이 비었거나 모양이 다르면, 기타 코드 중 이 모양인 것을 품번으로 쓴다(아디다스 'KR9552').",
+    "editshop_rules: 편집숍 검색 결과 규칙. 브랜드 분류의 찾는 순서에 editshop이 있으면 쓴다.",
+    "editshop_slugs(브랜드): 편집숍 안 브랜드 주소 이름. 없으면 브랜드 이름을 영문 소문자·숫자로 줄여 쓴다(PIEDPIPER → piedpiper).",
+    "editshop_first(브랜드): true면 편집숍 검색을 공식몰·모회사 몰 규칙보다 먼저 한다(공식몰이 서버를 막는 브랜드).",
+    "editshop_slugs 값이 빈 문자열(\"\")이면 그 편집숍에 브랜드 페이지가 없다는 뜻 — 브랜드 안 검색을 건너뛰고 전체 검색만 한다.",
+    "editshop_names(브랜드): 편집숍 전체 검색에 넣을 브랜드 이름(예: 무신사는 \"뉴발란스\"). 없으면 한글 별칭 → 규칙 이름 → 태그 글자 순.",
+    "{code_base}: 품번 끝의 색상·사이즈 꼬리(-01, _002 등)를 뗀 것. 편집숍은 꼬리 없는 스타일 번호로 올리는 경우가 많다.",
+    "editshop_brands의 adidas: 2026-11-10 실패 태그 자동 분석에서 무신사로 서로 다른 품번 3개(KH4509·KR9712·KV9560)를 찾아 추가."
+  ],
+  "malls": {
+    "ssf": {
+      "name": "SSF샵 (삼성물산 패션)",
+      "domain": "ssfshop.com",
+      "rules": [
+        {
+          "url": "https://m.ssfshop.com/public/goods/detail/{code_compact}/sapView",
+          "verified": "2026-11-09 8seconds 태그 QR이 이 경로로 가고, 상품 페이지로 리다이렉트되는 것 확인(456X51CM86)"
+        }
+      ]
+    },
+    "lf": {
+      "name": "LF몰 (LF)",
+      "domain": "lfmall.co.kr",
+      "rules": [
+        {
+          "url": "https://www.lfmall.co.kr/app/product/{code_compact}",
+          "verified": "2026-11-09 상품코드 JNJU6D701BK → /app/product/JNJU6D701BK (사용자 확인). 태그 품번이 상품코드와 같은지는 실제 태그로 확인 필요"
+        }
+      ]
+    },
+    "handsome": {
+      "name": "더한섬닷컴 (한섬)",
+      "domain": "thehandsome.com",
+      "rules": [
+        {
+          "url": "https://www.thehandsome.com/ko/PM/productDetail/{code_compact}",
+          "verified": "2026-11-09 상품번호 SY2GBRJC211WM → /ko/PM/productDetail/SY2GBRJC211WM (사용자 확인). 태그 품번이 상품번호와 같은지는 실제 태그로 확인 필요"
+        }
+      ]
+    },
+    "sivillage": {
+      "name": "SI빌리지 (신세계인터내셔날)",
+      "domain": "shinsegaev.com",
+      "rules": [
+        {
+          "search_url": "https://m.shinsegaev.com/search/totalSearch.siv?search_kwd={code_compact}",
+          "product_id_pattern": "goods_no=(?P<id>\\d{6,})",
+          "product_url": "https://m.shinsegaev.com/goods/initDetailGoods.siv?goods_no={id}",
+          "verified": "2026-11-09 품번 46B6301558 검색 → 그 상품이 뜸(사용자 확인). 검색 결과 HTML에서 goods_no 링크가 잡히는지는 엔진 로그로 확인 필요"
+        }
+      ]
+    },
+    "kolon": {
+      "name": "코오롱몰 (코오롱FnC)",
+      "domain": "kolonmall.com",
+      "rules": [],
+      "todo": "품번 주소/검색 결과 주소 확인 필요"
+    },
+    "eland": {
+      "name": "이랜드몰 (이랜드)",
+      "domain": "elandmall.co.kr",
+      "rules": [],
+      "todo": "품번 주소/검색 결과 주소 확인 필요"
+    },
+    "lottegfr": {
+      "name": "롯데온 (롯데GFR)",
+      "domain": "lotteon.com",
+      "rules": [],
+      "todo": "품번 주소/검색 결과 주소 확인 필요"
+    }
+  },
+  "brands": {
+    "8seconds": {
+      "aliases": [
+        "8seconds",
+        "8 seconds",
+        "에잇세컨즈",
+        "에잇 세컨즈"
+      ],
+      "mall": "ssf",
+      "category": "spa"
+    },
+    "beaker": {
+      "aliases": [
+        "beaker",
+        "비이커"
+      ],
+      "mall": "ssf",
+      "category": "contemporary"
+    },
+    "beanpole": {
+      "aliases": [
+        "beanpole",
+        "빈폴"
+      ],
+      "mall": "ssf",
+      "category": "casual"
+    },
+    "beanpole golf": {
+      "aliases": [
+        "beanpole golf",
+        "빈폴골프"
+      ],
+      "mall": "ssf",
+      "category": "sports"
+    },
+    "kuho": {
+      "aliases": [
+        "kuho",
+        "구호"
+      ],
+      "mall": "ssf",
+      "category": "contemporary"
+    },
+    "kuho plus": {
+      "aliases": [
+        "kuho plus",
+        "구호플러스"
+      ],
+      "mall": "ssf",
+      "category": "contemporary"
+    },
+    "lebeige": {
+      "aliases": [
+        "lebeige",
+        "르베이지"
+      ],
+      "mall": "ssf",
+      "category": "contemporary"
+    },
+    "galaxy": {
+      "aliases": [
+        "galaxy",
+        "갤럭시"
+      ],
+      "mall": "ssf",
+      "category": "career"
+    },
+    "rogatis": {
+      "aliases": [
+        "rogatis",
+        "로가디스"
+      ],
+      "mall": "ssf",
+      "category": "career"
+    },
+    "juun.j": {
+      "aliases": [
+        "juun.j",
+        "juunj",
+        "준지"
+      ],
+      "mall": "ssf",
+      "category": "contemporary"
+    },
+    "maison kitsune": {
+      "aliases": [
+        "maison kitsune",
+        "메종키츠네"
+      ],
+      "mall": "ssf",
+      "category": "contemporary"
+    },
+    "ami": {
+      "aliases": [
+        "ami",
+        "아미"
+      ],
+      "mall": "ssf",
+      "category": "contemporary"
+    },
+    "theory": {
+      "aliases": [
+        "theory",
+        "띠어리"
+      ],
+      "mall": "ssf",
+      "category": "contemporary"
+    },
+    "ganni": {
+      "aliases": [
+        "ganni",
+        "가니"
+      ],
+      "mall": "ssf",
+      "category": "contemporary"
+    },
+    "hazzys": {
+      "aliases": [
+        "hazzys",
+        "헤지스"
+      ],
+      "mall": "lf",
+      "category": "casual"
+    },
+    "hazzys golf": {
+      "aliases": [
+        "hazzys golf",
+        "헤지스골프"
+      ],
+      "mall": "lf",
+      "category": "sports"
+    },
+    "daks": {
+      "aliases": [
+        "daks",
+        "닥스"
+      ],
+      "mall": "lf",
+      "category": "career"
+    },
+    "daks golf": {
+      "aliases": [
+        "daks golf",
+        "닥스골프"
+      ],
+      "mall": "lf",
+      "category": "sports"
+    },
+    "maestro": {
+      "aliases": [
+        "maestro",
+        "마에스트로"
+      ],
+      "mall": "lf",
+      "category": "career"
+    },
+    "tngt": {
+      "aliases": [
+        "tngt",
+        "티엔지티"
+      ],
+      "mall": "lf",
+      "category": "career"
+    },
+    "jill stuart new york": {
+      "aliases": [
+        "jill stuart new york",
+        "jillstuart new york",
+        "질스튜어트 뉴욕",
+        "질스튜어트"
+      ],
+      "mall": "lf",
+      "category": "career"
+    },
+    "at.corner": {
+      "aliases": [
+        "at.corner",
+        "atcorner",
+        "앳코너"
+      ],
+      "mall": "lf",
+      "category": "career"
+    },
+    "dunst": {
+      "aliases": [
+        "dunst",
+        "던스트"
+      ],
+      "mall": "lf",
+      "category": "k_designer"
+    },
+    "barbour": {
+      "aliases": [
+        "barbour",
+        "바버"
+      ],
+      "mall": "lf",
+      "category": "casual"
+    },
+    "vanessa bruno": {
+      "aliases": [
+        "vanessa bruno",
+        "바네사브루노"
+      ],
+      "mall": "lf",
+      "category": "contemporary"
+    },
+    "athe vanessa bruno": {
+      "aliases": [
+        "athe vanessa bruno",
+        "아떼 바네사브루노"
+      ],
+      "mall": "lf",
+      "category": "contemporary"
+    },
+    "time": {
+      "aliases": [
+        "time",
+        "타임"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "time homme": {
+      "aliases": [
+        "time homme",
+        "타임옴므"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "mine": {
+      "aliases": [
+        "mine",
+        "마인"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "system": {
+      "aliases": [
+        "system",
+        "시스템"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "system homme": {
+      "aliases": [
+        "system homme",
+        "시스템옴므"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "sjsj": {
+      "aliases": [
+        "sjsj"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "the cashmere": {
+      "aliases": [
+        "the cashmere",
+        "더캐시미어"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "obzee": {
+      "aliases": [
+        "obzee",
+        "오브제"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "o'2nd": {
+      "aliases": [
+        "o'2nd",
+        "o2nd",
+        "오즈세컨"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "lanvin collection": {
+      "aliases": [
+        "lanvin collection",
+        "랑방컬렉션"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "decke": {
+      "aliases": [
+        "decke",
+        "덱케"
+      ],
+      "mall": "handsome",
+      "category": "shoes_acc"
+    },
+    "club monaco": {
+      "aliases": [
+        "club monaco",
+        "클럽모나코"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "tom greyhound": {
+      "aliases": [
+        "tom greyhound",
+        "톰그레이하운드"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "tommy hilfiger": {
+      "aliases": [
+        "tommy hilfiger",
+        "타미힐피거"
+      ],
+      "mall": "handsome",
+      "category": "casual"
+    },
+    "dkny": {
+      "aliases": [
+        "dkny"
+      ],
+      "mall": "handsome",
+      "category": "contemporary"
+    },
+    "vov": {
+      "aliases": [
+        "vov",
+        "보브"
+      ],
+      "mall": "sivillage",
+      "category": "career"
+    },
+    "g-cut": {
+      "aliases": [
+        "g-cut",
+        "gcut",
+        "지컷"
+      ],
+      "mall": "sivillage",
+      "category": "career"
+    },
+    "studio tomboy": {
+      "aliases": [
+        "studio tomboy",
+        "스튜디오 톰보이",
+        "스튜디오톰보이"
+      ],
+      "mall": "sivillage",
+      "category": "contemporary"
+    },
+    "comodo": {
+      "aliases": [
+        "comodo",
+        "코모도"
+      ],
+      "mall": "sivillage",
+      "category": "career"
+    },
+    "man on the boon": {
+      "aliases": [
+        "man on the boon",
+        "맨온더분"
+      ],
+      "mall": "sivillage",
+      "category": "career"
+    },
+    "jaju": {
+      "aliases": [
+        "jaju",
+        "자주"
+      ],
+      "mall": "sivillage",
+      "category": "lifestyle"
+    },
+    "kolon sport": {
+      "aliases": [
+        "kolon sport",
+        "코오롱스포츠"
+      ],
+      "mall": "kolon",
+      "category": "sports"
+    },
+    "customellow": {
+      "aliases": [
+        "customellow",
+        "커스텀멜로우"
+      ],
+      "mall": "kolon",
+      "category": "career"
+    },
+    "series": {
+      "aliases": [
+        "series",
+        "시리즈"
+      ],
+      "mall": "kolon",
+      "category": "casual"
+    },
+    "lucky chouette": {
+      "aliases": [
+        "lucky chouette",
+        "럭키슈에뜨"
+      ],
+      "mall": "kolon",
+      "category": "contemporary"
+    },
+    "jack nicklaus": {
+      "aliases": [
+        "jack nicklaus",
+        "잭니클라우스"
+      ],
+      "mall": "kolon",
+      "category": "sports"
+    },
+    "waac": {
+      "aliases": [
+        "waac",
+        "왁"
+      ],
+      "mall": "kolon",
+      "category": "sports"
+    },
+    "elord": {
+      "aliases": [
+        "elord",
+        "엘로드"
+      ],
+      "mall": "kolon",
+      "category": "sports"
+    },
+    "spao": {
+      "aliases": [
+        "spao",
+        "스파오"
+      ],
+      "mall": "eland",
+      "category": "spa"
+    },
+    "mixxo": {
+      "aliases": [
+        "mixxo",
+        "미쏘"
+      ],
+      "mall": "eland",
+      "category": "spa"
+    },
+    "who.a.u": {
+      "aliases": [
+        "who.a.u",
+        "whoau",
+        "후아유"
+      ],
+      "mall": "eland",
+      "category": "spa"
+    },
+    "roem": {
+      "aliases": [
+        "roem",
+        "로엠"
+      ],
+      "mall": "eland",
+      "category": "career"
+    },
+    "zara": {
+      "aliases": [
+        "zara",
+        "자라"
+      ],
+      "official_domain": "zara.com",
+      "category": "spa"
+    },
+    "massimo dutti": {
+      "aliases": [
+        "massimo dutti",
+        "마시모두띠",
+        "마시모 두띠"
+      ],
+      "official_domain": "massimodutti.com",
+      "category": "spa"
+    },
+    "cos": {
+      "aliases": [
+        "cos",
+        "코스"
+      ],
+      "official_domain": "cos.com",
+      "category": "spa"
+    },
+    "arket": {
+      "aliases": [
+        "arket",
+        "아르켓"
+      ],
+      "official_domain": "arket.com",
+      "category": "spa"
+    },
+    "h&m": {
+      "aliases": [
+        "h&m",
+        "hm",
+        "에이치앤엠"
+      ],
+      "official_domain": "hm.com",
+      "category": "spa"
+    },
+    "uniqlo": {
+      "aliases": [
+        "uniqlo",
+        "유니클로"
+      ],
+      "official_domain": "uniqlo.com",
+      "category": "spa"
+    },
+    "muji": {
+      "aliases": [
+        "muji",
+        "무인양품",
+        "무지"
+      ],
+      "official_domain": "mujikorea.net",
+      "category": "spa"
+    },
+    "topten": {
+      "aliases": [
+        "topten",
+        "탑텐",
+        "topten10"
+      ],
+      "official_domain": "topten10mall.com",
+      "category": "spa"
+    },
+    "giordano": {
+      "aliases": [
+        "giordano",
+        "지오다노"
+      ],
+      "official_domain": "giordano.co.kr",
+      "category": "spa"
+    },
+    "nike": {
+      "aliases": [
+        "nike",
+        "나이키"
+      ],
+      "official_domain": "nike.com",
+      "category": "sports"
+    },
+    "adidas": {
+      "aliases": [
+        "adidas",
+        "아디다스"
+      ],
+      "official_domain": "adidas.co.kr",
+      "category": "sports",
+      "code_format": "^[A-Z]{2}[0-9]{4}$"
+    },
+    "puma": {
+      "aliases": [
+        "puma",
+        "푸마",
+        "퓨마"
+      ],
+      "official_domain": "puma.com",
+      "category": "sports"
+    },
+    "new balance": {
+      "aliases": [
+        "nb",
+        "new",
+        "new balance",
+        "newbalance",
+        "뉴발란스"
+      ],
+      "official_domain": "nbkorea.com",
+      "rules": [
+        {
+          "url": "https://www.nbkorea.com/product/productDetail.action?styleCode={style}&colCode={color}",
+          "code_pattern": "^(?P<style>NB[A-Z0-9]+)-(?P<color>\\d{2})$",
+          "verified": "2026-11-09 실제 태그 NBNQG41923-01 → 이 주소에서 찾음"
+        }
+      ],
+      "category": "sports",
+      "editshop_first": true,
+      "editshop_slugs": {
+        "musinsa.com": ""
+      },
+      "editshop_names": {
+        "musinsa.com": "뉴발란스"
+      }
+    },
+    "asics": {
+      "aliases": [
+        "asics",
+        "아식스"
+      ],
+      "official_domain": "asics.com",
+      "category": "sports"
+    },
+    "converse": {
+      "aliases": [
+        "converse",
+        "컨버스"
+      ],
+      "official_domain": "converse.co.kr",
+      "category": "shoes_acc"
+    },
+    "vans": {
+      "aliases": [
+        "vans",
+        "반스"
+      ],
+      "official_domain": "vans.co.kr",
+      "category": "shoes_acc",
+      "editshop_slugs": {
+        "musinsa.com": "vans"
+      }
+    },
+    "reebok": {
+      "aliases": [
+        "reebok",
+        "리복"
+      ],
+      "official_domain": "reebok.co.kr",
+      "category": "sports"
+    },
+    "under armour": {
+      "aliases": [
+        "under armour",
+        "언더아머"
+      ],
+      "official_domain": "underarmour.co.kr",
+      "category": "sports"
+    },
+    "fila": {
+      "aliases": [
+        "fila",
+        "휠라"
+      ],
+      "official_domain": "fila.co.kr",
+      "category": "sports"
+    },
+    "skechers": {
+      "aliases": [
+        "skechers",
+        "스케쳐스"
+      ],
+      "official_domain": "skechers.co.kr",
+      "category": "shoes_acc"
+    },
+    "lululemon": {
+      "aliases": [
+        "lululemon",
+        "룰루레몬"
+      ],
+      "official_domain": "lululemon.co.kr",
+      "category": "sports"
+    },
+    "on": {
+      "aliases": [
+        "on",
+        "on running",
+        "온러닝"
+      ],
+      "official_domain": "on.com",
+      "category": "sports"
+    },
+    "hoka": {
+      "aliases": [
+        "hoka",
+        "호카"
+      ],
+      "official_domain": "hoka.com",
+      "category": "sports"
+    },
+    "salomon": {
+      "aliases": [
+        "salomon",
+        "살로몬"
+      ],
+      "official_domain": "salomon.com",
+      "category": "sports"
+    },
+    "descente": {
+      "aliases": [
+        "descente",
+        "데상트"
+      ],
+      "official_domain": "descentekorea.co.kr",
+      "category": "sports"
+    },
+    "the north face": {
+      "aliases": [
+        "the north face",
+        "thenorthface",
+        "north face",
+        "노스페이스",
+        "더노스페이스"
+      ],
+      "official_domain": "thenorthfacekorea.co.kr",
+      "category": "sports"
+    },
+    "columbia": {
+      "aliases": [
+        "columbia",
+        "컬럼비아"
+      ],
+      "official_domain": "columbiakorea.co.kr",
+      "category": "sports"
+    },
+    "patagonia": {
+      "aliases": [
+        "patagonia",
+        "파타고니아"
+      ],
+      "official_domain": "patagonia.co.kr",
+      "category": "sports"
+    },
+    "arc'teryx": {
+      "aliases": [
+        "arc'teryx",
+        "arcteryx",
+        "아크테릭스"
+      ],
+      "official_domain": "arcteryx.co.kr",
+      "category": "sports"
+    },
+    "oakley": {
+      "aliases": [
+        "oakley",
+        "오클리"
+      ],
+      "official_domain": "oakley.com",
+      "category": "sports",
+      "editshop_slugs": {
+        "musinsa.com": ""
+      }
+    },
+    "mlb": {
+      "aliases": [
+        "mlb",
+        "엠엘비"
+      ],
+      "official_domain": "mlb-korea.com",
+      "category": "casual"
+    },
+    "discovery expedition": {
+      "aliases": [
+        "discovery expedition",
+        "discovery",
+        "디스커버리"
+      ],
+      "official_domain": "discovery-expedition.com",
+      "category": "sports"
+    },
+    "levi's": {
+      "aliases": [
+        "levi's",
+        "levis",
+        "리바이스"
+      ],
+      "official_domain": "levi.co.kr",
+      "category": "casual"
+    },
+    "polo ralph lauren": {
+      "aliases": [
+        "polo ralph lauren",
+        "ralph lauren",
+        "polo",
+        "폴로",
+        "폴로 랄프로렌"
+      ],
+      "official_domain": "ralphlauren.co.kr",
+      "category": "casual"
+    },
+    "crocs": {
+      "aliases": [
+        "crocs",
+        "크록스"
+      ],
+      "official_domain": "crocs.co.kr",
+      "category": "shoes_acc"
+    },
+    "dr. martens": {
+      "aliases": [
+        "dr. martens",
+        "dr.martens",
+        "dr martens",
+        "닥터마틴"
+      ],
+      "official_domain": "drmartens.co.kr",
+      "category": "shoes_acc"
+    },
+    "kream": {
+      "aliases": [
+        "kream",
+        "크림"
+      ],
+      "official_domain": "kream.co.kr",
+      "category": "k_designer"
+    },
+    "kream+": {
+      "aliases": [
+        "kream+",
+        "kream plus",
+        "크림플러스",
+        "크림+"
+      ],
+      "official_domain": "kream.co.kr",
+      "category": "k_designer"
+    },
+    "piedpiper": {
+      "aliases": [
+        "piedpiper",
+        "pied piper",
+        "파이드파이퍼"
+      ],
+      "category": "k_designer",
+      "editshop_slugs": {
+        "musinsa.com": "piedpiper"
+      }
+    },
+    "amou": {
+      "aliases": [
+        "amou",
+        "아모우"
+      ],
+      "category": "k_designer",
+      "editshop_slugs": {
+        "musinsa.com": "machineboymachine"
+      }
+    },
+    "eeut": {
+      "aliases": [
+        "eeut",
+        "이우트"
+      ],
+      "category": "k_designer",
+      "editshop_slugs": {
+        "musinsa.com": "eeut"
+      }
+    },
+    "kimmatin": {
+      "aliases": [
+        "kimmatin",
+        "matin kim",
+        "마뗑킴",
+        "마땡킴"
+      ],
+      "category": "k_designer",
+      "editshop_slugs": {
+        "musinsa.com": "matinkim"
+      }
+    },
+    "mardi mercredi": {
+      "aliases": [
+        "mardi mercredi",
+        "마르디메크르디",
+        "마르디 메크르디"
+      ],
+      "category": "k_designer"
+    },
+    "thisisneverthat": {
+      "aliases": [
+        "thisisneverthat",
+        "디스이즈네버댓"
+      ],
+      "category": "k_designer"
+    },
+    "covernat": {
+      "aliases": [
+        "covernat",
+        "커버낫"
+      ],
+      "category": "k_designer"
+    },
+    "lmc": {
+      "aliases": [
+        "lmc",
+        "엘엠씨"
+      ],
+      "category": "k_designer"
+    },
+    "kirsh": {
+      "aliases": [
+        "kirsh",
+        "키르시"
+      ],
+      "category": "k_designer"
+    },
+    "emis": {
+      "aliases": [
+        "emis",
+        "이미스"
+      ],
+      "category": "k_designer"
+    },
+    "stand oil": {
+      "aliases": [
+        "stand oil",
+        "스탠드오일"
+      ],
+      "category": "k_designer"
+    },
+    "marithe francois girbaud": {
+      "aliases": [
+        "marithe francois girbaud",
+        "마리떼",
+        "마리떼 프랑소와 저버"
+      ],
+      "category": "k_designer"
+    },
+    "mahagrid": {
+      "aliases": [
+        "mahagrid",
+        "마하그리드"
+      ],
+      "category": "k_designer"
+    },
+    "nerdy": {
+      "aliases": [
+        "nerdy",
+        "널디"
+      ],
+      "category": "k_designer"
+    },
+    "andersson bell": {
+      "aliases": [
+        "andersson bell",
+        "앤더슨벨"
+      ],
+      "category": "k_designer"
+    },
+    "ader error": {
+      "aliases": [
+        "ader error",
+        "아더에러"
+      ],
+      "category": "k_designer"
+    },
+    "rest & recreation": {
+      "aliases": [
+        "rest & recreation",
+        "rest&recreation",
+        "레스트앤레크레이션"
+      ],
+      "category": "k_designer"
+    },
+    "sculptor": {
+      "aliases": [
+        "sculptor",
+        "스컬프터"
+      ],
+      "category": "k_designer"
+    },
+    "low classic": {
+      "aliases": [
+        "low classic",
+        "로우클래식"
+      ],
+      "category": "k_designer"
+    },
+    "87mm": {
+      "aliases": [
+        "87mm",
+        "mmlg"
+      ],
+      "category": "k_designer"
+    },
+    "yale": {
+      "aliases": [
+        "yale",
+        "예일"
+      ],
+      "category": "k_designer"
+    },
+    "lee": {
+      "aliases": [
+        "lee",
+        "리"
+      ],
+      "category": "k_designer"
+    },
+    "musinsa standard": {
+      "aliases": [
+        "musinsa standard",
+        "무신사 스탠다드",
+        "무탠다드"
+      ],
+      "category": "k_designer"
+    },
+    "wooalong": {
+      "aliases": [
+        "wooalong",
+        "우알롱"
+      ],
+      "category": "k_designer"
+    },
+    "drawfit": {
+      "aliases": [
+        "drawfit",
+        "드로우핏"
+      ],
+      "category": "k_designer"
+    },
+    "partimento": {
+      "aliases": [
+        "partimento",
+        "파르티멘토"
+      ],
+      "category": "k_designer"
+    },
+    "coyseio": {
+      "aliases": [
+        "coyseio",
+        "코이세이오"
+      ],
+      "category": "k_designer"
+    },
+    "yeseyesee": {
+      "aliases": [
+        "yeseyesee",
+        "예스아이씨"
+      ],
+      "category": "k_designer"
+    },
+    "999humanity": {
+      "aliases": [
+        "999humanity",
+        "999휴머니티"
+      ],
+      "category": "k_designer"
+    },
+    "the barnnet": {
+      "aliases": [
+        "the barnnet",
+        "더바넷"
+      ],
+      "category": "k_designer"
+    },
+    "trimmingbird": {
+      "aliases": [
+        "trimmingbird",
+        "트리밍버드"
+      ],
+      "category": "k_designer"
+    },
+    "depound": {
+      "aliases": [
+        "depound",
+        "드파운드"
+      ],
+      "category": "k_designer"
+    },
+    "rawrow": {
+      "aliases": [
+        "rawrow",
+        "로우로우"
+      ],
+      "category": "k_designer"
+    },
+    "milo archive": {
+      "aliases": [
+        "milo archive",
+        "밀로아카이브"
+      ],
+      "category": "k_designer"
+    }
+  },
+  "dept_store_malls": [
+    "lotteon.com",
+    "ssg.com",
+    "thehyundai.com"
+  ],
+  "companies": {
+    "삼성물산": "ssf",
+    "삼성물산패션": "ssf",
+    "한섬": "handsome",
+    "현대한섬": "handsome",
+    "엘에프": "lf",
+    "lf": "lf",
+    "신세계인터내셔날": "sivillage",
+    "신세계인터내셔널": "sivillage",
+    "코오롱인더스트리": "kolon",
+    "코오롱fnc": "kolon",
+    "코오롱에프앤씨": "kolon",
+    "이랜드월드": "eland",
+    "이랜드": "eland",
+    "롯데지에프알": "lottegfr",
+    "롯데gfr": "lottegfr"
+  },
+  "categories": {
+    "luxury": {
+      "name": "해외 명품",
+      "floor": "1~2층",
+      "order": [
+        "official",
+        "dept_store"
+      ]
+    },
+    "contemporary": {
+      "name": "컨템포러리·디자이너(여성·남성)",
+      "floor": "2~5층",
+      "order": [
+        "parent_mall",
+        "dept_store",
+        "official",
+        "editshop"
+      ]
+    },
+    "career": {
+      "name": "커리어·캐릭터·신사복",
+      "floor": "3~5층",
+      "order": [
+        "parent_mall",
+        "dept_store",
+        "official"
+      ]
+    },
+    "casual": {
+      "name": "캐주얼·데님·트래디셔널",
+      "floor": "4~6층·가두점",
+      "order": [
+        "official",
+        "parent_mall",
+        "editshop"
+      ]
+    },
+    "sports": {
+      "name": "스포츠·아웃도어·골프",
+      "floor": "6층·가두점",
+      "order": [
+        "official",
+        "parent_mall",
+        "editshop"
+      ]
+    },
+    "spa": {
+      "name": "SPA",
+      "floor": "지하·가두점",
+      "order": [
+        "official",
+        "parent_mall"
+      ]
+    },
+    "k_designer": {
+      "name": "영패션·K디자이너·스트릿",
+      "floor": "영패션관·가두점·팝업",
+      "order": [
+        "editshop",
+        "official"
+      ]
+    },
+    "shoes_acc": {
+      "name": "슈즈·잡화",
+      "floor": "1층·가두점",
+      "order": [
+        "official",
+        "editshop"
+      ]
+    },
+    "lifestyle": {
+      "name": "리빙·라이프스타일",
+      "floor": "7~8층",
+      "order": [
+        "official",
+        "parent_mall"
+      ]
+    },
+    "unknown": {
+      "name": "모르는 브랜드",
+      "floor": "-",
+      "order": [
+        "official",
+        "editshop"
+      ]
+    }
+  },
+  "editshops": [
+    "musinsa.com",
+    "29cm.co.kr",
+    "4910.kr",
+    "wconcept.co.kr"
+  ],
+  "editshop_brands": {
+    "musinsa.com": [
+      "adidas"
+    ],
+    "29cm.co.kr": [],
+    "4910.kr": [],
+    "wconcept.co.kr": []
+  },
+  "code_brands": [
+    {
+      "pattern": "^VN0[0-9A-Z]{6,}$",
+      "brand": "vans",
+      "verified": "2026-11-09 반스 태그 7장 품번이 모두 VN000…"
+    },
+    {
+      "pattern": "^NB[A-Z]{3}[0-9A-Z]{4,}",
+      "brand": "new balance",
+      "verified": "2026-11-09 뉴발란스 태그 품번 NBNQG…·NBMLG… (한 장은 브랜드를 'NBA'로 잘못 읽음)"
+    }
+  ],
+  "editshop_rules": {
+    "musinsa.com": [
+      {
+        "search_url": "https://www.musinsa.com/brand/{brand_slug}/products?keyword={code}&keywordType=keyword&gf=A",
+        "product_id_pattern": "/products/(?P<id>\\d{5,})",
+        "product_url": "https://www.musinsa.com/products/{id}",
+        "verified": "2026-11-09 사용자 확인: /brand/piedpiper/products?keyword=PP263LT01MT 로 브랜드 안 품번 검색"
+      },
+      {
+        "search_url": "https://www.musinsa.com/search/goods?keyword={brand}%20{code_base}",
+        "product_id_pattern": "/products/(?P<id>\\d{5,})",
+        "product_url": "https://www.musinsa.com/products/{id}",
+        "verified": "2026-11-10 브랜드 이름은 무신사에서 쓰는 이름(뉴발란스 등), 품번은 색상 꼬리를 뗀 스타일 번호로"
+      },
+      {
+        "search_url": "https://www.musinsa.com/search/goods?keyword={code}",
+        "product_id_pattern": "/products/(?P<id>\\d{5,})",
+        "product_url": "https://www.musinsa.com/products/{id}",
+        "verified": "2026-11-09 실제 83장 테스트에서 뉴발란스 2장을 이 주소로 찾음"
+      }
+    ]
+  }
+}

@@ -92,6 +92,11 @@ query ListWishProducts(\$ownerId: ID!, \$limit: Int, \$nextToken: String) {
     nextToken
   }
 }''';
+  /// 태그 찾기 피드백(익명). 만들기만 된다 — 읽기 권한은 없다.
+  static const createTagFeedback = '''
+mutation CreateTagFeedback(\$input: CreateTagFeedbackInput!) {
+  createTagFeedback(input: \$input) { id }
+}''';
   static const createProduct = '''
 mutation CreateWishProduct(\$input: CreateWishProductInput!) {
   createWishProduct(input: \$input) { ownerId productId }
@@ -283,7 +288,7 @@ query IdentifyProductTag(\$imageBase64: String!, \$mimeType: String!) {
   identifyProductTag(imageBase64: \$imageBase64, mimeType: \$mimeType) {
     status brand productCode productName color tagPrice officialDomain
     matchUrl matchHost matchSource verifiedBy note
-    matchName matchPrice matchRegularPrice matchImage matchVia
+    matchName matchPrice matchRegularPrice matchImage matchVia skipReason traceId cause
   }
 }''';
 
