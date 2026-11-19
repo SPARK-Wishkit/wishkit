@@ -871,6 +871,14 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 공유로 받은 주소를 꺼내고 비운다(한 번만 쓰이게). 상품 추가 화면이 읽는다 — 저장하지 않고 나갔다가
+  /// 다시 열 때 예전 공유 주소를 또 읽지 않도록. 화면을 그리는 중에도 부를 수 있게 알림은 보내지 않는다.
+  String? takePendingShareUrl() {
+    final url = pendingShareUrl;
+    pendingShareUrl = null;
+    return url;
+  }
+
   Product? productById(int id) {
     return products.where((p) => p.id == id).firstOrNull;
   }
