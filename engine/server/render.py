@@ -262,6 +262,58 @@ async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> 
         await context.close()
 
 
+async def resolve_in_browser(browser: Browser, url: str, *, timeout_s: float = 8.0) -> str | None:
+    """앱 공유용 짧은 링크(onelink.me 등)를 실제 브라우저로 열어, 쇼핑몰 주소로 넘어가는 순간의 주소만 얻는다.
+
+    share_links.py 의 HTTP 요청이 막힐 때 쓴다(2026-11-18 운영 로그: musinsa.onelink.me 가 서버의
+    urllib 요청에 403 Forbidden). 짧은 링크 페이지를 끝까지 렌더링하지 않는다 — 메인 프레임이 짧은 링크가
+    아닌 웹 주소로 이동하려는 첫 요청(3xx 리다이렉트·JS 이동 모두 `request` 이벤트로 잡힌다)이 보이면 바로
+    끝낸다. PC 브라우저 UA 로 연다(휴대폰 UA 면 앱/스토어로 보내려다 끝나지 않는다, 10/24 로그).
+    timeout_s 안에 못 찾으면 None."""
+    from share_links import is_short_link  # 순환 import 방지용 지역 import
+
+    context = await browser.new_context(user_agent=DESKTOP_UA, viewport=VIEWPORT)
+    found: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+    try:
+        page = await context.new_page()
+
+        def on_request(request) -> None:
+            if found.done() or not request.is_navigation_request() or request.frame != page.main_frame:
+                return
+            target = request.url
+            parsed = urllib.parse.urlsplit(target)
+            if parsed.scheme in ("http", "https") and parsed.hostname and not is_short_link(target):
+                found.set_result(target)
+
+        page.on("request", on_request)
+
+        async def _block_heavy(route) -> None:  # 중간 페이지의 이미지·폰트·영상은 받을 필요가 없다
+            if route.request.resource_type in ("image", "font", "media"):
+                await route.abort()
+            else:
+                await route.continue_()
+
+        await page.route("**/*", _block_heavy)
+
+        async def _open() -> None:
+            try:
+                await page.goto(url, timeout=int(timeout_s * 1000), wait_until="commit")
+            except Exception:  # noqa: BLE001, S110 — 이동 중 끊기거나(목적지를 찾아 닫을 때) 시간 초과는 found 로 판단
+                pass
+
+        opener = asyncio.ensure_future(_open())
+        try:
+            return await asyncio.wait_for(asyncio.shield(found), timeout=timeout_s)
+        except TimeoutError:
+            return None
+        finally:
+            opener.cancel()
+    except Exception:  # noqa: BLE001
+        return None
+    finally:
+        await context.close()
+
+
 async def launch_browser(playwright) -> Browser:
     """앱 시작 시 1회만 호출 — 이후 모든 요청이 이 브라우저 프로세스를 공유한다.
     설치된 Chrome을 우선 쓰고, 없으면 Playwright 번들 Chromium으로 폴백한다."""
