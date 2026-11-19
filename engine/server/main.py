@@ -36,8 +36,8 @@ from playwright.async_api import async_playwright
 from providers import ProviderResult, call_gemini, call_gemini_vision
 from pydantic import BaseModel, HttpUrl
 from qr_codes import decode_codes, resolve_qr_url
-from render import launch_browser, render
-from share_links import resolve_share_link
+from render import launch_browser, render, resolve_in_browser
+from share_links import is_short_link, resolve_share_link
 from tag_identify import (
     IdentifyError,
     PageView,
@@ -98,6 +98,20 @@ async def _extract(url: str) -> dict:
     t_start = now_ms()
     # 앱 공유용 짧은 링크(musinsa.onelink.me 등)는 실제 상품 주소로 먼저 바꾼다(share_links.py).
     url = await asyncio.to_thread(resolve_share_link, url)
+    if is_short_link(url):
+        # HTTP 요청으로 못 풀었다(2026-11-18: onelink.me 가 서버 요청에 403). 브라우저로 이동 주소만 얻는다.
+        # 그래도 못 풀면 짧은 링크를 렌더링하지 않는다 — 앱/스토어로 보내는 중간 페이지라 끝까지 기다리다
+        # 전체 시간을 다 써서 504 가 났다. 빨리 실패해야 앱이 바로 직접 입력 화면을 보여 준다.
+        short_url = url
+        async with app.state.render_semaphore:
+            resolved = await resolve_in_browser(
+                app.state.browser, short_url, timeout_s=config.SHORT_LINK_BROWSER_TIMEOUT_S
+            )
+        if not resolved:
+            logger.warning("[extract] 공유 링크를 상품 주소로 못 바꿈 — 렌더링하지 않고 종료: %s", short_url)
+            raise HTTPException(502, f"공유 링크를 상품 주소로 바꾸지 못함: {short_url}")
+        logger.info("공유 링크 → 상품 주소(브라우저): %s → %s", short_url, resolved)
+        url = resolved
 
     async with app.state.render_semaphore:
         r = await render(app.state.browser, url, nav_timeout_ms=config.RENDER_NAV_TIMEOUT_MS)
