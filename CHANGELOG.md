@@ -1,5 +1,19 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-19 - 에이블리 앱 공유 링크 풀기 · 엔진 로그 가격 표시 수정
+
+🌟 **쉬운 설명**
+- 에이블리 앱에서 공유한 링크(`applink.a-bly.com/…`)를 넣으면 12초쯤 기다리다 실패하던 문제를 고쳤어요. 이제 링크를 상품 주소(`m.a-bly.com/goods/…`)로 먼저 바꿔서 읽어요.
+- 서버 기록에 상품 가격이 늘 "없음"으로 찍히던 문제를 고쳤어요. 앱에 가는 가격은 원래 정상이었고, 기록 한 줄만 잘못 읽고 있었어요.
+
+🔧 **기술 설명**
+- `share_links.SHORT_LINK_SUFFIXES` 에 `applink.a-bly.com`(Airbridge) 추가. PC UA 로 열면 302 → `m.a-bly.com/goods/…`, 휴대폰 UA 면 `ably.airbridge.io`(앱 이동 페이지) → 예전엔 짧은 링크로 안 보고 휴대폰 UA 로 렌더링하다 `Page.goto` 12초 시간 초과(2026-11-19 운영 로그).
+- `resolve_share_link`: 다음 요청이 실패해도 이미 짧은 링크를 벗어난 쇼핑몰 주소까지 왔으면 그 주소를 쓴다. 에이블리는 302 뒤 `m.a-bly.com` 에 urllib 요청이 403 이라, 예전 코드는 찾은 주소를 버리고 짧은 링크로 돌아갔다.
+- `main._extract` 의 `[extract] host=… price=…` 로그가 `extracted["unconditional_price"]`(없는 키)를 읽어 11/2(8867043)부터 항상 `price=None` → `extracted["price"]["unconditional_price"]` 로 수정. 응답·앱 동작은 그대로.
+- 테스트: `test_share_links.py` +4(applink 판정 2, 다음 요청 403 이어도 상품 주소 유지, 첫 요청 403 이면 원래 주소), `test_main.py` +1(로그 줄 가격).
+
+---
+
 ## 2026-11-19 - 쇼핑몰이 서버를 막으면 이유를 남기고 바로 실패
 
 🌟 **쉬운 설명**

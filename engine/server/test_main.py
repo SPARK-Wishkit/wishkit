@@ -125,3 +125,27 @@ def test_extract_blocked_logs_reason_without_share_query(monkeypatch, caplog):
     assert "host=www.musinsa.com status=403" in lines[0]
     assert "Access Denied" in lines[0] and "final_url=https://www.musinsa.com/products/7489748 " in lines[0]
     assert "abc123" not in caplog.text
+
+
+def test_extract_log_line_shows_the_nested_price(monkeypatch, caplog):
+    """[extract] host=… price=… 줄은 응답의 price.unconditional_price 를 찍는다(예전엔 바깥에서 찾아 늘 None)."""
+    import logging
+
+    import main
+    from providers import ProviderResult
+    from render import RenderResult
+
+    async def fake_render(browser, url, *, nav_timeout_ms):
+        return RenderResult(final_url=url, cleaned_html="<p>후드집업 21,500원</p>", raw_text="후드집업 21,500원")
+
+    data = {"product_name": "후드집업", "image_url": None, "ambiguous": False, "ambiguity_reason": None,
+            "confidence": "high", "price": {"unconditional_price": 21500, "regular_price": None, "currency": "KRW"}}
+    monkeypatch.setattr(main, "render", fake_render)
+    monkeypatch.setattr(main, "call_gemini", lambda html: ProviderResult("gemini", "fake", True, data, 1))
+    with caplog.at_level(logging.INFO, logger="extract-server"), TestClient(app) as client:
+        resp = client.post("/extract", json={"url": "https://m.a-bly.com/goods/51469717"})
+
+    assert resp.status_code == 200
+    assert resp.json()["price"]["unconditional_price"] == 21500
+    lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("[extract] host=")]
+    assert len(lines) == 1 and "host=m.a-bly.com price=21500 " in lines[0]

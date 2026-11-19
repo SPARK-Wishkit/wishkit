@@ -166,7 +166,8 @@ async def _extract(url: str) -> dict:
     # 가격을 읽었는지, 못 읽었으면 AI가 적은 이유.
     logger.info(
         "[extract] host=%s price=%r ambiguous=%s reason=%r body_chars=%d vision=%s (%dms, 렌더 %dms)",
-        urllib.parse.urlparse(r.final_url or url).hostname, extracted.get("unconditional_price"),
+        # 가격은 응답의 "price" 안에 있다(prompts.py 스키마). 11/2 부터 바깥에서 찾아 로그엔 늘 None 이었다.
+        urllib.parse.urlparse(r.final_url or url).hostname, (extracted.get("price") or {}).get("unconditional_price"),
         bool(extracted.get("ambiguous")), extracted.get("ambiguity_reason"), len(r.raw_text.strip()),
         screenshot_fallback_used, response["metrics"]["total_elapsed_ms"], render_elapsed_ms,
     )

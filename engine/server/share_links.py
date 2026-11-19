@@ -34,6 +34,9 @@ SHORT_LINK_SUFFIXES = (
     "bit.ly",
     "han.gl",
     "url.kr",
+    # Airbridge(에이블리 앱 공유). PC UA 로 열면 302 → m.a-bly.com/goods/…, 휴대폰 UA 면 ably.airbridge.io(앱
+    # 이동 페이지)로 간다 — 휴대폰 UA 로 그대로 렌더링하면 12초 시간 초과였다(2026-11-19 운영 로그).
+    "applink.a-bly.com",
 )
 
 # 앱으로 보내는 주소 안에 들어 있는 "웹으로 열 때 갈 주소" 파라미터 (앞에 있을수록 우선)
@@ -168,6 +171,11 @@ def resolve_share_link(url: str, *, fetch=_fetch, total_timeout: float = TOTAL_T
             current = nxt
     except Exception as exc:  # noqa: BLE001 — 못 풀면 원래 주소로 렌더링을 시도한다
         logger.warning("공유 링크 풀기 실패(%s): %s", url, exc)
+        # 이미 짧은 링크를 벗어나 쇼핑몰 주소까지 왔으면 그 주소를 쓴다. 쇼핑몰이 서버의 단순 HTTP 요청만
+        # 막는 경우가 있다(2026-11-19 에이블리: applink 302 → m.a-bly.com 에 urllib 403, 브라우저는 열림).
+        if current != url and _is_web(current) and not is_short_link(current):
+            logger.info("공유 링크 → 상품 주소(마지막 요청은 실패, 여기까지 사용): %s → %s", url, strip_query(current))
+            return current
         return web_fallback_in(url) or url
     if current != url:
         logger.info("공유 링크 → 상품 주소: %s → %s", url, strip_query(current))
