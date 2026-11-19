@@ -76,6 +76,11 @@ class RenderResult:
     # 화면에 안 보이는 품번 단서(대표 이미지 주소·구조화 데이터의 sku/mpn/gtin 등). _code_hints() 참고
     code_hints: list[str] = field(default_factory=list)
     error: str | None = None
+    # 차단 판정 근거(blocked 일 때만): 걸린 BLOCK_PATTERNS 문구 + 화면 글자 앞부분. 운영 로그로 어떤 차단
+    # (Akamai·Cloudflare·몰 자체 페이지)인지 가리려고 남긴다 — 2026-11-19 무신사가 AWS 에서만 차단됐는데
+    # 서버 HTML 이 안 남아 원인을 몰랐다.
+    block_reason: str | None = None
+    status_code: int | None = None  # 메인 문서 응답 코드(홈 웜업 재시도를 했으면 마지막 것)
 
     @property
     def ok(self) -> bool:
@@ -86,8 +91,23 @@ def _pick_ua(host: str) -> str:
     return MOBILE_UA if any(h in host for h in MOBILE_UA_HOSTS) else DESKTOP_UA
 
 
+def _block_phrase(html: str) -> str | None:
+    """HTML 에서 실제로 걸린 차단 문구(BLOCK_PATTERNS 의 첫 일치). 차단이 아니면 None."""
+    m = BLOCK_PATTERNS.search(html)
+    return m.group(0) if m else None
+
+
 def _looks_blocked(html: str) -> bool:
-    return bool(BLOCK_PATTERNS.search(html))
+    return _block_phrase(html) is not None
+
+
+BLOCK_TEXT_HEAD_CHARS = 200
+
+
+def _block_reason(phrase: str, raw_text: str) -> str:
+    """로그용 차단 근거: `"<문구>" | <화면 글자 앞 200자(공백 정리)>`."""
+    head = " ".join(raw_text.split())[:BLOCK_TEXT_HEAD_CHARS]
+    return f'"{phrase}" | {head}'
 
 
 def _clean_html(html: str) -> tuple[str, str, list[str]]:
@@ -209,14 +229,22 @@ def _code_hints(html: str) -> list[str]:
         return []
 
 
-async def _goto_and_wait(page, url: str, nav_timeout_ms: int) -> None:
-    await page.goto(url, timeout=nav_timeout_ms, wait_until="domcontentloaded")
+async def _goto_and_wait(page, url: str, nav_timeout_ms: int) -> int | None:
+    """열고 가격이 보일 때까지 기다린다. 메인 문서 응답 코드를 돌려준다.
+
+    처음 받은 HTML 이 이미 차단 페이지면 기다리지 않고 바로 돌아간다 — 차단 페이지에는 가격이 끝내 안
+    나타나서, 원래는 여기서 10초 + 홈 웜업 뒤 또 10초를 그냥 썼다(2026-11-19 무신사 502, 24.4초)."""
+    resp = await page.goto(url, timeout=nav_timeout_ms, wait_until="domcontentloaded")
+    status = resp.status if resp is not None else None
+    if _looks_blocked(await page.content()):
+        return status
     for i in range(POLL_MAX_ITERATIONS):
         if await page.evaluate(_JS_PRICE_VISIBLE):
-            return
+            return status
         if i * POLL_INTERVAL_S >= MIN_WAIT_BEFORE_WEAK_SIGNAL_S and await page.evaluate(_JS_WEAK_READY):
-            return
+            return status
         await asyncio.sleep(POLL_INTERVAL_S)
+    return status
 
 
 async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> RenderResult:
@@ -226,21 +254,22 @@ async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> 
     context = await browser.new_context(user_agent=_pick_ua(parsed.netloc), viewport=VIEWPORT)
     try:
         page = await context.new_page()
-        await _goto_and_wait(page, url, nav_timeout_ms)
+        status = await _goto_and_wait(page, url, nav_timeout_ms)
         html = await page.content()
 
         if _looks_blocked(html):
-            # 홈 웜업 후 1회 재시도
+            # 홈 웜업 후 1회 재시도(유니클로 Akamai 용). 이것도 차단이면 _goto_and_wait 가 기다리지 않고 끝낸다.
             try:
                 await page.goto(f"{parsed.scheme}://{parsed.netloc}/",
                                 timeout=nav_timeout_ms, wait_until="domcontentloaded")
                 await asyncio.sleep(1.0)
-                await _goto_and_wait(page, url, nav_timeout_ms)
+                status = await _goto_and_wait(page, url, nav_timeout_ms)
                 html = await page.content()
             except PWTimeoutError:
                 pass
 
         cleaned_html, raw_text, images = _clean_html(html)
+        phrase = _block_phrase(html)
         try:
             screenshot = await page.screenshot(type="jpeg", quality=70)
         except Exception:  # noqa: BLE001 — 스크린샷 실패는 텍스트 추출 흐름을 막지 않음
@@ -248,7 +277,9 @@ async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> 
 
         return RenderResult(
             final_url=page.url,
-            blocked=_looks_blocked(html),
+            blocked=phrase is not None,
+            block_reason=_block_reason(phrase, raw_text) if phrase else None,
+            status_code=status,
             cleaned_html=cleaned_html,
             raw_text=raw_text,
             image_candidates=images,

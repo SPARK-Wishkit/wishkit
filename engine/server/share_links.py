@@ -47,6 +47,15 @@ MAX_HOPS = 6
 TOTAL_TIMEOUT_S = 4.0  # 엔진 전체 25초 안에서 렌더링·AI 에 시간을 남긴다
 
 
+def strip_query(url: str) -> str:
+    """로그·오류 메시지용: 쿼리·조각을 뺀 `scheme://host/path`. 공유로 풀린 주소에는 공유한 사람을 가리키는
+    값(af_referrer_customer_id 등)이 붙어 있어 그대로 남기지 않는다. 주소가 아니면 그대로 돌려준다."""
+    parts = urllib.parse.urlsplit(url or "")
+    if not parts.scheme or not parts.netloc:
+        return url
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
 def _host(url: str) -> str:
     return (urllib.parse.urlsplit(url).hostname or "").lower()
 
@@ -161,5 +170,5 @@ def resolve_share_link(url: str, *, fetch=_fetch, total_timeout: float = TOTAL_T
         logger.warning("공유 링크 풀기 실패(%s): %s", url, exc)
         return web_fallback_in(url) or url
     if current != url:
-        logger.info("공유 링크 → 상품 주소: %s → %s", url, current)
+        logger.info("공유 링크 → 상품 주소: %s → %s", url, strip_query(current))
     return current
