@@ -98,3 +98,30 @@ def test_identify_tag_rejects_oversized_base64_before_decoding(monkeypatch):
         resp = client.post("/identify-tag", json={"image_base64": "A" * 12})
     assert resp.status_code == 413
     assert str(config.IDENTIFY_MAX_IMAGE_BYTES) in resp.json()["detail"]
+
+
+def test_extract_blocked_logs_reason_without_share_query(monkeypatch, caplog):
+    """차단 502 는 엔진 로그에도 이유(문구·status)를 남기고, 주소의 쿼리(공유자 식별값)는 빼고 남긴다."""
+    import logging
+
+    import main
+    from render import RenderResult
+
+    async def fake_render(browser, url, *, nav_timeout_ms):
+        return RenderResult(final_url=url, blocked=True, status_code=403,
+                            block_reason='"Access Denied" | Access Denied You don\'t have permission')
+
+    monkeypatch.setattr(main, "render", fake_render)
+    url = "https://www.musinsa.com/products/7489748?af_referrer_customer_id=abc123&shortlink=wwp934zk"
+    with caplog.at_level(logging.WARNING, logger="extract-server"), TestClient(app) as client:
+        resp = client.post("/extract", json={"url": url})
+
+    assert resp.status_code == 502
+    detail = resp.json()["detail"]
+    assert "status=403" in detail and "final_url=https://www.musinsa.com/products/7489748)" in detail
+    assert "abc123" not in detail
+    lines = [r.getMessage() for r in caplog.records if "[extract] 차단" in r.getMessage()]
+    assert len(lines) == 1
+    assert "host=www.musinsa.com status=403" in lines[0]
+    assert "Access Denied" in lines[0] and "final_url=https://www.musinsa.com/products/7489748 " in lines[0]
+    assert "abc123" not in caplog.text

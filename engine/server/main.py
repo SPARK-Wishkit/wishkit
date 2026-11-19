@@ -37,7 +37,7 @@ from providers import ProviderResult, call_gemini, call_gemini_vision
 from pydantic import BaseModel, HttpUrl
 from qr_codes import decode_codes, resolve_qr_url
 from render import launch_browser, render, resolve_in_browser
-from share_links import is_short_link, resolve_share_link
+from share_links import is_short_link, resolve_share_link, strip_query
 from tag_identify import (
     IdentifyError,
     PageView,
@@ -110,20 +110,31 @@ async def _extract(url: str) -> dict:
         if not resolved:
             logger.warning("[extract] 공유 링크를 상품 주소로 못 바꿈 — 렌더링하지 않고 종료: %s", short_url)
             raise HTTPException(502, f"공유 링크를 상품 주소로 바꾸지 못함: {short_url}")
-        logger.info("공유 링크 → 상품 주소(브라우저): %s → %s", short_url, resolved)
+        logger.info("공유 링크 → 상품 주소(브라우저): %s → %s", short_url, strip_query(resolved))
         url = resolved
 
     async with app.state.render_semaphore:
         r = await render(app.state.browser, url, nav_timeout_ms=config.RENDER_NAV_TIMEOUT_MS)
     render_elapsed_ms = now_ms() - t_start
 
+    # 502 이유는 원래 HTTPException detail(→ parsing-proxy Lambda 로그)에만 남았다. 엔진 로그에도 한 줄씩 남긴다.
+    # 주소는 쿼리를 뺀다(공유로 풀린 주소에 공유한 사람 식별값이 붙어 있음). 성공 응답의 final_url 은 그대로 —
+    # 앱이 상품 주소로 저장하고, 쿼리에 상품 번호가 있는 몰도 있다.
+    host = urllib.parse.urlparse(r.final_url or url).hostname
     if r.error:
+        logger.warning("[extract] 렌더링 오류 host=%s error=%s url=%s (%dms)",
+                       host, r.error, strip_query(url), render_elapsed_ms)
         raise HTTPException(502, f"렌더링 오류: {r.error}")
     if r.blocked:
-        raise HTTPException(502, f"상품 페이지 접근이 차단됨(final_url={r.final_url})")
+        final_url = strip_query(r.final_url or url)
+        logger.warning("[extract] 차단 host=%s status=%s reason=%r final_url=%s (%dms)",
+                       host, r.status_code, r.block_reason, final_url, render_elapsed_ms)
+        raise HTTPException(502, f"상품 페이지 접근이 차단됨(status={r.status_code}, final_url={final_url})")
 
     text_result, text_elapsed_ms = await _run_gemini(call_gemini, r.cleaned_html)
     if not text_result.ok or not text_result.data:
+        logger.warning("[extract] AI 호출 실패 host=%s error=%s (%dms)",
+                       host, text_result.error, now_ms() - t_start)
         raise HTTPException(502, f"AI 호출 실패: {text_result.error}")
     extracted = text_result.data
 

@@ -1,5 +1,21 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-19 - 쇼핑몰이 서버를 막으면 이유를 남기고 바로 실패
+
+🌟 **쉬운 설명**
+- 쇼핑몰이 서버의 접속을 막았을 때(차단 페이지), 예전에는 가격이 뜨기를 20초 넘게 기다리다 실패했어요. 이제 차단 페이지인 걸 알아보면 기다리지 않고 몇 초 안에 실패해서, 앱이 곧바로 직접 입력 화면을 보여 줘요.
+- 어떤 차단이었는지(차단 문구·응답 코드·화면 글자 앞부분)를 서버 로그에 남겨요. 무신사 상품 페이지가 AWS 서버에서만 막히는 원인을 확인하려는 거예요. 막힌 걸 우회하지는 않아요.
+
+🔧 **기술 설명**
+- 배경(2026-11-19 운영): #40 으로 무신사 공유 링크는 풀렸지만 `www.musinsa.com/products/7489748` 이 Fargate 에서만 `_looks_blocked` → 502, Lambda 기준 24.4초. 엔진 로그엔 이유가 없고(HTTPException detail 은 parsing-proxy 로그에만), 서버 HTML 도 안 남아 어떤 차단인지 몰랐다.
+- `render.RenderResult` 에 `block_reason`(걸린 `BLOCK_PATTERNS` 문구 + 화면 글자 앞 200자) · `status_code`(메인 문서 응답 코드, 홈 웜업 재시도 후면 마지막 것) 추가. 도우미 `_block_phrase`·`_block_reason`.
+- `render._goto_and_wait`: `page.goto` 직후 HTML 이 차단 페이지면 가격 폴링(최대 10초)을 하지 않고 돌아간다. 홈 웜업 재시도 1회(유니클로 Akamai 용)는 그대로, 그것도 차단이면 폴링 없이 끝. 정상 페이지 동작은 같다.
+- `main._extract`: 502 를 올리기 전에 `[extract] 차단 host=… status=… reason=… final_url=…` / `[extract] 렌더링 오류 …` / `[extract] AI 호출 실패 …` 한 줄씩 남김. 로그·502 메시지의 주소는 `share_links.strip_query` 로 쿼리 제거(공유로 풀린 주소의 `af_referrer_customer_id` 등). 성공 응답의 `render.final_url` 은 그대로(앱이 상품 주소로 저장, 쿼리에 상품 번호가 있는 몰이 있음). `공유 링크 → 상품 주소` 로그 두 줄도 쿼리 제거.
+- 테스트: `test_render_block.py` 6개(걸린 문구·근거 문자열·쿼리 제거, 로컬 HTTP 서버로 차단 페이지가 5초 안에 `blocked`·`status 403`·문구 포함으로 끝나는지, 홈 웜업으로 풀리는 페이지·정상 페이지는 그대로인지), `test_main.py` 에 차단 로그·502 메시지에 쿼리가 안 남는지 1개.
+- ⚠️ 처음 HTML 에 차단 문구가 있다가 몇 초 뒤 스스로 풀리는 JS 확인 페이지(예: Cloudflare "Just a moment")는 이제 기다리지 않고 홈 웜업 1회 뒤 실패한다.
+
+---
+
 ## 2026-11-19 - 무신사 앱 공유 링크가 서버에서 막혀도 읽기
 
 🌟 **쉬운 설명**
