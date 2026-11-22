@@ -1,5 +1,30 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-22 - 엔진 상시 운영 준비: 끄기 확인·자동 되돌리기·알람
+
+🌟 **쉬운 설명**
+- 출시하면 상품 정보를 읽는 서버(엔진)를 계속 켜 둬야 해요. 실수로 끄지 않게, 끌 때 한 번 더 물어봐요.
+- 새 버전을 올렸는데 서버가 안 뜨면 이전 버전으로 저절로 돌아가요.
+- 서버가 꺼지거나, 오류가 몰리거나, 너무 느려지면 팀 메일로 알림이 가게 준비했어요(출시 때 켜요).
+- 서버 기록을 14일에서 30일 동안 보관해요.
+
+🔧 **기술 설명**
+- `engine/deploy/engine.sh`
+  - `stop`: 확인 질문(`[y/N]`), `--yes` 로 건너뜀.
+  - `deploy`(create/update-service): `deploymentCircuitBreaker={enable=true,rollback=true}`, 최소 100%·최대 200% 를 매번 넣는다.
+  - `status`: 태스크 정의 리비전·서킷 브레이커·`wishkit-engine-*` 알람 상태(StateValue·알림 켜짐)도 보여 준다.
+  - `setup` 의 로그 보관 14일 → 30일(ops-setup 과 같게).
+- 새 `engine/deploy/ops-setup.sh`(멱등): 로그 그룹 `/ecs/wishkit-engine` 보관 30일 + 알람 3개 → SNS `ReportAlerts`(앱 ID 로 찾음).
+  - `wishkit-engine-down`: AWS/ECS CPUUtilization(클러스터·서비스) 5분 평균 2회, 데이터 없음 = 경보.
+  - `wishkit-engine-proxy-errors`: parsing-proxy Lambda Errors 5분 합계 ≥ 5.
+  - `wishkit-engine-proxy-slow`: 같은 Lambda Duration 5분 p90 > 20000ms.
+  - 새 알람은 알림 꺼짐(`--no-actions-enabled`), 옵션 없이 다시 돌리면 기존 알림 상태 유지. `--enable-alarms`/`--disable-alarms`/`--dry-run`.
+  - Lambda 는 운영 앱 ID(`amplify-d10l8u76nc8eda…parsingproxy`)로 찾아 개인 샌드박스 함수를 피한다. `PROXY_FUNCTION`·`ALARM_TOPIC_ARN` 으로 직접 지정 가능.
+- 새 `engine/deploy/README.md`: 출시 때 켜는 순서(start → 헬스 확인 → `ops-setup.sh --enable-alarms` → 앱에서 담기), 알람 표, 비용.
+- 확인: `bash -n` 두 스크립트, `ops-setup.sh --dry-run`(운영 주제·Lambda 를 찾아 명령 출력), `engine.sh status`, `echo n | engine.sh stop`(취소). shellcheck 는 이 PC 에 없어 못 돌림.
+
+---
+
 ## 2026-11-22 - 저장되는 상품 주소에서 공유 추적값 걷어내기
 
 🌟 **쉬운 설명**
