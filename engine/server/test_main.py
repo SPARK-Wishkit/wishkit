@@ -172,3 +172,37 @@ def test_extract_success_final_url_drops_only_tracking_params(monkeypatch):
     assert resp.status_code == 200
     assert resp.json()["render"]["final_url"] == "https://example.com/goods?no=123"
     assert "abc123" not in resp.text
+
+
+def test_extract_ably_coupon_price_corrected_without_vision(monkeypatch, caplog):
+    """에이블리: AI 가 웹 전용 쿠폰가(29,210)를 골라도 즉시할인가(32,450)로 바로잡고, 스크린샷 폴백은 부르지 않는다."""
+    import logging
+
+    import main
+    from providers import ProviderResult
+    from render import RenderResult
+    from test_price_rules import ABLY_77103060
+
+    async def fake_render(browser, url, *, nav_timeout_ms):
+        return RenderResult(final_url="https://mobile.a-bly.com/goods/77103060",
+                            cleaned_html="<p>후드집업</p>", raw_text=ABLY_77103060, screenshot=b"jpg")
+
+    data = {"product_name": "[컬러포인트🖤] 루이 홀스 후드집업 (5color)", "image_url": None, "ambiguous": True,
+            "ambiguity_reason": "가격 후보 여러 개", "confidence": "medium",
+            "price": {"unconditional_price": 29210, "regular_price": 34900, "currency": "KRW"}}
+
+    def no_vision(*args, **kwargs):
+        raise AssertionError("규칙으로 확정되면 스크린샷 폴백을 부르지 않아야 한다")
+
+    monkeypatch.setattr(main, "render", fake_render)
+    monkeypatch.setattr(main, "call_gemini", lambda html: ProviderResult("gemini", "fake", True, data, 1))
+    monkeypatch.setattr(main, "call_gemini_vision", no_vision)
+    with caplog.at_level(logging.INFO, logger="extract-server"), TestClient(app) as client:
+        resp = client.post("/extract", json={"url": "https://m.a-bly.com/goods/77103060"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["price"]["unconditional_price"] == 32450
+    assert body["price"]["regular_price"] == 34900
+    assert body["ambiguous"] is False and body["screenshot_fallback_used"] is False
+    assert "[price-rule] host=mobile.a-bly.com 에이블리 즉시할인가로 교정: 29210 → 32450" in caplog.text

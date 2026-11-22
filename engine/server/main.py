@@ -33,6 +33,7 @@ from compare import grounding_check
 from fastapi import FastAPI, HTTPException
 from metrics import PeakRSSSampler, now_ms
 from playwright.async_api import async_playwright
+from price_rules import apply_price_rules
 from providers import ProviderResult, call_gemini, call_gemini_vision
 from pydantic import BaseModel, HttpUrl
 from qr_codes import decode_codes, resolve_qr_url
@@ -143,6 +144,10 @@ async def _extract(url: str) -> dict:
                        host, text_result.error, now_ms() - t_start)
         raise HTTPException(502, f"AI 호출 실패: {text_result.error}")
     extracted = text_result.data
+    # 몰별 가격 규칙(price_rules.py — 지금은 에이블리 즉시할인가). 페이지 글자로 확인되면 AI 값을 바로잡고
+    # ambiguous 를 풀어 스크린샷 폴백을 건너뛴다.
+    if note := apply_price_rules(extracted, r.raw_text, host):
+        logger.info("[price-rule] host=%s %s", host, note)
 
     screenshot_fallback_used = False
     vision_elapsed_ms = 0
@@ -153,6 +158,8 @@ async def _extract(url: str) -> dict:
         if vision_result.ok and vision_result.data:
             extracted = vision_result.data
             screenshot_fallback_used = True
+            if note := apply_price_rules(extracted, r.raw_text, host):
+                logger.info("[price-rule] host=%s (스크린샷 결과) %s", host, note)
         else:
             logger.warning("스크린샷 폴백 실패(%s) — 텍스트 결과를 그대로 사용", vision_result.error)
 
