@@ -1,5 +1,24 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-22 - Android AdMob 실제 ID + 출시용 빌드 스크립트
+
+🌟 **쉬운 설명**
+- Android 앱에 팀 AdMob 계정의 실제 광고 ID 를 넣었어요. 출시 빌드에서 진짜 광고가 나와요.
+- 개발할 때(디버그 빌드)는 지금처럼 구글 테스트 광고가 나와요 — 실수로 진짜 광고를 눌러 계정이 막히지 않게.
+- Play 에 올릴 파일을 명령 하나로 만들 수 있어요: `scripts/build_android_release.sh`. 빠뜨리기 쉬운 것(운영 주소록, 업로드 키, 광고 ID)을 먼저 검사해요.
+
+🔧 **기술 설명**
+- `app/android/gradle.properties` `admobAndroidAppId` = `ca-app-pub-8101096133732475~2266367309`(팀 계정 `pub-8101096133732475`, 앱 "WishKit"). → `manifestPlaceholders["admobAppId"]` → manifest `com.google.android.gms.ads.APPLICATION_ID`(debug·release 공통).
+- 새 `scripts/build_android_release.sh`(755, `build_ios_release.sh` 와 같은 방식)
+  - 검사: `lib/amplify_outputs.dart` 에 `siteBaseUrl`, `android/key.properties` 네 칸 + 키 파일 존재, AdMob 앱 ID·광고 단위가 테스트 퍼블리셔(`ca-app-pub-3940256099942544`)가 아니고 모양이 맞는지.
+  - `flutter analyze --no-fatal-infos --no-fatal-warnings`(기존 warning 1개 때문에 오류만 실패) · `flutter test`(`SKIP_TESTS=1` 로 생략).
+  - `flutter build appbundle --release --build-number=<커밋 수> --dart-define=ADMOB_NATIVE_ANDROID=ca-app-pub-8101096133732475/2293241289 --dart-define=ADMOB_BANNER_ANDROID=ca-app-pub-8101096133732475/7327122292`(환경변수로 바꿀 수 있음, `BUILD_NUMBER` 로 빌드 번호 지정).
+  - 끝나면 jarsigner 로 서명 주체를 보여 주고 `Android Debug` 면 실패.
+- `docs/play-release/README.md` 2절(실제 ID 표, 적용됨) · 3절(스크립트 사용법) · 6.1 행 갱신.
+- 광고 단위 기본값(`lib/ads/ads_config.dart` 의 테스트 단위)은 그대로 — dart-define 없는 빌드는 테스트 광고. iOS(`ADMOB_NATIVE_IOS`·`ADMOB_BANNER_IOS`, `ios/Flutter/AdMob.xcconfig`)는 건드리지 않음.
+
+---
+
 ## 2026-11-22 - 가입 직후 홈 화면 빨간 오류(Bad state: No element) 수정
 
 🌟 **쉬운 설명**
