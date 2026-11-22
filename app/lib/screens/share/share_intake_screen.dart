@@ -20,16 +20,20 @@ import '../../widgets/top_toast.dart';
 
 /// Shown when another app shares a product URL into this app.
 class ShareIntakeScreen extends StatefulWidget {
-  const ShareIntakeScreen({super.key, this.sharedUrl});
+  const ShareIntakeScreen({super.key, this.sharedUrl, this.bridge});
 
   final String? sharedUrl;
+
+  /// 테스트에서 가짜 서버를 넣을 때만 쓴다.
+  final ParsingBridge? bridge;
 
   @override
   State<ShareIntakeScreen> createState() => _ShareIntakeScreenState();
 }
 
 class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
-  final bridge = ParsingBridge();
+  late final ParsingBridge bridge = widget.bridge ?? ParsingBridge();
+  late final AppStore _store;
   final urlCtrl = TextEditingController();
   final titleCtrl = TextEditingController();
   final priceCtrl = TextEditingController();
@@ -38,6 +42,10 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
   /// 직접 기록할 때의 브랜드(선택). 비우면 "직접 기록"으로 저장한다.
   final brandCtrl = TextEditingController();
   bool loading = false;
+
+  /// 지금 진행 중인 "상품 불러오기"의 번호. 취소하거나 새 공유가 들어오면 올려서, 늦게 도착한 이전 결과를
+  /// 버린다(서버 요청 자체는 끊을 수 없다 — 엔진이 25초 안에 알아서 끝낸다).
+  int _parseSeq = 0;
   bool saving = false;
   String? error;
   ParsedProductInfo? parsed;
@@ -73,18 +81,57 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
   @override
   void initState() {
     super.initState();
-    final store = context.read<AppStore>();
+    _store = context.read<AppStore>();
     // 리스트를 고르지 않으면 '전체'에만 저장된다(폴더 칩을 누르면 그 폴더로).
     selectedListId = 'all';
-    final initial = widget.sharedUrl ?? store.pendingShareUrl;
+    // 꺼내면서 비운다 — 저장하지 않고 나갔다가 다시 열 때 예전 공유 주소를 또 읽지 않게.
+    final pending = _store.takePendingShareUrl();
+    final initial = widget.sharedUrl ?? pending;
     if (initial != null) {
       urlCtrl.text = ShareInput.normalize(initial);
       WidgetsBinding.instance.addPostFrameCallback((_) => _parse());
     }
+    // 이 화면이 이미 열려 있을 때 다른 앱에서 또 공유하면 화면을 새로 만들지 않는다(같은 '/share' 경로).
+    // 그래서 initState 만으로는 새 주소가 안 들어와 이전 링크가 남았다(2026-11-19, 에이블리 → 무신사).
+    _store.addListener(_onStoreChanged);
+  }
+
+  void _onStoreChanged() {
+    if (_store.pendingShareUrl == null || !mounted) return;
+    _applySharedUrl(_store.takePendingShareUrl()!);
+  }
+
+  /// 새로 공유받은 주소로 바꾸고 바로 읽는다. 앞의 상품을 읽는 중이었으면 그 결과는 버린다.
+  void _applySharedUrl(String url) {
+    _parseSeq++;
+    setState(() {
+      urlCtrl.text = ShareInput.normalize(url);
+      parsed = null;
+      error = null;
+      loading = false;
+      tagResult = null;
+      tagConfirmPending = false;
+    });
+    titleCtrl.clear();
+    priceCtrl.clear();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _parse();
+    });
+  }
+
+  /// "상품 불러오기" 취소 — 결과를 기다리지 않고 바로 입력 상태로 돌아간다.
+  void _cancelParse() {
+    if (!loading) return;
+    _parseSeq++;
+    setState(() {
+      loading = false;
+      error = null;
+    });
   }
 
   @override
   void dispose() {
+    _store.removeListener(_onStoreChanged);
     urlCtrl.dispose();
     titleCtrl.dispose();
     priceCtrl.dispose();
@@ -96,6 +143,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
   Future<void> _parse({bool fromTag = false}) async {
     final input = urlCtrl.text.trim();
     if (input.isEmpty) return;
+    final seq = ++_parseSeq;
     setState(() {
       loading = true;
       error = null;
@@ -112,13 +160,16 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
       final info = input.contains('http') && !input.trim().contains(' ')
           ? await bridge.parseProductUrl(input)
           : await bridge.scrapShareInput(input);
+      if (!mounted || seq != _parseSeq) return; // 취소했거나 새 공유로 바뀜
       titleCtrl.text = info.name == '공유된 상품' ? '' : info.name;
       priceCtrl.text = info.price > 0 ? '${info.price}' : '';
-      if (mounted) setState(() => parsed = info);
+      setState(() => parsed = info);
     } catch (e) {
-      if (mounted) setState(() => error = '상품 정보를 불러오지 못했어요');
+      if (mounted && seq == _parseSeq) {
+        setState(() => error = '상품 정보를 불러오지 못했어요');
+      }
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted && seq == _parseSeq) setState(() => loading = false);
     }
   }
 
@@ -788,6 +839,15 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   loading: loading,
                   onPressed: loading || identifying ? () {} : _parse,
                 ),
+                // 읽는 중에만 — 기다리지 않고 직접 입력하거나 다른 링크를 넣을 수 있게.
+                if (loading) ...[
+                  const SizedBox(height: 8),
+                  DiaryButton(
+                    label: '불러오기 취소',
+                    icon: Icons.close,
+                    onPressed: _cancelParse,
+                  ),
+                ],
                 if (kTagAutoFind) ...[
                   const SizedBox(height: 8),
                   DiaryButton(
