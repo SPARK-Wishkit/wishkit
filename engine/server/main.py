@@ -37,7 +37,12 @@ from providers import ProviderResult, call_gemini, call_gemini_vision
 from pydantic import BaseModel, HttpUrl
 from qr_codes import decode_codes, resolve_qr_url
 from render import launch_browser, render, resolve_in_browser
-from share_links import is_short_link, resolve_share_link, strip_query
+from share_links import (
+    is_short_link,
+    resolve_share_link,
+    strip_query,
+    strip_tracking_params,
+)
 from tag_identify import (
     IdentifyError,
     PageView,
@@ -118,8 +123,9 @@ async def _extract(url: str) -> dict:
     render_elapsed_ms = now_ms() - t_start
 
     # 502 이유는 원래 HTTPException detail(→ parsing-proxy Lambda 로그)에만 남았다. 엔진 로그에도 한 줄씩 남긴다.
-    # 주소는 쿼리를 뺀다(공유로 풀린 주소에 공유한 사람 식별값이 붙어 있음). 성공 응답의 final_url 은 그대로 —
-    # 앱이 상품 주소로 저장하고, 쿼리에 상품 번호가 있는 몰도 있다.
+    # 주소는 쿼리를 뺀다(공유로 풀린 주소에 공유한 사람 식별값이 붙어 있음). 성공 응답의 final_url 은 쿼리를
+    # 통째로 지우지 않는다(앱이 상품 주소로 저장하고, 쿼리에 상품 번호가 있는 몰도 있다) — 대신 알려진 추적
+    # 파라미터만 지운다(strip_tracking_params).
     host = urllib.parse.urlparse(r.final_url or url).hostname
     if r.error:
         logger.warning("[extract] 렌더링 오류 host=%s error=%s url=%s (%dms)",
@@ -154,7 +160,7 @@ async def _extract(url: str) -> dict:
         **extracted,
         "grounding": grounding_check(extracted, r.raw_text, r.image_candidates),
         "screenshot_fallback_used": screenshot_fallback_used,
-        "render": {"ok": r.ok, "blocked": r.blocked, "final_url": r.final_url},
+        "render": {"ok": r.ok, "blocked": r.blocked, "final_url": strip_tracking_params(r.final_url)},
         "metrics": {
             "total_elapsed_ms": now_ms() - t_start,
             "render_elapsed_ms": render_elapsed_ms,

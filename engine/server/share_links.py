@@ -59,6 +59,35 @@ def strip_query(url: str) -> str:
     return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
 
+# 저장용 주소에서 지울 공유·광고 추적 파라미터(이름 기준, 대소문자 무시). 여기 없는 파라미터는 절대 지우지 않는다
+# — 쿼리에 상품 번호가 들어 있는 몰(`goods?no=123` 등)이 있어서 쿼리 전체를 지우면 안 된다.
+TRACKING_PARAM_PREFIXES = ("utm_", "af_", "airbridge", "deep_link_")
+TRACKING_PARAM_NAMES = frozenset({
+    "shortlink", "pid", "is_retargeting", "source_caller", "onelink_id", "fbclid", "gclid", "igshid",
+})
+
+
+def _is_tracking_param(name: str) -> bool:
+    name = name.lower()
+    return name in TRACKING_PARAM_NAMES or name.startswith(TRACKING_PARAM_PREFIXES)
+
+
+def strip_tracking_params(url: str | None) -> str | None:
+    """저장용: 앱이 상품 주소로 저장하는 주소에서 **알려진 추적 파라미터만** 지운다(공유한 사람 식별값 등 —
+    무신사 `af_referrer_customer_id`, 에이블리 `airbridge_referrer`, `utm_*`). 나머지 쿼리와 순서·인코딩은
+    그대로 두고, 남는 쿼리가 없으면 `?` 도 없앤다. 쿼리 전체를 지우는 `strip_query`(로그용)와 다르다."""
+    if not url:
+        return url
+    parts = urllib.parse.urlsplit(url)
+    if not parts.query:
+        return url
+    kept = [
+        piece for piece in parts.query.split("&")
+        if piece and not _is_tracking_param(urllib.parse.unquote_plus(piece.split("=", 1)[0]))
+    ]
+    return urllib.parse.urlunsplit(parts._replace(query="&".join(kept)))
+
+
 def _host(url: str) -> str:
     return (urllib.parse.urlsplit(url).hostname or "").lower()
 
