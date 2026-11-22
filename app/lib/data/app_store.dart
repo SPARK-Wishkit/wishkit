@@ -380,8 +380,10 @@ class AppStore extends ChangeNotifier {
     return newest.where((p) => p.listId == selectedTabId).toList();
   }
 
-  WishlistTab get selectedTab =>
-      tabs.firstWhere((t) => t.id == selectedTabId, orElse: () => tabs.first);
+  /// 선택된 폴더. 폴더를 아직 못 불러왔으면(가입·로그인 직후 데이터 준비 중) null —
+  /// 라우터는 Cognito 로그인만 보고 홈으로 보내서, 그 사이 tabs 가 비어 있을 수 있다.
+  WishlistTab? get selectedTab =>
+      tabs.where((t) => t.id == selectedTabId).firstOrNull ?? tabs.firstOrNull;
 
   List<WishlistTab> get customTabs => tabs.where((t) => t.id != 'all').toList();
 

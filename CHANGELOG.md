@@ -1,5 +1,21 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-22 - 가입 직후 홈 화면 빨간 오류(Bad state: No element) 수정
+
+🌟 **쉬운 설명**
+- 회원가입이나 로그인을 막 했을 때, 홈 화면 가운데가 잠깐 빨간 오류 화면으로 보이던 문제를 고쳤어요.
+- 이제 내 폴더를 불러오는 동안에는 로딩 표시가 보이고, 다 불러오면 바로 홈이 나와요. 불러오기에 실패하면 안내 문구가 보여요.
+
+🔧 **기술 설명**
+- 원인: 라우터(`auth_routes.dart` `authRedirect`)는 Cognito 로그인(`AuthStatus.signedIn`)만 보고 바로 홈으로 보내고, `AppStore._hydrateSession` 은 그 뒤에 `ensureProfile → loadProfile → loadTabs`(새 계정은 기본 폴더 생성 포함)를 한다. 그 사이 `tabs == []` 인데
+  - `AppStore.selectedTab`(`app_store.dart:384`) 이 `firstWhere(…, orElse: () => tabs.first)` → 빈 목록에서 `StateError` → `WishlistScreen.build` 전체가 실패(본문 빨간 화면)
+  - `_TabsRowState.build`(`wishlist_screen.dart:571`) 의 `store.tabs.first` 도 같은 이유로 실패
+- 수정: `selectedTab` 을 `WishlistTab?` 로(`where(...).firstOrNull ?? tabs.firstOrNull`). `WishlistScreen` 은 null 이면 `_LoadingHome`(로고 + 로딩, `backendError` 가 있으면 그 문구). `_TabsRow` 는 `tabs.firstOrNull` 이 null 이면 빈 위젯.
+- 다른 탭(친구·살까말까·마이페이지) 첫 화면에는 빈 목록 `.first`/`orElse: .first` 패턴이 없었다(`basket_picker_sheet.dart:54` 는 isEmpty 확인, `app_store.dart:927·939` 는 그룹마다 1개 이상이라 안전).
+- 테스트: `test/wishlist_empty_state_test.dart` 4개(빈 tabs 에서 selectedTab null, 홈이 예외 없이 로딩 표시, 실패 문구, 폴더가 들어오면 홈). 수정 전 3개가 `Bad state: No element` 로 실패하는 것 확인.
+
+---
+
 ## 2026-11-22 - 엔진 상시 운영 준비: 끄기 확인·자동 되돌리기·알람
 
 🌟 **쉬운 설명**
