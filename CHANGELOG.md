@@ -1,5 +1,22 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-22 - 저장되는 상품 주소에서 공유 추적값 걷어내기
+
+🌟 **쉬운 설명**
+- 다른 앱에서 공유받은 링크로 상품을 담으면, 상품 주소 뒤에 "누가 공유했는지" 같은 추적값이 붙은 채로 저장됐어요. 공개 폴더나 공유 링크로 다른 사람에게도 보일 수 있었어요.
+- 이제 이런 추적값만 지우고 저장해요. 상품 번호처럼 상품을 찾는 데 필요한 값은 그대로 남겨요.
+- 이미 저장된 상품 주소는 그대로예요(이번 변경은 새로 담는 상품부터).
+
+🔧 **기술 설명**
+- `share_links.strip_tracking_params(url)` 추가: 쿼리에서 **알려진 추적 파라미터만** 지우고(이름 기준, 대소문자 무시) 나머지 쿼리의 순서·인코딩과 조각(#)은 그대로. 남는 쿼리가 없으면 `?` 도 없앤다.
+  - 접두어: `utm_`, `af_`, `airbridge`, `deep_link_` / 정확히 일치: `shortlink`, `pid`, `is_retargeting`, `source_caller`, `onelink_id`, `fbclid`, `gclid`, `igshid`
+- `main._extract` 성공 응답의 `render.final_url`(→ parsing-proxy → 앱 `productUrl`)에 적용. #41 에서 쿼리 전체를 유지하기로 한 이유(쿼리에 상품 번호가 있는 몰)는 그대로 지킨다. 로그·502 메시지용 `strip_query`(쿼리 전체 제거)와는 별개.
+- 배경: 무신사 공유로 풀린 주소에 `af_referrer_customer_id`·`af_referrer_uid`, 에이블리 공유 주소에 `airbridge_referrer`(client_id·event_uuid 등)·`utm_*` 가 남아 저장되고 있었다(2026-11-19·22 운영).
+- 앱이 이미 저장한 주소는 건드리지 않는다.
+- 테스트: `test_share_links.py` +10(무신사 af_* → 경로만, 에이블리 airbridge·utm(대문자 포함) → 쿼리 없음, `goods?no=123&utm_source=x` → `?no=123`, 추적값 없는 주소·조각·비슷한 이름 `pids` 유지, None/빈 문자열), `test_main.py` +1(성공 응답 `render.final_url` 에서 추적값만 빠짐).
+
+---
+
 ## 2026-11-19 - 에이블리 앱 공유 링크 풀기 · 엔진 로그 가격 표시 수정
 
 🌟 **쉬운 설명**

@@ -149,3 +149,26 @@ def test_extract_log_line_shows_the_nested_price(monkeypatch, caplog):
     assert resp.json()["price"]["unconditional_price"] == 21500
     lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("[extract] host=")]
     assert len(lines) == 1 and "host=m.a-bly.com price=21500 " in lines[0]
+
+
+def test_extract_success_final_url_drops_only_tracking_params(monkeypatch):
+    """성공 응답의 render.final_url(앱이 상품 주소로 저장)은 공유 추적값만 빠지고 나머지 쿼리는 남는다."""
+    import main
+    from providers import ProviderResult
+    from render import RenderResult
+
+    rendered = "https://example.com/goods?no=123&af_referrer_customer_id=abc123&utm_source=share"
+
+    async def fake_render(browser, url, *, nav_timeout_ms):
+        return RenderResult(final_url=rendered, cleaned_html="<p>후드집업 21,500원</p>", raw_text="후드집업 21,500원")
+
+    data = {"product_name": "후드집업", "image_url": None, "ambiguous": False, "ambiguity_reason": None,
+            "confidence": "high", "price": {"unconditional_price": 21500, "regular_price": None, "currency": "KRW"}}
+    monkeypatch.setattr(main, "render", fake_render)
+    monkeypatch.setattr(main, "call_gemini", lambda html: ProviderResult("gemini", "fake", True, data, 1))
+    with TestClient(app) as client:
+        resp = client.post("/extract", json={"url": "https://example.com/goods?no=123"})
+
+    assert resp.status_code == 200
+    assert resp.json()["render"]["final_url"] == "https://example.com/goods?no=123"
+    assert "abc123" not in resp.text
