@@ -6,8 +6,8 @@
 #   bash engine.sh setup     # 처음 한 번: 네트워크·저장소·권한·클러스터 만들기 (Gemini 키를 물어봄)
 #   bash engine.sh deploy    # 코드를 바꿨을 때: 이미지 빌드·업로드 → 새 버전으로 교체 (켜져 있지 않으면 꺼진 채로)
 #   bash engine.sh start     # 켜기 (1~3분)   — 켜져 있는 동안만 요금이 나간다(2 vCPU·4GB 기준 시간당 약 0.1달러)
-#   bash engine.sh stop      # 끄기          — 시연이 끝나면 꼭 끌 것
-#   bash engine.sh status    # 켜져 있는지 확인
+#   bash engine.sh stop      # 끄기 (확인 질문, --yes 로 건너뜀) — 출시 후에는 끄면 모든 링크 담기가 실패한다
+#   bash engine.sh status    # 켜져 있는지·태스크 정의 리비전·서킷 브레이커·알람 상태 확인
 #   bash engine.sh env       # Amplify 콘솔 환경변수에 넣을 값 출력
 #   bash engine.sh destroy   # 전부 지우기 (Gemini 키 포함)
 #
@@ -36,6 +36,9 @@ account_id() { aws sts get-caller-identity --query Account --output text; }
 ecr_uri() { echo "$(account_id).dkr.ecr.${REGION}.amazonaws.com/${NAME}"; }
 
 die() { echo "❌ $*" >&2; exit 1; }
+
+# 배포 설정: 새 버전이 안 뜨면 이전 버전으로 자동 복귀(서킷 브레이커 + rollback). deploy 가 매번 넣는다.
+DEPLOYMENT_CONFIG="deploymentCircuitBreaker={enable=true,rollback=true},maximumPercent=200,minimumHealthyPercent=100"
 
 # 필요한 프로그램·AWS 로그인이 있는지 맨 먼저 확인한다(없으면 중간에 엉뚱한 오류로 멈추지 않게).
 preflight() {
@@ -113,9 +116,9 @@ cmd_setup() {
   aws_ ecr put-lifecycle-policy --repository-name "$NAME" --lifecycle-policy-text \
     '{"rules":[{"rulePriority":1,"description":"keep last 5","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":5},"action":{"type":"expire"}}]}' >/dev/null
 
-  log "로그 (14일 보관)"
+  log "로그 (30일 보관 — ops-setup.sh 와 같게)"
   aws_ logs create-log-group --log-group-name "/ecs/${NAME}" >/dev/null 2>&1 || true
-  aws_ logs put-retention-policy --log-group-name "/ecs/${NAME}" --retention-in-days 14
+  aws_ logs put-retention-policy --log-group-name "/ecs/${NAME}" --retention-in-days 30
 
   log "실행 권한(IAM 역할)"
   aws iam create-role --role-name "${NAME}-exec-role" --assume-role-policy-document \
@@ -207,7 +210,8 @@ cmd_deploy() {
 
   if service_exists; then
     log "서비스를 새 버전으로 교체 (켜져 있었으면 새 버전으로 다시 뜨고, 꺼져 있었으면 꺼진 채)"
-    aws_ ecs update-service --cluster "$NAME" --service "$NAME" --task-definition "$task_def_arn" >/dev/null
+    aws_ ecs update-service --cluster "$NAME" --service "$NAME" --task-definition "$task_def_arn" \
+      --deployment-configuration "$DEPLOYMENT_CONFIG" >/dev/null
   else
     log "서비스 만들기 (꺼진 상태로 시작 — 켜려면 start)"
     vpc=$(default_vpc)
@@ -215,7 +219,7 @@ cmd_deploy() {
     registry=$(discovery_service_arn "$ns")
     [ -n "$registry" ] || { echo "setup 을 먼저 실행해 주세요." >&2; exit 1; }
     aws_ ecs create-service --cluster "$NAME" --service-name "$NAME" --task-definition "$task_def_arn" \
-      --desired-count 0 --launch-type FARGATE \
+      --desired-count 0 --launch-type FARGATE --deployment-configuration "$DEPLOYMENT_CONFIG" \
       --network-configuration "awsvpcConfiguration={subnets=[$(subnets_csv "$vpc")],securityGroups=[$(sg_id "$vpc" "${NAME}-task-sg")],assignPublicIp=ENABLED}" \
       --service-registries "registryArn=${registry}" >/dev/null
   fi
@@ -227,11 +231,16 @@ cmd_start() {
   log "켜는 중… (1~3분)"
   aws_ ecs update-service --cluster "$NAME" --service "$NAME" --desired-count 1 >/dev/null
   aws_ ecs wait services-stable --cluster "$NAME" --services "$NAME"
-  log "켜졌어요. 시연이 끝나면 꼭: bash $0 stop"
+  log "켜졌어요. 시연·테스트용이면 끝나고 bash $0 stop (출시 후에는 끄지 말 것 — 알람은 ops-setup.sh --enable-alarms)"
 }
 
 cmd_stop() {
   service_exists || { echo "서비스가 없어요(이미 지웠거나 deploy 전)."; return 0; }
+  if [ "${1:-}" != "--yes" ]; then
+    local ok
+    read -r -p "정말 끄시겠습니까? 출시 후에는 끄면 모든 링크 담기가 실패합니다 [y/N] " ok || ok=""
+    case "$ok" in y | Y | yes | YES) ;; *) echo "취소했어요(엔진은 그대로)."; return 0 ;; esac
+  fi
   aws_ ecs update-service --cluster "$NAME" --service "$NAME" --desired-count 0 >/dev/null
   log "끄는 중… 몇십 초 뒤 요금이 멈춰요."
 }
@@ -239,8 +248,21 @@ cmd_stop() {
 cmd_status() {
   if ! service_exists; then echo "서비스 없음 (deploy 전)"; return 0; fi
   aws_ ecs describe-services --cluster "$NAME" --services "$NAME" \
-    --query 'services[0].{desired:desiredCount,running:runningCount,pending:pendingCount}' --output table
+    --query 'services[0].{desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition,circuitBreaker:deploymentConfiguration.deploymentCircuitBreaker.enable,rollback:deploymentConfiguration.deploymentCircuitBreaker.rollback}' \
+    --output table
   echo "desired=1 이고 running=1 이면 켜진 상태(요금 나가는 중), desired=0 이면 꺼진 상태"
+  echo "알람 (${NAME}-*, ops-setup.sh 가 만듦):"
+  local alarms
+  alarms=$(aws_ cloudwatch describe-alarms --alarm-name-prefix "${NAME}-" \
+    --query 'MetricAlarms[].[AlarmName,StateValue,ActionsEnabled]' --output text 2>&1) ||
+    { echo "  조회 실패: $alarms"; return 0; }
+  if [ -z "$alarms" ]; then
+    echo "  없음 — bash $(dirname "$0")/ops-setup.sh 로 만들 수 있어요"
+  else
+    echo "$alarms" | while read -r name state actions; do
+      echo "  $name  상태=$state  알림=$([ "$actions" = "True" ] && echo 켜짐 || echo 꺼짐)"
+    done
+  fi
 }
 
 cmd_env() {
@@ -297,7 +319,7 @@ case "${1:-}" in
   setup) cmd_setup ;;
   deploy) cmd_deploy ;;
   start) cmd_start ;;
-  stop) cmd_stop ;;
+  stop) cmd_stop "${2:-}" ;;
   status) cmd_status ;;
   env) cmd_env ;;
   destroy) cmd_destroy ;;
