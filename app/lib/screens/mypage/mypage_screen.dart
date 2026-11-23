@@ -9,6 +9,9 @@ import '../../auth/auth_validators.dart';
 import '../../data/app_store.dart';
 import '../../theme/avatar_presets.dart';
 import '../../theme/diary_theme.dart';
+import '../../tutorial/tutorial_content.dart';
+import '../../tutorial/tutorial_controller.dart';
+import '../../tutorial/tutorial_target.dart';
 import '../../widgets/diary_widgets.dart';
 import '../../support/support_info.dart';
 import '../../widgets/top_toast.dart';
@@ -194,11 +197,14 @@ class _MyPageScreenState extends State<MyPageScreen> {
             ),
             const SectionBand(height: 6),
             // 메뉴 줄 높이: 예전 44의 1.5배(66).
-            MenuRow(
-              height: 66,
-              label: '내가 보낸 살까말까',
-              icon: Icons.outbox_outlined,
-              onTap: () => context.push('/sent-baskets'),
+            TutorialTarget(
+              id: TutorialTargets.sentBaskets,
+              child: MenuRow(
+                height: 66,
+                label: '내가 보낸 살까말까',
+                icon: Icons.outbox_outlined,
+                onTap: () => context.push('/sent-baskets'),
+              ),
             ),
             MenuRow(
               height: 66,
@@ -252,6 +258,18 @@ class _MyPageScreenState extends State<MyPageScreen> {
               label: '개인정보처리방침',
               icon: Icons.privacy_tip_outlined,
               onTap: () => openSupportPage(context, SupportInfo.privacyPage),
+            ),
+            MenuRow(
+              height: 66,
+              label: kTutorialReplayLabel,
+              icon: Icons.help_outline,
+              onTap: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                await context.read<TutorialController>().resetAll();
+                messenger.showSnackBar(
+                  const SnackBar(content: Text(kTutorialReplayDone)),
+                );
+              },
             ),
             MenuRow(
               height: 66,
