@@ -27,10 +27,7 @@ from typing import Literal
 
 import brand_rules
 import config
-import failure_report
-import failure_store
-from compare import grounding_check
-from fastapi import FastAPI, HTTPException
+from compare import grounding_check, withhold_off_policy_price
 from metrics import PeakRSSSampler, now_ms
 from playwright.async_api import async_playwright
 from price_rules import apply_price_rules
@@ -138,7 +135,7 @@ async def _extract(url: str) -> dict:
                        host, r.status_code, r.block_reason, final_url, render_elapsed_ms)
         raise HTTPException(502, f"상품 페이지 접근이 차단됨(status={r.status_code}, final_url={final_url})")
 
-    text_result, text_elapsed_ms = await _run_gemini(call_gemini, r.cleaned_html)
+    text_result, text_elapsed_ms = await _run_gemini(call_gemini, r.cleaned_html, r.price_candidates)
     if not text_result.ok or not text_result.data:
         logger.warning("[extract] AI 호출 실패 host=%s error=%s (%dms)",
                        host, text_result.error, now_ms() - t_start)
@@ -153,7 +150,7 @@ async def _extract(url: str) -> dict:
     vision_elapsed_ms = 0
     if extracted.get("ambiguous") and r.screenshot:
         vision_result, vision_elapsed_ms = await _run_gemini(
-            call_gemini_vision, r.screenshot, r.image_candidates
+            call_gemini_vision, r.screenshot, r.image_candidates, r.price_candidates
         )
         if vision_result.ok and vision_result.data:
             extracted = vision_result.data
@@ -163,9 +160,16 @@ async def _extract(url: str) -> dict:
         else:
             logger.warning("스크린샷 폴백 실패(%s) — 텍스트 결과를 그대로 사용", vision_result.error)
 
+    # 그라운딩은 AI 원래 답으로 잰다(정책 위반 여부가 로그·회귀 테스트에 남도록). 그다음 위반이면 가격을 비운다.
+    grounding = grounding_check(extracted, r.raw_text, r.image_candidates, r.price_candidates)
+    final = withhold_off_policy_price(extracted, grounding, r.price_candidates)
+    grounding["price_withheld"] = final is not extracted
+    if grounding["price_withheld"]:
+        logger.info("가격 정책 위반으로 가격 비움: %s (%s)", url, final["ambiguity_reason"])
+
     response = {
-        **extracted,
-        "grounding": grounding_check(extracted, r.raw_text, r.image_candidates),
+        **final,
+        "grounding": grounding,
         "screenshot_fallback_used": screenshot_fallback_used,
         "render": {"ok": r.ok, "blocked": r.blocked, "final_url": strip_tracking_params(r.final_url)},
         "metrics": {

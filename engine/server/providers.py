@@ -140,13 +140,22 @@ def generate(
     raise AssertionError("unreachable")  # 루프는 항상 return 또는 raise로 끝난다
 
 
-def call_gemini(cleaned_html: str, *, max_retries: int = config.GEMINI_MAX_RETRIES) -> ProviderResult:
-    """1차 추출: 정제된 HTML을 텍스트로 보낸다."""
-    return generate("gemini", build_user_prompt(cleaned_html), max_retries)
+def call_gemini(
+    cleaned_html: str,
+    price_candidates: list[dict] | None = None,
+    *,
+    max_retries: int = config.GEMINI_MAX_RETRIES,
+) -> ProviderResult:
+    """1차 추출: 정제된 HTML과 화면에서 잰 가격 후보(글자 크기)를 텍스트로 보낸다."""
+    return generate("gemini", build_user_prompt(cleaned_html, price_candidates), max_retries)
 
 
 def call_gemini_vision(
-    screenshot: bytes, image_candidates: list[str], *, max_retries: int = config.GEMINI_MAX_RETRIES
+    screenshot: bytes,
+    image_candidates: list[str],
+    price_candidates: list[dict] | None = None,
+    *,
+    max_retries: int = config.GEMINI_MAX_RETRIES,
 ) -> ProviderResult:
     """스크린샷 폴백: 1차 결과가 ambiguous일 때만 main.py가 호출한다. 스크린샷으로는 실제
     이미지 URL을 알 수 없으므로 1차 렌더링의 이미지 후보 목록을 같이 넘긴다."""
@@ -154,6 +163,6 @@ def call_gemini_vision(
 
     contents = [
         types.Part.from_bytes(data=screenshot, mime_type="image/jpeg"),
-        build_vision_user_prompt(image_candidates),
+        build_vision_user_prompt(image_candidates, price_candidates),
     ]
     return generate("gemini_vision", contents, max_retries)

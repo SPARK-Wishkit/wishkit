@@ -46,7 +46,7 @@ BLOCK_PATTERNS = re.compile(
 
 MAX_CLEANED_CHARS = 130000  # AI 입력 토큰 비용 통제용 상한 (근거: engine-ai-prototype 17절)
 
-VIEWPORT = {"width": 1280, "height": 1600}
+VIEWPORT = {"width": 1280, "height": 1600}  # 높이를 바꾸면 아래 FIRST_SCREEN_PX도 같이 바꿀 것
 
 # 렌더링 완료 대기 조건 (design-doc-snapshot 21절, 유니클로 레이스 컨디션 근본 수정).
 # 가격 텍스트가 실제로 보이면 즉시 종료(강한 신호). ld+json 가격/본문 길이 같은 약한 신호는
@@ -59,6 +59,67 @@ _JS_WEAK_READY = r"""() => {
   const ld = document.querySelector('script[type="application/ld+json"]');
   return (!!ld && /"(price|offers)"/i.test(ld.textContent)) || document.body.innerText.length > 1500;
 }"""
+
+# 화면 가격 후보 측정 (2026-11 가격 정책 변경: "상품 페이지에서 가장 크게 홍보하는 가격").
+# 정제된 HTML에는 글자 크기 정보가 없어서, 렌더링된 화면에서 가격처럼 보이는 글자마다 실제 글자
+# 크기·굵기·위치·취소선 여부를 재서 Gemini에 같이 넘긴다(prompts.format_price_candidates).
+# 가격 모양: "34,800"(콤마) 또는 "34800원"/"₩34800". 콤마 없는 4자리 이상 숫자는 연도·상품번호와
+# 헷갈리므로 원/₩ 표시가 붙을 때만 인정한다. 화면에 안 보이는 요소(크기 0, 숨김)는 뺀다.
+_JS_PRICE_CANDIDATES = r"""() => {
+  const RE = /(\d{1,3}(?:,\d{3})+)|(?:₩\s*(\d{4,}))|(?:(\d{4,})\s*원)/g;
+  const out = [];
+  const seen = new Map();  // 요소 → 이미 넣은 가격들 (같은 요소·같은 가격은 한 번만)
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    const el = node.parentElement;
+    if (!el) continue;
+    const values = [...node.textContent.matchAll(RE)]
+      .map(m => parseInt((m[1] || m[2] || m[3]).replace(/,/g, ''), 10));
+    if (!values.length) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || parseFloat(cs.opacity) === 0) continue;
+    let struck = false;
+    for (let a = el, i = 0; a && i < 4; a = a.parentElement, i++) {
+      if (['DEL', 'S', 'STRIKE'].includes(a.tagName) ||
+          getComputedStyle(a).textDecorationLine.includes('line-through')) { struck = true; break; }
+    }
+    // 주변 글자: "쿠폰적용가 29,800원"처럼 라벨이 붙은 범위까지(80자 이하인 가장 큰 조상)
+    let context = (el.innerText || node.textContent).replace(/\s+/g, ' ').trim();
+    for (let a = el.parentElement, i = 0; a && i < 3; a = a.parentElement, i++) {
+      const t = (a.innerText || '').replace(/\s+/g, ' ').trim();
+      if (t.length > 80) break;
+      context = t;
+    }
+    if (!seen.has(el)) seen.set(el, new Set());
+    for (const value of values) {
+      if (seen.get(el).has(value)) continue;
+      seen.get(el).add(value);
+      out.push({
+        value: value,
+        font_px: parseFloat(cs.fontSize) || 0,
+        font_weight: parseInt(cs.fontWeight, 10) || 400,
+        struck: struck,
+        top: Math.round(rect.top + window.scrollY),
+        context: context.slice(0, 80),
+      });
+    }
+  }
+  out.sort((a, b) => (b.font_px - a.font_px) || (a.top - b.top));
+  return out.slice(0, 25);
+}"""
+
+# 첫 화면(상품 페이지에 들어갔을 때 스크롤 없이 보이는 범위)의 높이 — 뷰포트 높이와 같다.
+FIRST_SCREEN_PX = 1600
+
+# 가장 큰 가격 안정화 대기 (2026-11-03). 퀸잇은 기본 가격이 먼저 보이고 약 0.5초 뒤에 더 큰
+# "첫구매 특가"가 그려진다. 가격이 보이자마자 끝내면 그걸 놓치므로, 첫 화면에서 가장 크게 표시된
+# 가격(들)이 PRICE_SETTLE_STABLE_S 동안 바뀌지 않을 때까지 기다린다(최대 PRICE_SETTLE_MAX_S).
+PRICE_SETTLE_POLL_S = 0.25
+PRICE_SETTLE_STABLE_S = 1.0
+PRICE_SETTLE_MAX_S = 3.0
 
 _STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "link", "meta"]
 _KEEP_ATTRS = {"id", "src", "href", "content", "property", "alt", "aria-label"}
@@ -73,8 +134,9 @@ class RenderResult:
     image_candidates: list[str] = field(default_factory=list)
     screenshot: bytes = b""
     meta_text: str = ""  # <title>·설명 메타 태그 글자. 품번이 본문엔 없고 메타에만 있는 몰이 있다(무신사)
-    # 화면에 안 보이는 품번 단서(대표 이미지 주소·구조화 데이터의 sku/mpn/gtin 등). _code_hints() 참고
-    code_hints: list[str] = field(default_factory=list)
+    # 화면에서 잰 가격 후보(글자 큰 순, 최대 25개). 각 항목: value, font_px, font_weight, struck,
+    # top, context, first_screen. 측정이 실패하면 빈 목록(추출은 그대로 진행).
+    price_candidates: list[dict] = field(default_factory=list)
     error: str | None = None
     # 차단 판정 근거(blocked 일 때만): 걸린 BLOCK_PATTERNS 문구 + 화면 글자 앞부분. 운영 로그로 어떤 차단
     # (Akamai·Cloudflare·몰 자체 페이지)인지 가리려고 남긴다 — 2026-11-19 무신사가 AWS 에서만 차단됐는데
@@ -157,94 +219,49 @@ def _meta_text(html: str) -> str:
     return " ".join(dict.fromkeys(p for p in parts if p))  # 같은 문장 중복 제거(순서 유지)
 
 
-# 화면에 품번이 안 보여도 페이지 안쪽 데이터에는 들어 있는 경우가 많다. 다만 페이지 안의 모든 데이터를
-# 보면 추천 상품·최근 본 상품의 품번까지 섞여 엉뚱한 페이지를 맞다고 할 수 있으므로, "이 페이지의 대표
-# 상품"을 가리키는 곳만 본다: 대표 이미지(og:image 등)·대표 주소(canonical·og:url)·상품 메타 태그,
-# 그리고 구조화 데이터(JSON-LD) 중 Product 항목의 코드·이미지 필드.
-_HINT_META_KEYS = {"og:image", "og:image:url", "og:image:secure_url", "twitter:image", "og:url"}
-_LD_PRODUCT_TYPES = {"product", "productgroup", "productmodel"}
-_LD_CODE_KEYS = ("sku", "mpn", "gtin", "gtin8", "gtin12", "gtin13", "gtin14", "productid", "model", "image", "url")
-_LD_OFFER_CODE_KEYS = ("sku", "mpn", "gtin", "gtin8", "gtin12", "gtin13", "gtin14")
-_PRICE_KEY_RE = re.compile(r"price|amount|currency|availability|condition")
-MAX_CODE_HINTS = 60  # 단서가 이상하게 많은 페이지(변형 수백 개 등)에서 확인이 느려지지 않게
-
-
-def _ld_strings(value) -> list[str]:
-    """JSON-LD 필드 값에서 글자만 꺼낸다(문자열·숫자·목록·{"url"/"@id"/"name"} 객체)."""
-    if isinstance(value, (str, int)) and not isinstance(value, bool):
-        return [str(value)]
-    if isinstance(value, list):
-        return [s for v in value for s in _ld_strings(v)]
-    if isinstance(value, dict):
-        return [s for k in ("url", "@id", "contentUrl", "value") if k in value for s in _ld_strings(value[k])]
-    return []
-
-
-def _ld_products(node) -> list[dict]:
-    """JSON-LD에서 Product 계열 객체를 모두 찾는다(@graph·목록·hasVariant·offers 안쪽 포함)."""
-    found: list[dict] = []
-    if isinstance(node, list):
-        for v in node:
-            found += _ld_products(v)
-    elif isinstance(node, dict):
-        types = node.get("@type")
-        types = types if isinstance(types, list) else [types]
-        if any(str(t).lower() in _LD_PRODUCT_TYPES for t in types if t):
-            found.append(node)
-        for key in ("@graph", "hasVariant", "offers", "mainEntity", "itemOffered"):
-            if key in node:
-                found += _ld_products(node[key])
-    return found
-
-
-def _code_hints(html: str) -> list[str]:
-    """화면에 안 보이는 품번 단서를 모은다. 실패해도 빈 목록(확인 흐름을 막지 않음)."""
+async def measure_price_candidates(page) -> list[dict]:
+    """지금 화면에 보이는 가격 후보를 글자 크기와 함께 잰다. 실패해도 예외를 던지지 않는다."""
     try:
-        soup = BeautifulSoup(html, "html.parser")
-        hints: list[str] = []
-        for m in soup.find_all("meta"):
-            key = (m.get("property") or m.get("name") or "").strip().lower()
-            content = (m.get("content") or "").strip()
-            # product:price:amount 같은 가격·통화 값은 뺀다(숫자 품번과 우연히 같을 수 있음)
-            if content and (key in _HINT_META_KEYS or (key.startswith("product:") and not _PRICE_KEY_RE.search(key))):
-                hints.append(content)
-        for link in soup.find_all("link", rel="canonical"):
-            if link.get("href"):
-                hints.append(link["href"].strip())
-        for script in soup.find_all("script", type="application/ld+json"):
-            try:
-                data = json.loads(script.string or "")
-            except (ValueError, TypeError):
-                continue
-            for product in _ld_products(data):
-                for key, value in product.items():
-                    if key.lower() in _LD_CODE_KEYS:
-                        hints += _ld_strings(value)
-                offers = product.get("offers")
-                for offer in offers if isinstance(offers, list) else [offers]:
-                    if isinstance(offer, dict):
-                        hints += [s for k in _LD_OFFER_CODE_KEYS for s in _ld_strings(offer.get(k))]
-        return list(dict.fromkeys(h for h in hints if h))[:MAX_CODE_HINTS]
-    except Exception:  # noqa: BLE001
+        raw = await page.evaluate(_JS_PRICE_CANDIDATES)
+    except Exception:  # noqa: BLE001 — 측정 실패는 추출 흐름을 막지 않음
         return []
+    return [{**c, "first_screen": c["top"] < FIRST_SCREEN_PX} for c in raw]
 
 
-async def _goto_and_wait(page, url: str, nav_timeout_ms: int) -> int | None:
-    """열고 가격이 보일 때까지 기다린다. 메인 문서 응답 코드를 돌려준다.
+def _top_price_signature(cands: list[dict]) -> frozenset[int]:
+    """첫 화면에서 취소선 없이 가장 큰 글자로 표시된 가격들(compare.most_prominent_prices와 같은 기준)."""
+    pool = [c for c in cands if c["first_screen"] and not c["struck"]]
+    if not pool:
+        return frozenset()
+    top = max(c["font_px"] for c in pool)
+    return frozenset(c["value"] for c in pool if c["font_px"] == top)
 
-    처음 받은 HTML 이 이미 차단 페이지면 기다리지 않고 바로 돌아간다 — 차단 페이지에는 가격이 끝내 안
-    나타나서, 원래는 여기서 10초 + 홈 웜업 뒤 또 10초를 그냥 썼다(2026-11-19 무신사 502, 24.4초)."""
-    resp = await page.goto(url, timeout=nav_timeout_ms, wait_until="domcontentloaded")
-    status = resp.status if resp is not None else None
-    if _looks_blocked(await page.content()):
-        return status
+
+async def _settle_prices(page) -> None:
+    """가장 크게 표시된 가격이 일정 시간 바뀌지 않을 때까지 기다린다. 늦게 그려지는 쿠폰가·
+    첫구매가를 놓치지 않기 위함. 측정이 계속 실패하거나(빈 목록) 최대 시간이 지나면 그냥 끝낸다."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + PRICE_SETTLE_MAX_S
+    last = _top_price_signature(await measure_price_candidates(page))
+    stable_since = loop.time()
+    while loop.time() < deadline:
+        await asyncio.sleep(PRICE_SETTLE_POLL_S)
+        sig = _top_price_signature(await measure_price_candidates(page))
+        if sig != last:
+            last, stable_since = sig, loop.time()
+        elif loop.time() - stable_since >= PRICE_SETTLE_STABLE_S:
+            return
+
+
+async def _goto_and_wait(page, url: str, nav_timeout_ms: int) -> None:
+    await page.goto(url, timeout=nav_timeout_ms, wait_until="domcontentloaded")
     for i in range(POLL_MAX_ITERATIONS):
         if await page.evaluate(_JS_PRICE_VISIBLE):
-            return status
+            break
         if i * POLL_INTERVAL_S >= MIN_WAIT_BEFORE_WEAK_SIGNAL_S and await page.evaluate(_JS_WEAK_READY):
-            return status
+            break
         await asyncio.sleep(POLL_INTERVAL_S)
-    return status
+    await _settle_prices(page)
 
 
 async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> RenderResult:
@@ -269,7 +286,7 @@ async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> 
                 pass
 
         cleaned_html, raw_text, images = _clean_html(html)
-        phrase = _block_phrase(html)
+        price_candidates = await measure_price_candidates(page)
         try:
             screenshot = await page.screenshot(type="jpeg", quality=70)
         except Exception:  # noqa: BLE001 — 스크린샷 실패는 텍스트 추출 흐름을 막지 않음
@@ -285,7 +302,7 @@ async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> 
             image_candidates=images,
             screenshot=screenshot,
             meta_text=_meta_text(html),
-            code_hints=_code_hints(html),
+            price_candidates=price_candidates,
         )
     except Exception as exc:  # noqa: BLE001
         return RenderResult(error=f"{type(exc).__name__}: {exc}")
