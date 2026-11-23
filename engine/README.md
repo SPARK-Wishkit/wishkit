@@ -112,3 +112,35 @@ python golden_regression_check.py --golden-catalog ../testdata/golden_catalog.js
 - AWS 리소스 생성/배포, 실제 캐시 백엔드 구현, DB 연동, Flutter 앱 쪽 통합 — 전부 이 작업의
   범위가 아니다(보고서의 "다음에 결정이 필요한 것" 참고).
 - 몰별 규칙 기반 폴백 — 이번 방향(AI 완전 대체)과 어긋나서 추가하지 않았다.
+
+
+## 태그 찾기 실패 모으기 · 원인 정리 · 자동 학습 (2026-11-09)
+
+엔진은 `/identify-tag` 요청마다 로그에 `[identify-report] {...}` 한 줄(익명 JSON)을 남기고, 응답에 `trace_id`와
+`cause`(원인)를 넣는다. 앱은 사용자의 답(맞아요 `yes` / 다른 상품이에요 `no` / 못 불러옴 `not_found` / 못 찾은 뒤 직접
+넣은 링크 `user_link`)을 같은 `traceId`로 TagFeedback에 남긴다. 사진·사용자 정보는 어디에도 남지 않는다.
+
+- 원인 목록과 뜻: `server/failure_report.py`의 `CAUSES`
+- 분석·학습: `tools/learn_from_feedback.py`
+  - 로컬 테스트 결과로: `python tools/learn_from_feedback.py --reports ~/engine.log --reports tools/tag_identify_result.json`
+  - 운영 데이터로(매주 자동): `.github/workflows/tag-learning.yml`이 CloudWatch 기록과 TagFeedback을 내보내 돌리고
+    `engine/reports/tag_learning_날짜.md` + `server/brand_rules.learned.json`을 PR로 올린다.
+- 자동 학습 기준(확실한 것만): 새 브랜드·새 판매처는 같은 사이트에서 2번 이상 확인, 주소 규칙은 서로 다른 품번 3개 이상이
+  "품번만 바뀌는 같은 주소 모양". 그보다 약한 근거는 리포트의 "사람이 볼 제안"에만 적는다.
+- 학습 규칙은 `brand_rules.learned.json`에 따로 쌓이고, 사람이 고치는 `brand_rules.json`과 겹치면 사람 쪽이 이긴다.
+  학습 규칙도 페이지 안에서 품번이 확인돼야 "찾음"이 되므로 틀려도 잘못된 상품을 내보내지 않는다.
+
+
+## 실패 태그 보관 · 자동 규칙 발견 (2026-11-09)
+
+- QR이 없으면 **브랜드와 품번이 둘 다** 있어야 찾는다. 하나라도 없으면 `skip_reason`(`no_brand`/`no_code`/`no_brand_no_code`)으로 바로 끝낸다.
+- 실패 태그 보관(`server/failure_store.py`, 기본 꺼짐): `.env`에 `TAG_FAILURE_DIR=/경로`(로컬) 또는 `TAG_FAILURE_S3_BUCKET=버킷`(운영).
+  사진은 JPEG로 다시 저장해 촬영 위치·기기 정보를 지운다. **운영에서 켜기 전 개인정보 처리방침에 반영할 것.**
+- 자동 규칙 발견(`tools/discover_rules.py`): 보관된 실패(또는 `tag_identify_result.json`)를 시간 제한 없이 다시 시도해,
+  페이지에서 품번이 확인된 방법을 브랜드별로 모으고, 서로 다른 품번 2개 이상에서 통하면 `brand_rules.learned.json`에 넣는다.
+  `python tools/discover_rules.py --failures tools/tag_identify_result.json --write-learned`
+- 참고: 무신사 `llms.txt`는 쿼리가 붙은 검색 결과 주소(`?keyword=`)를 자동 수집 제외 목록에 두고 있다. 무신사 검색 규칙은
+  사용량이 늘기 전에 무신사 제휴·약관을 확인하거나, 사용자 휴대폰에서 여는 방식(WebView)으로 옮기는 것을 검토한다.
+
+- 공식몰 사이트 검색(`server/site_search.py`): 공식몰 도메인을 알면 그 사이트 검색창에 품번을 넣어 찾는다(플랫폼 공통 검색 주소 모양).
+  엔진은 마지막 수단으로, `tools/discover_rules.py`는 시간 넉넉히 + 사이트가 알려 주는 검색 주소(SearchAction)까지.

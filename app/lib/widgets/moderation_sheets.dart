@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../data/app_store.dart';
 import '../models/moderation.dart';
 import '../theme/diary_theme.dart';
+import 'top_toast.dart';
 
 /// 신고 · 차단 화면 모음 (App Store 심사 1.2: 사용자 생성 콘텐츠).
 ///
@@ -154,9 +155,7 @@ Future<bool> showReportDialog(
                       } catch (e) {
                         if (!ctx.mounted) return;
                         setState(() => sending = false);
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          SnackBar(content: Text(_message(e))),
-                        );
+                        showTopToast(ctx, _message(e), error: true);
                       }
                     },
               child: Text(
@@ -169,11 +168,11 @@ Future<bool> showReportDialog(
       );
     },
   );
-  detailCtrl.dispose();
+  // 대화상자가 닫히는 애니메이션 동안에는 입력칸이 아직 그려지므로, 끝난 뒤 정리한다.
+  // (바로 정리하면 "TextEditingController was used after being disposed" 오류)
+  Future<void>.delayed(const Duration(milliseconds: 500), detailCtrl.dispose);
   if (sent != true || !context.mounted) return false;
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('신고가 접수됐어요. 24시간 안에 확인할게요.')),
-  );
+  showTopToast(context, '신고가 접수됐어요. 24시간 안에 확인할게요.');
   if (target.userId.isEmpty || store.isBlocked(target.userId)) return false;
   return confirmBlockUser(
     context,
@@ -225,16 +224,12 @@ Future<bool> confirmBlockUser(
     await store.blockUser(userId);
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_message(e))),
-      );
+      showTopToast(context, _message(e), error: true);
     }
     return false;
   }
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$userName님을 차단했어요.')),
-    );
+    showTopToast(context, '$userName님을 차단했어요.');
   }
   return true;
 }

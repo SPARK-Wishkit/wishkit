@@ -9,6 +9,7 @@ import share_links
 from share_links import (
     is_short_link,
     resolve_share_link,
+    strip_tracking_params,
     web_fallback_in,
     web_url_in_page,
 )
@@ -104,6 +105,8 @@ def test_total_timeout_bounds_cumulative_time_not_just_each_hop():
     ("https://link.coupang.com/a/b", True),
     (PRODUCT, False),
     ("https://notonelink.me.example.com/x", False),
+    ("https://applink.a-bly.com/n2ac4ga", True),  # 에이블리 앱 공유(Airbridge)
+    ("https://m.a-bly.com/goods/51469717", False),
 ])
 def test_is_short_link(url, expected):
     assert is_short_link(url) is expected
@@ -143,3 +146,69 @@ def test_real_http_redirect_chain(monkeypatch):
         assert resolve_share_link(f"http://127.0.0.1:{port}/short") == f"http://localhost:{port}/products/7"
     finally:
         server.shutdown()
+
+
+def test_keeps_shop_url_when_shop_blocks_the_next_plain_request():
+    """에이블리(2026-11-19): applink 302 → m.a-bly.com 상품 주소, 그 주소에 urllib 요청은 403. 예전엔 찾은
+    상품 주소를 버리고 짧은 링크로 돌아가 휴대폰 UA 로 렌더링하다 12초 시간 초과였다."""
+    import urllib.error
+
+    short = "https://applink.a-bly.com/n2ac4ga"
+    shop = "https://m.a-bly.com/goods/51469717?utm_source=app__goods_detail"
+    fetch, calls = _fake({
+        short: (shop, ""),
+        shop: urllib.error.HTTPError(shop, 403, "Forbidden", {}, None),
+    })
+    assert resolve_share_link(short, fetch=fetch) == shop
+    assert calls == [short, shop]
+
+
+def test_first_hop_blocked_still_returns_original():
+    """짧은 링크 자체가 막히면(무신사 onelink 403) 예전처럼 원래 주소 — 브라우저 풀기로 넘어간다."""
+    import urllib.error
+
+    fetch, _ = _fake({SHORT: urllib.error.HTTPError(SHORT, 403, "Forbidden", {}, None)})
+    assert resolve_share_link(SHORT, fetch=fetch) == SHORT
+
+
+@pytest.mark.parametrize(
+    "url, expected",
+    [
+        # 무신사 공유로 풀린 주소: AppsFlyer 추적값만 붙어 있음 → 쿼리 없음
+        (
+            (
+                "https://www.musinsa.com/products/7489748?af_referrer_customer_id=abc123&af_referrer_uid=u-1"
+                "&shortlink=wwp934zk&pid=af_app_invites&c=share&af_siteid=x&is_retargeting=true"
+                "&source_caller=ui&af_sub1=y&onelink_id=PvkC&deep_link_value=z&deep_link_sub1=w"
+            ),
+            "https://www.musinsa.com/products/7489748?c=share",
+        ),
+        (
+            (
+                "https://www.musinsa.com/products/7489748?af_referrer_customer_id=abc123&af_referrer_uid=u-1"
+                "&shortlink=wwp934zk&pid=af_app_invites&is_retargeting=true&source_caller=ui&onelink_id=PvkC"
+            ),
+            "https://www.musinsa.com/products/7489748",
+        ),
+        # 에이블리 공유로 풀린 주소: airbridge_referrer·utm_* → 쿼리 없음
+        (
+            (
+                "https://m.a-bly.com/goods/51469717?airbridge_referrer=%7B%22client_id%22%3A%22c1%22%7D"
+                "&utm_source=airbridge&utm_medium=share&UTM_Campaign=a"
+            ),
+            "https://m.a-bly.com/goods/51469717",
+        ),
+        # 상품 번호가 쿼리에 있는 주소: 상품 번호는 남긴다(순서 유지)
+        ("https://example.com/goods?no=123&utm_source=x", "https://example.com/goods?no=123"),
+        ("https://example.com/goods?fbclid=f&no=123&gclid=g&opt=b%20c", "https://example.com/goods?no=123&opt=b%20c"),
+        # 추적값 없는 주소는 그대로
+        ("https://example.com/goods?no=123&color=red", "https://example.com/goods?no=123&color=red"),
+        ("https://www.musinsa.com/products/7489748", "https://www.musinsa.com/products/7489748"),
+        # 조각(#)은 그대로, 비슷하지만 다른 이름(utm 접두어 없음, pids)은 안 지운다
+        ("https://example.com/p?igshid=i&pids=1#top", "https://example.com/p?pids=1#top"),
+        (None, None),
+        ("", ""),
+    ],
+)
+def test_strip_tracking_params(url, expected):
+    assert strip_tracking_params(url) == expected

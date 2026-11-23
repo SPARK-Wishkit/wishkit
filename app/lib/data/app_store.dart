@@ -388,9 +388,14 @@ class AppStore extends ChangeNotifier {
   String? get uid =>
       currentUser.uid.isNotEmpty ? currentUser.uid : _auth?.uid;
 
+  /// 최근에 담은 상품이 위로. 상품 id가 담은 시각(밀리초)이라 id 큰 순서가 최신순이다.
+  List<Product> get productsNewestFirst =>
+      [...products]..sort((a, b) => b.id.compareTo(a.id));
+
   List<Product> get displayedProducts {
-    if (selectedTabId == 'all') return products;
-    return products.where((p) => p.listId == selectedTabId).toList();
+    final newest = productsNewestFirst;
+    if (selectedTabId == 'all') return newest;
+    return newest.where((p) => p.listId == selectedTabId).toList();
   }
 
   /// 폴더 목록이 비어 있으면 null (불러오는 중이거나 실패).
@@ -591,6 +596,21 @@ class AppStore extends ChangeNotifier {
       throw const TagIdentifyUnavailable();
     }
     return _repo.identifyProductFromTag(image, mimeType: mimeType);
+  }
+
+  /// 태그 찾기 결과에 대한 반응을 익명으로 남긴다(엔진 개선용). 기다리지 않고, 실패해도 조용히 넘어간다 —
+  /// 피드백 때문에 상품 담기가 늦어지거나 막히면 안 된다.
+  void recordTagFeedback(
+    TagFeedbackAnswer answer,
+    TagIdentifyResult result, {
+    String? userUrl,
+  }) {
+    if (!backendReady || uid == null) return;
+    unawaited(
+      _repo
+          .sendTagFeedback(answer, result, userUrl: userUrl)
+          .catchError((Object _) {}),
+    );
   }
 
   /// 태그 사진을 저장소에 올리고 주소를 돌려준다. 상품 저장([addParsedProduct]) 전에 부른다.
@@ -876,6 +896,14 @@ class AppStore extends ChangeNotifier {
   void setPendingShareUrl(String? url) {
     pendingShareUrl = url;
     notifyListeners();
+  }
+
+  /// 공유로 받은 주소를 꺼내고 비운다(한 번만 쓰이게). 상품 추가 화면이 읽는다 — 저장하지 않고 나갔다가
+  /// 다시 열 때 예전 공유 주소를 또 읽지 않도록. 화면을 그리는 중에도 부를 수 있게 알림은 보내지 않는다.
+  String? takePendingShareUrl() {
+    final url = pendingShareUrl;
+    pendingShareUrl = null;
+    return url;
   }
 
   Product? productById(int id) {

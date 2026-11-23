@@ -5,7 +5,6 @@ tag_identify.py 단위 테스트. Gemini·브라우저는 가짜로 바꿔 끼�
 import asyncio
 
 import pytest
-
 from providers import ProviderResult
 from tag_identify import (
     IdentifyError,
@@ -16,6 +15,7 @@ from tag_identify import (
     page_matches,
     parse_search_output,
 )
+
 
 @pytest.fixture(autouse=True)
 def _render_verify_on(monkeypatch):
@@ -255,22 +255,19 @@ def test_official_base_code_match_beats_mall_full_code_match():
     assert out.match["url"] == official and out.match["verified_by"] == "product_code_base"
 
 
-def test_mall_code_match_still_beats_official_name_only_match():
+def test_no_code_is_skipped_since_2026_11_09():
+    # 예전엔 품번 없이 상품명으로만 찾았지만, 이제 QR이 없으면 브랜드·품번이 둘 다 있어야 찾는다.
     tag = {**NIKE_TAG, "product_code": None, "barcode": None, "product_name": "소프트 헨리넥 반팔 티셔츠"}
-    official, mall = "https://www.nike.com/kr/t/x", "https://www.musinsa.com/products/1"
 
     async def search(t):
-        return _ok({"text": f"OFFICIAL_DOMAIN: nike.com\nURL: {official}\nURL: {mall}", "sources": []})
-
-    pages = {official: PageView(True, official, "NIKE 소프트 헨리넥 반팔 티셔츠"),
-             mall: PageView(True, mall, "NIKE 소프트 헨리넥 반팔 티셔츠")}
+        raise AssertionError("검색하면 안 됨")
 
     async def render_page(url):
-        return pages[url]
+        raise AssertionError("페이지를 열면 안 됨")
 
     out = _run(identify(b"img", "image/jpeg", read_tag=_tag_reader(tag), search=search,
                         render_page=render_page, time_left=lambda: 40))
-    assert out.match["url"] == official and out.match["verified_by"] == "name"  # 둘 다 이름 → 공식몰
+    assert out.status == "not_found" and out.skip_reason == "no_code"
 
 
 # ── 무신사 검색 단계를 뺀 뒤 (2026-10-28) ──
@@ -549,9 +546,9 @@ def test_parse_keeps_pipes_inside_title():
 
 # ── 2026-11-02: 구글 사본 읽기(URL context) ─────────────────────────────
 
-import json  # noqa: E402
+import json
 
-from tag_identify import parse_read_output  # noqa: E402
+from tag_identify import parse_read_output
 
 
 def _with_pages(search_text, pages, retrieved, tag=BEAKER_TAG, sources=SSF_SOURCES, read_ok=True):

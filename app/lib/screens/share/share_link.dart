@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../theme/diary_theme.dart';
+import '../../widgets/top_toast.dart';
 
 /// 살까말까를 어떻게 공유할지.
 enum ShareMethod {
@@ -75,7 +76,7 @@ Future<void> shareBasketLink({
   required String message,
   Rect? origin,
 }) async {
-  final messenger = ScaffoldMessenger.of(context);
+  final toast = TopToast.of(context);
   final navigator = Navigator.of(context, rootNavigator: true);
   showDialog<void>(
     context: context,
@@ -87,7 +88,7 @@ Future<void> shareBasketLink({
     url = await publish();
   } catch (e) {
     navigator.pop();
-    messenger.showSnackBar(SnackBar(content: Text(_errorText(e))));
+    toast.show(_errorText(e), error: true);
     return;
   }
   navigator.pop();
@@ -98,8 +99,10 @@ Future<void> shareBasketLink({
     );
   } catch (_) {
     await Clipboard.setData(ClipboardData(text: url));
-    messenger.showSnackBar(
-      const SnackBar(content: Text('공유창을 열 수 없어서 링크를 복사했어요. 원하는 곳에 붙여 넣어 주세요')),
+    toast.show(
+      '공유창을 열 수 없어서 링크를 복사했어요. 원하는 곳에 붙여 넣어 주세요',
+      icon: Icons.link,
+      duration: const Duration(seconds: 4),
     );
   }
 }

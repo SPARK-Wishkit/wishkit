@@ -91,6 +91,12 @@ export interface EngineIdentifyResponse {
     via?: string | null;
   } | null;
   note: string | null;
+  /** 일부러 찾지 않은 이유. 'no_brand_no_code' = 태그에 브랜드·품번이 없음. */
+  skip_reason?: string | null;
+  /** 요청 하나를 가리키는 무작위 id — 엔진 기록과 앱 피드백을 잇는 데만 쓴다. */
+  trace_id?: string | null;
+  /** 엔진이 진단한 결과 원인(failure_report.CAUSES 키). */
+  cause?: string | null;
 }
 
 /** 앱에 돌려주는 모양(GraphQL IdentifiedTag와 1:1). */
@@ -113,6 +119,12 @@ export interface IdentifiedTag {
   matchImage: string | null;
   /** 'qr'(태그 QR로 찾음) | 'search'(품번·브랜드 검색으로 찾음) | null(링크 없음) */
   matchVia: string | null;
+  /** 'no_brand_no_code'(태그에 브랜드·품번이 없어 찾지 않음) | null */
+  skipReason: string | null;
+  /** 엔진 기록과 피드백을 잇는 무작위 id */
+  traceId: string | null;
+  /** 엔진이 진단한 원인(ok, search_empty, page_blocked …) */
+  cause: string | null;
 }
 
 /** 엔진 서버가 받는 사진 형식. */
@@ -157,5 +169,8 @@ export function toIdentifiedTag(res: EngineIdentifyResponse): IdentifiedTag {
     matchRegularPrice: wonOrNull(res.match?.regular_price),
     matchImage: typeof image === 'string' && /^https?:\/\//.test(image) ? image : null,
     matchVia: res.match ? (res.match.via === 'qr' ? 'qr' : 'search') : null,
+    skipReason: typeof res.skip_reason === 'string' ? res.skip_reason : null,
+    traceId: typeof res.trace_id === 'string' ? res.trace_id : null,
+    cause: typeof res.cause === 'string' ? res.cause : null,
   };
 }

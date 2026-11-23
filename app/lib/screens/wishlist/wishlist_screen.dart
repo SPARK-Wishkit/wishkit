@@ -12,7 +12,10 @@ import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../theme/list_card.dart';
+import '../../tutorial/tutorial_content.dart';
+import '../../tutorial/tutorial_target.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({super.key});
@@ -129,41 +132,45 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                         onDelete: () =>
                                             store.removeProduct(p.id),
                                       );
-                                      return LayoutBuilder(
-                                        builder: (context, constraints) {
-                                          return LongPressDraggable<Product>(
-                                            data: p,
-                                            onDragStarted: () =>
-                                                HapticFeedback.mediumImpact(),
-                                            onDragUpdate: (details) =>
-                                                _tabsRowKey.currentState
-                                                    ?.updateAutoScroll(
-                                                      details.globalPosition,
-                                                    ),
-                                            onDragEnd: (_) => _tabsRowKey
-                                                .currentState
-                                                ?.endAutoScrollDrag(),
-                                            // See-through while dragging, so the
-                                            // folder tab underneath stays visible.
-                                            feedback: Opacity(
-                                              opacity: 0.6,
-                                              child: Material(
-                                                color: Colors.transparent,
-                                                borderRadius:
-                                                    BorderRadius.circular(DiaryTheme.radius),
-                                                child: SizedBox(
-                                                  width: constraints.maxWidth,
-                                                  child: card,
+                                      return TutorialTarget(
+                                        id: TutorialTargets.firstCard,
+                                        enabled: adFeed.itemIndex(i) == 0,
+                                        child: LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            return LongPressDraggable<Product>(
+                                              data: p,
+                                              onDragStarted: () =>
+                                                  HapticFeedback.mediumImpact(),
+                                              onDragUpdate: (details) =>
+                                                  _tabsRowKey.currentState
+                                                      ?.updateAutoScroll(
+                                                        details.globalPosition,
+                                                      ),
+                                              onDragEnd: (_) => _tabsRowKey
+                                                  .currentState
+                                                  ?.endAutoScrollDrag(),
+                                              // See-through while dragging, so the
+                                              // folder tab underneath stays visible.
+                                              feedback: Opacity(
+                                                opacity: 0.6,
+                                                child: Material(
+                                                  color: Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(DiaryTheme.radius),
+                                                  child: SizedBox(
+                                                    width: constraints.maxWidth,
+                                                    child: card,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            childWhenDragging: Opacity(
-                                              opacity: 0.35,
+                                              childWhenDragging: Opacity(
+                                                opacity: 0.35,
+                                                child: card,
+                                              ),
                                               child: card,
-                                            ),
-                                            child: card,
-                                          );
-                                        },
+                                            );
+                                          },
+                                        ),
                                       );
                                     },
                                   ),
@@ -299,9 +306,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
       await store.moveProduct(product.id, tab.id);
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('이동에 실패했어요: $e')));
+      showTopError(context, e, prefix: '이동에 실패했어요: ');
     }
   }
 
@@ -517,6 +522,43 @@ class _WishlistScreenState extends State<WishlistScreen> {
 /// Double-tap opens the edit sheet (rename / delete / privacy).
 /// Plain swipe scrolls; ReorderableDelayedDragStartListener's delay is what
 /// lets that swipe pass through to the scrollable instead of starting a drag.
+/// 폴더를 아직 못 불러왔을 때(가입·로그인 직후) 홈 화면. 불러오기가 실패했으면 그 안내를 보여 준다.
+class _LoadingHome extends StatelessWidget {
+  const _LoadingHome({this.error});
+
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: DiaryColors.canvas,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: WishkitLogo(size: 30),
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: error == null
+                    ? const CircularProgressIndicator()
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(error!, textAlign: TextAlign.center),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TabsRow extends StatefulWidget {
   const _TabsRow({
     super.key,
@@ -712,7 +754,10 @@ class _TabsRowState extends State<_TabsRow> {
       ),
       footer: Padding(
         padding: const EdgeInsets.only(right: 12),
-        child: _AddListTab(onTap: widget.onAdd),
+        child: TutorialTarget(
+          id: TutorialTargets.addFolder,
+          child: _AddListTab(onTap: widget.onAdd),
+        ),
       ),
       itemCount: custom.length,
       itemBuilder: (context, index) {

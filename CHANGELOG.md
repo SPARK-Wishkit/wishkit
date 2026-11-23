@@ -1,5 +1,295 @@
 # 변경 이력 (CHANGELOG)
 
+## 2026-11-22 - Android AdMob 실제 ID + 출시용 빌드 스크립트
+
+🌟 **쉬운 설명**
+- Android 앱에 팀 AdMob 계정의 실제 광고 ID 를 넣었어요. 출시 빌드에서 진짜 광고가 나와요.
+- 개발할 때(디버그 빌드)는 지금처럼 구글 테스트 광고가 나와요 — 실수로 진짜 광고를 눌러 계정이 막히지 않게.
+- Play 에 올릴 파일을 명령 하나로 만들 수 있어요: `scripts/build_android_release.sh`. 빠뜨리기 쉬운 것(운영 주소록, 업로드 키, 광고 ID)을 먼저 검사해요.
+
+🔧 **기술 설명**
+- `app/android/gradle.properties` `admobAndroidAppId` = `ca-app-pub-8101096133732475~2266367309`(팀 계정 `pub-8101096133732475`, 앱 "WishKit"). → `manifestPlaceholders["admobAppId"]` → manifest `com.google.android.gms.ads.APPLICATION_ID`(debug·release 공통).
+- 새 `scripts/build_android_release.sh`(755, `build_ios_release.sh` 와 같은 방식)
+  - 검사: `lib/amplify_outputs.dart` 에 `siteBaseUrl`, `android/key.properties` 네 칸 + 키 파일 존재, AdMob 앱 ID·광고 단위가 테스트 퍼블리셔(`ca-app-pub-3940256099942544`)가 아니고 모양이 맞는지.
+  - `flutter analyze --no-fatal-infos --no-fatal-warnings`(기존 warning 1개 때문에 오류만 실패) · `flutter test`(`SKIP_TESTS=1` 로 생략).
+  - `flutter build appbundle --release --build-number=<커밋 수> --dart-define=ADMOB_NATIVE_ANDROID=ca-app-pub-8101096133732475/2293241289 --dart-define=ADMOB_BANNER_ANDROID=ca-app-pub-8101096133732475/7327122292`(환경변수로 바꿀 수 있음, `BUILD_NUMBER` 로 빌드 번호 지정).
+  - 끝나면 jarsigner 로 서명 주체를 보여 주고 `Android Debug` 면 실패.
+- `docs/play-release/README.md` 2절(실제 ID 표, 적용됨) · 3절(스크립트 사용법) · 6.1 행 갱신.
+- 광고 단위 기본값(`lib/ads/ads_config.dart` 의 테스트 단위)은 그대로 — dart-define 없는 빌드는 테스트 광고. iOS(`ADMOB_NATIVE_IOS`·`ADMOB_BANNER_IOS`, `ios/Flutter/AdMob.xcconfig`)는 건드리지 않음.
+
+---
+
+## 2026-11-22 - 가입 직후 홈 화면 빨간 오류(Bad state: No element) 수정
+
+🌟 **쉬운 설명**
+- 회원가입이나 로그인을 막 했을 때, 홈 화면 가운데가 잠깐 빨간 오류 화면으로 보이던 문제를 고쳤어요.
+- 이제 내 폴더를 불러오는 동안에는 로딩 표시가 보이고, 다 불러오면 바로 홈이 나와요. 불러오기에 실패하면 안내 문구가 보여요.
+
+🔧 **기술 설명**
+- 원인: 라우터(`auth_routes.dart` `authRedirect`)는 Cognito 로그인(`AuthStatus.signedIn`)만 보고 바로 홈으로 보내고, `AppStore._hydrateSession` 은 그 뒤에 `ensureProfile → loadProfile → loadTabs`(새 계정은 기본 폴더 생성 포함)를 한다. 그 사이 `tabs == []` 인데
+  - `AppStore.selectedTab`(`app_store.dart:384`) 이 `firstWhere(…, orElse: () => tabs.first)` → 빈 목록에서 `StateError` → `WishlistScreen.build` 전체가 실패(본문 빨간 화면)
+  - `_TabsRowState.build`(`wishlist_screen.dart:571`) 의 `store.tabs.first` 도 같은 이유로 실패
+- 수정: `selectedTab` 을 `WishlistTab?` 로(`where(...).firstOrNull ?? tabs.firstOrNull`). `WishlistScreen` 은 null 이면 `_LoadingHome`(로고 + 로딩, `backendError` 가 있으면 그 문구). `_TabsRow` 는 `tabs.firstOrNull` 이 null 이면 빈 위젯.
+- 다른 탭(친구·살까말까·마이페이지) 첫 화면에는 빈 목록 `.first`/`orElse: .first` 패턴이 없었다(`basket_picker_sheet.dart:54` 는 isEmpty 확인, `app_store.dart:927·939` 는 그룹마다 1개 이상이라 안전).
+- 테스트: `test/wishlist_empty_state_test.dart` 4개(빈 tabs 에서 selectedTab null, 홈이 예외 없이 로딩 표시, 실패 문구, 폴더가 들어오면 홈). 수정 전 3개가 `Bad state: No element` 로 실패하는 것 확인.
+
+---
+
+## 2026-11-22 - 에이블리: 쿠폰가 대신 즉시할인가 저장
+
+🌟 **쉬운 설명**
+- 에이블리 상품을 담으면 가끔 쿠폰을 써야만 되는 가격(웹에만 보이는 행사 쿠폰가)이 저장됐어요. 예: 에이블리 앱에는 32,450원인데 29,210원으로 저장.
+- 이제 에이블리는 "정가 − 즉시 할인"으로 계산한 가격이 화면에 있으면 그 가격을 저장해요. 쿠폰·첫 구매·최대 혜택·예상 구매가는 저장하지 않아요.
+
+🔧 **기술 설명**
+- 원인(2026-11-22 운영, 상품 77103060): 웹(비로그인) 페이지가 `쿠폰적용가 34,900원(취소선) 32,450원 16% 29,210원` 으로 에블프 쿠폰가 29,210 을 가장 크게 보여 주고, 메타 `product:price:amount` 도 29,210. 상세에는 `즉시 할인 7% -2,450원` 이 따로 있다. 프롬프트 few-shot 1번(정가 − 즉시할인액)이 있는데도 Gemini 가 29,210 을 골랐다(같은 상품이 오전에는 스크린샷 폴백으로 32,450). 웹의 29,210 은 에이블리 앱에는 없는 값(앱은 23% 26,740 최대혜택가).
+- 새 `price_rules.py` `apply_price_rules(extracted, raw_text, host)`: host 가 `a-bly.com`(하위 도메인 포함)일 때만. 화면 글자에 `즉시 할인 N% -X원` 이 한 금액으로 있고, 정가 R(AI regular_price 또는 `쿠폰적용가` 바로 뒤 금액)과 R − X 가 둘 다 `…원` 으로 화면에 있을 때만 `unconditional_price = R − X`, `regular_price = R`, `ambiguous = false`. 하나라도 확인이 안 되면 AI 값 그대로.
+- `main._extract`: 텍스트 추출 직후 적용(교정되면 ambiguous 가 풀려 스크린샷 폴백을 건너뜀), 폴백 결과에도 한 번 더 적용. 로그 `[price-rule] host=… 에이블리 즉시할인가로 교정: A → B (정가 R)`.
+- 프롬프트는 바꾸지 않았다(이미 같은 지시가 있음 — 규칙으로 고정).
+- 테스트: `test_price_rules.py` 14개(77103060 화면 글자로 29,210·27,590·26,740 → 32,450 / 정가 34,900, 정가를 라벨에서 찾기, 기권 채우기, 쿠폰적용가 라벨 없는 레이아웃 21,500−1,700=19,800, 이미 맞으면 그대로, 다른 몰·비슷한 도메인 안 건드림, 확인 못 하는 페이지 4종, 더 큰 숫자 안의 금액 무시), `test_main.py` +1(`/extract` 에서 교정·폴백 안 부름·로그).
+
+---
+
+## 2026-11-22 - 엔진 상시 운영 준비: 끄기 확인·자동 되돌리기·알람
+
+🌟 **쉬운 설명**
+- 출시하면 상품 정보를 읽는 서버(엔진)를 계속 켜 둬야 해요. 실수로 끄지 않게, 끌 때 한 번 더 물어봐요.
+- 새 버전을 올렸는데 서버가 안 뜨면 이전 버전으로 저절로 돌아가요.
+- 서버가 꺼지거나, 오류가 몰리거나, 너무 느려지면 팀 메일로 알림이 가게 준비했어요(출시 때 켜요).
+- 서버 기록을 14일에서 30일 동안 보관해요.
+
+🔧 **기술 설명**
+- `engine/deploy/engine.sh`
+  - `stop`: 확인 질문(`[y/N]`), `--yes` 로 건너뜀.
+  - `deploy`(create/update-service): `deploymentCircuitBreaker={enable=true,rollback=true}`, 최소 100%·최대 200% 를 매번 넣는다.
+  - `status`: 태스크 정의 리비전·서킷 브레이커·`wishkit-engine-*` 알람 상태(StateValue·알림 켜짐)도 보여 준다.
+  - `setup` 의 로그 보관 14일 → 30일(ops-setup 과 같게).
+- 새 `engine/deploy/ops-setup.sh`(멱등): 로그 그룹 `/ecs/wishkit-engine` 보관 30일 + 알람 3개 → SNS `ReportAlerts`(앱 ID 로 찾음).
+  - `wishkit-engine-down`: AWS/ECS CPUUtilization(클러스터·서비스) 5분 평균 2회, 데이터 없음 = 경보.
+  - `wishkit-engine-proxy-errors`: parsing-proxy Lambda Errors 5분 합계 ≥ 5.
+  - `wishkit-engine-proxy-slow`: 같은 Lambda Duration 5분 p90 > 20000ms.
+  - 새 알람은 알림 꺼짐(`--no-actions-enabled`), 옵션 없이 다시 돌리면 기존 알림 상태 유지. `--enable-alarms`/`--disable-alarms`/`--dry-run`.
+  - Lambda 는 운영 앱 ID(`amplify-d10l8u76nc8eda…parsingproxy`)로 찾아 개인 샌드박스 함수를 피한다. `PROXY_FUNCTION`·`ALARM_TOPIC_ARN` 으로 직접 지정 가능.
+- 새 `engine/deploy/README.md`: 출시 때 켜는 순서(start → 헬스 확인 → `ops-setup.sh --enable-alarms` → 앱에서 담기), 알람 표, 비용.
+- 확인: `bash -n` 두 스크립트, `ops-setup.sh --dry-run`(운영 주제·Lambda 를 찾아 명령 출력), `engine.sh status`, `echo n | engine.sh stop`(취소). shellcheck 는 이 PC 에 없어 못 돌림.
+
+---
+
+## 2026-11-22 - 저장되는 상품 주소에서 공유 추적값 걷어내기
+
+🌟 **쉬운 설명**
+- 다른 앱에서 공유받은 링크로 상품을 담으면, 상품 주소 뒤에 "누가 공유했는지" 같은 추적값이 붙은 채로 저장됐어요. 공개 폴더나 공유 링크로 다른 사람에게도 보일 수 있었어요.
+- 이제 이런 추적값만 지우고 저장해요. 상품 번호처럼 상품을 찾는 데 필요한 값은 그대로 남겨요.
+- 이미 저장된 상품 주소는 그대로예요(이번 변경은 새로 담는 상품부터).
+
+🔧 **기술 설명**
+- `share_links.strip_tracking_params(url)` 추가: 쿼리에서 **알려진 추적 파라미터만** 지우고(이름 기준, 대소문자 무시) 나머지 쿼리의 순서·인코딩과 조각(#)은 그대로. 남는 쿼리가 없으면 `?` 도 없앤다.
+  - 접두어: `utm_`, `af_`, `airbridge`, `deep_link_` / 정확히 일치: `shortlink`, `pid`, `is_retargeting`, `source_caller`, `onelink_id`, `fbclid`, `gclid`, `igshid`
+- `main._extract` 성공 응답의 `render.final_url`(→ parsing-proxy → 앱 `productUrl`)에 적용. #41 에서 쿼리 전체를 유지하기로 한 이유(쿼리에 상품 번호가 있는 몰)는 그대로 지킨다. 로그·502 메시지용 `strip_query`(쿼리 전체 제거)와는 별개.
+- 배경: 무신사 공유로 풀린 주소에 `af_referrer_customer_id`·`af_referrer_uid`, 에이블리 공유 주소에 `airbridge_referrer`(client_id·event_uuid 등)·`utm_*` 가 남아 저장되고 있었다(2026-11-19·22 운영).
+- 앱이 이미 저장한 주소는 건드리지 않는다.
+- 테스트: `test_share_links.py` +10(무신사 af_* → 경로만, 에이블리 airbridge·utm(대문자 포함) → 쿼리 없음, `goods?no=123&utm_source=x` → `?no=123`, 추적값 없는 주소·조각·비슷한 이름 `pids` 유지, None/빈 문자열), `test_main.py` +1(성공 응답 `render.final_url` 에서 추적값만 빠짐).
+
+---
+
+## 2026-11-19 - 에이블리 앱 공유 링크 풀기 · 엔진 로그 가격 표시 수정
+
+🌟 **쉬운 설명**
+- 에이블리 앱에서 공유한 링크(`applink.a-bly.com/…`)를 넣으면 12초쯤 기다리다 실패하던 문제를 고쳤어요. 이제 링크를 상품 주소(`m.a-bly.com/goods/…`)로 먼저 바꿔서 읽어요.
+- 서버 기록에 상품 가격이 늘 "없음"으로 찍히던 문제를 고쳤어요. 앱에 가는 가격은 원래 정상이었고, 기록 한 줄만 잘못 읽고 있었어요.
+
+🔧 **기술 설명**
+- `share_links.SHORT_LINK_SUFFIXES` 에 `applink.a-bly.com`(Airbridge) 추가. PC UA 로 열면 302 → `m.a-bly.com/goods/…`, 휴대폰 UA 면 `ably.airbridge.io`(앱 이동 페이지) → 예전엔 짧은 링크로 안 보고 휴대폰 UA 로 렌더링하다 `Page.goto` 12초 시간 초과(2026-11-19 운영 로그).
+- `resolve_share_link`: 다음 요청이 실패해도 이미 짧은 링크를 벗어난 쇼핑몰 주소까지 왔으면 그 주소를 쓴다. 에이블리는 302 뒤 `m.a-bly.com` 에 urllib 요청이 403 이라, 예전 코드는 찾은 주소를 버리고 짧은 링크로 돌아갔다.
+- `main._extract` 의 `[extract] host=… price=…` 로그가 `extracted["unconditional_price"]`(없는 키)를 읽어 11/2(8867043)부터 항상 `price=None` → `extracted["price"]["unconditional_price"]` 로 수정. 응답·앱 동작은 그대로.
+- 테스트: `test_share_links.py` +4(applink 판정 2, 다음 요청 403 이어도 상품 주소 유지, 첫 요청 403 이면 원래 주소), `test_main.py` +1(로그 줄 가격).
+
+---
+
+## 2026-11-19 - 상품 추가: 새로 공유한 링크로 바뀌게 + 불러오기 취소
+
+🌟 **쉬운 설명**
+- 상품 추가 화면이 열려 있을 때 다른 앱에서 또 공유하면, 링크 칸에 **이전 링크가 그대로 남던 문제**를 고쳤어요(예: 에이블리 링크가 남은 채 무신사에서 공유). 이제 새로 공유한 링크로 바뀌고 바로 불러와요.
+- 저장하지 않고 화면을 나갔다가 다시 열면 **예전에 공유한 링크를 또 불러오던 문제**도 고쳤어요.
+- 상품 정보를 불러오는 동안 **"불러오기 취소"** 버튼이 생겼어요. 누르면 기다리지 않고 바로 링크를 고치거나 직접 기록할 수 있어요.
+
+🔧 **기술 설명**
+- 원인: `ShareIntakeScreen` 이 공유 주소(`AppStore.pendingShareUrl`)를 `initState` 에서 한 번만 읽었다. 화면이 열린 채 `router.go('/share')` 하면 같은 State 를 재사용해 새 주소가 안 들어갔고, `pendingShareUrl` 은 저장할 때만 비워져 다음에 열면 예전 주소를 다시 읽었다(2026-11-19 운영 로그: 무신사 공유 직전 예전 에이블리 링크 재요청).
+- `AppStore.takePendingShareUrl()`(꺼내면서 비움, 알림 없음). 화면은 `initState` 에서 꺼내 쓰고, `AppStore` 리스너로 열려 있는 동안 들어온 새 공유를 받아 링크 칸·결과를 바꾸고 다시 읽는다.
+- 불러오기 번호(`_parseSeq`): 취소·새 공유 때 올려서 늦게 도착한 이전 결과를 버린다. 서버 요청 자체는 끊지 않는다(엔진이 25초 안에 끝냄).
+- `ShareIntakeScreen(bridge:)` — 테스트용 주입. 테스트: `test/share_intake_screen_test.dart` 3개(꺼낸 주소 비우기, 열린 화면에 새 공유 → 주소 교체·이전 결과 무시, 취소 → 입력 상태·늦은 결과 무시).
+
+---
+
+## 2026-11-19 - 쇼핑몰이 서버를 막으면 이유를 남기고 바로 실패
+
+🌟 **쉬운 설명**
+- 쇼핑몰이 서버의 접속을 막았을 때(차단 페이지), 예전에는 가격이 뜨기를 20초 넘게 기다리다 실패했어요. 이제 차단 페이지인 걸 알아보면 기다리지 않고 몇 초 안에 실패해서, 앱이 곧바로 직접 입력 화면을 보여 줘요.
+- 어떤 차단이었는지(차단 문구·응답 코드·화면 글자 앞부분)를 서버 로그에 남겨요. 무신사 상품 페이지가 AWS 서버에서만 막히는 원인을 확인하려는 거예요. 막힌 걸 우회하지는 않아요.
+
+🔧 **기술 설명**
+- 배경(2026-11-19 운영): #40 으로 무신사 공유 링크는 풀렸지만 `www.musinsa.com/products/7489748` 이 Fargate 에서만 `_looks_blocked` → 502, Lambda 기준 24.4초. 엔진 로그엔 이유가 없고(HTTPException detail 은 parsing-proxy 로그에만), 서버 HTML 도 안 남아 어떤 차단인지 몰랐다.
+- `render.RenderResult` 에 `block_reason`(걸린 `BLOCK_PATTERNS` 문구 + 화면 글자 앞 200자) · `status_code`(메인 문서 응답 코드, 홈 웜업 재시도 후면 마지막 것) 추가. 도우미 `_block_phrase`·`_block_reason`.
+- `render._goto_and_wait`: `page.goto` 직후 HTML 이 차단 페이지면 가격 폴링(최대 10초)을 하지 않고 돌아간다. 홈 웜업 재시도 1회(유니클로 Akamai 용)는 그대로, 그것도 차단이면 폴링 없이 끝. 정상 페이지 동작은 같다.
+- `main._extract`: 502 를 올리기 전에 `[extract] 차단 host=… status=… reason=… final_url=…` / `[extract] 렌더링 오류 …` / `[extract] AI 호출 실패 …` 한 줄씩 남김. 로그·502 메시지의 주소는 `share_links.strip_query` 로 쿼리 제거(공유로 풀린 주소의 `af_referrer_customer_id` 등). 성공 응답의 `render.final_url` 은 그대로(앱이 상품 주소로 저장, 쿼리에 상품 번호가 있는 몰이 있음). `공유 링크 → 상품 주소` 로그 두 줄도 쿼리 제거.
+- 테스트: `test_render_block.py` 6개(걸린 문구·근거 문자열·쿼리 제거, 로컬 HTTP 서버로 차단 페이지가 5초 안에 `blocked`·`status 403`·문구 포함으로 끝나는지, 홈 웜업으로 풀리는 페이지·정상 페이지는 그대로인지), `test_main.py` 에 차단 로그·502 메시지에 쿼리가 안 남는지 1개.
+- ⚠️ 처음 HTML 에 차단 문구가 있다가 몇 초 뒤 스스로 풀리는 JS 확인 페이지(예: Cloudflare "Just a moment")는 이제 기다리지 않고 홈 웜업 1회 뒤 실패한다.
+
+---
+
+## 2026-11-19 - 무신사 앱 공유 링크가 서버에서 막혀도 읽기
+
+🌟 **쉬운 설명**
+- 무신사 앱에서 공유한 링크(`musinsa.onelink.me/…`)를 넣으면 25초쯤 기다리다 실패하던 문제를 고쳤어요. 서버가 짧은 링크를 실제 상품 주소로 바꾸는 단계에서 막히고 있었어요.
+- 이제 막히면 서버의 브라우저로 링크를 열어 상품 주소로 넘어가는 순간의 주소만 얻어서 읽어요. 그래도 안 되면 오래 기다리지 않고 바로 실패해서, 앱이 곧바로 직접 입력 화면을 보여 줘요.
+
+🔧 **기술 설명**
+- 원인(2026-11-18 운영 로그 `/ecs/wishkit-engine`): `share_links.resolve_share_link` 의 urllib 요청에 onelink 가 `HTTP Error 403: Forbidden` → 짧은 링크 그대로 렌더링 → 앱/스토어로 보내는 중간 페이지에서 시간을 다 써 `POST /extract 504`. 같은 링크를 일반 PC 브라우저로 열면 `www.musinsa.com/products/7489748` 로 바로 넘어감(JSON-LD·og:image·가격 정상).
+- `render.resolve_in_browser`(신규): PC UA 새 컨텍스트로 짧은 링크를 열고, 메인 프레임의 첫 "짧은 링크가 아닌 http(s)" 이동 요청(`request` 이벤트 — 3xx·JS 이동 모두)이 보이면 그 주소를 돌려주고 닫는다. 이미지·폰트·영상은 받지 않음. `SHORT_LINK_BROWSER_TIMEOUT_S`(기본 8초) 안에 못 찾으면 None.
+- `main._extract`: HTTP 로 못 풀어 여전히 짧은 링크면 `resolve_in_browser` → 실패 시 렌더링하지 않고 `502 공유 링크를 상품 주소로 바꾸지 못함`.
+- 테스트: `test_resolve_in_browser.py` 3개(302 리다이렉트, 403 + JS 이동, 끝까지 안 넘어가면 시간 안에 None). `test_share_links.py` 포함 18개 통과.
+- ⚠️ AWS(Fargate) IP 자체가 onelink 에 막힌 경우엔 브라우저로도 못 풀 수 있다 — 그때는 빠른 502 로 끝난다. 배포 후 같은 링크로 로그(`공유 링크 → 상품 주소(브라우저)` / `[extract] 공유 링크를 상품 주소로 못 바꿈`)를 확인할 것.
+
+---
+
+## 2026-11-18 - 직접 기록한 상품은 가격 출처 안내 숨김
+
+- 상품 상세의 "가격과 상품 정보는 ○○ 기준이며, 실제 결제 가격과 다를 수 있어요."를 **판매 페이지 주소가 있는 상품(링크로 불러온 상품)에만** 보여요. 매장에서 본 옷을 직접 기록한 상품은 사용자가 쓴 값이라 띄우지 않아요(`product_detail_screen.dart`).
+
+---
+
+## 2026-11-18 - 직접 기록 화면 정리 · 최신순 정렬
+
+🌟 **쉬운 설명**
+- 직접 기록에 사진 넣는 곳이 여러 개라 헷갈리던 걸 **사진 칸 두 개(옷 사진 · 태그 사진)**로 정리했어요. 칸을 누르면 넣고, 넣은 사진은 오른쪽 위 **X**로 빼고 다시 넣을 수 있어요.
+- 직접 기록에 **브랜드 입력칸**(선택)을 추가했어요.
+- 위시리스트와 살까말까 상품 고르기에서 **최근에 담은 상품이 위**로 와요.
+
+🔧 **기술 설명**
+- `share_intake_screen.dart`: `_photoSlot`(88px, X 버튼, 다시 누르면 바꾸기) 두 개, "옷 사진 넣기/바꾸기/빼기"·"태그 사진 첨부" 버튼 제거. `brandCtrl` → 저장 시 `platform`(비우면 "직접 기록"). 링크로 불러오면 옷 사진도 비움(사진 칸은 직접 기록 전용).
+- `AppStore.productsNewestFirst`(id = 담은 시각 밀리초, 큰 순) → `displayedProducts`, 살까말까 상품 고르기.
+
+---
+
+## 2026-11-18 - 상품 추가 화면 문구 정리
+
+🌟 **쉬운 설명**
+- "공유 담기" 버튼과 화면 이름을 **"상품 추가"**로 바꿨어요.
+- "AI로 읽음", "자동 읽기 서버가 꺼져 있어요", "보완 필요: image_url" 같은 **내부 사정 문구를 없앴어요.** 못 불러왔을 때는 사용자가 할 일만 알려 줘요.
+- 두 문장짜리 안내는 문장마다 줄을 바꿨어요.
+
+🔧 **기술 설명**
+- `main.dart` 하단 버튼 라벨·아이콘(링크 → 더하기), `share_intake_screen.dart` 제목·설명·입력칸·버튼 문구.
+- 카드 안 상태 문구(`_statusText`) 제거 → 아래 안내 한 곳(`_failureText`)으로 합침. `engineOff`도 `failed`와 같은 문구. `missingFields` 표시 제거.
+
+---
+
+## 2026-11-10 - 출시 범위: 태그 자동 찾기 끄기
+
+🌟 **쉬운 설명**
+- 출시 때는 **태그 사진으로 온라인 상품을 자동으로 찾는 기능을 꺼요.** 정확도를 더 높인 뒤 다시 켤 거예요.
+- 매장에서 본 옷은 **"매장에서 본 옷 직접 기록하기"**로 옷 사진·태그 사진(선택)을 넣고 이름·가격을 직접 입력해요. 태그 사진은 첨부만 하고 엔진으로 보내지 않아요.
+- 온라인 몰 링크 붙여서 담기는 그대로예요.
+
+🔧 **기술 설명**
+- `app/lib/config/features.dart`(신규) `kTagAutoFind = false`. 끄면: "태그 사진으로 찾기" 버튼 숨김, 직접 기록의 태그 사진 버튼은 "태그 사진 첨부 (선택)" — `_pickTagPhoto`가 `/identify-tag`를 부르지 않고 사진만 붙임(저장 시 기존처럼 `tag-photos/`에 업로드, 미리보기·빼기 추가).
+- 엔진 코드(태그 찾기 v2)는 그대로 둠 — `true`로 바꾸고 앱을 다시 배포하면 돌아옴.
+
+---
+
+## 2026-11-09 - 태그 찾기: 모든 브랜드 대응 · 브랜드+품번 필수 · 실패 태그 보관 · 자동 규칙 발견
+
+🌟 **쉬운 설명**
+- QR이 없으면 **브랜드와 품번이 둘 다 있어야** 찾아요. 하나라도 없으면 엉뚱한 상품을 보여 주지 않고 바로 직접 기록으로 가요.
+- 무신사에서 **"브랜드 품번"**으로 먼저 찾고, 안 되면 품번만으로 찾아요(브랜드 안에서 품번으로 찾는 효과).
+- 못 찾은 태그는 **사진(위치 등 메타데이터 지움)과 읽은 브랜드·품번**을 보관할 수 있어요(기본은 꺼짐).
+- 보관된 실패 태그를 도구가 **시간을 넉넉히 들여 여러 방법으로 다시 찾아 보고**, 같은 브랜드에서 2번 이상 통한 방법은 사람 없이 브랜드 규칙에 넣어요(무신사 우선, 공식몰 카페24·쇼피파이 검색).
+
+🔧 **기술 설명**
+- `tag_identify._missing_key`: QR 후보가 없으면 브랜드(태그 글자·품번 모양·회사명·웹사이트)와 품번이 모두 있어야 함. `skip_reason`: `no_brand_no_code` | `no_brand` | `no_code`. 앱 `TagIdentifyResult.skipped`·안내 문구.
+- `brand_rules._fill`: `{brand}`·`{brand_slug}` 자리표시자. 무신사 규칙 3개: **브랜드 안 검색** `/brand/{브랜드}/products?keyword={품번}`(사용자 확인) → 전체 검색 "브랜드 품번" → "품번만". 브랜드 주소 이름은 `editshop_slugs`, 없으면 영문 소문자·숫자로 만듦(한글만 있으면 규칙 이름 사용). 뉴발란스는 `editshop_first`로 무신사를 공식몰보다 먼저. 한 태그에 열어 보는 규칙 주소 최대 3개.
+- (2026-11-10 보완) 무신사 브랜드 주소 이름이 다른 브랜드(AMOU → `machineboymachine`)·브랜드 페이지가 없는 브랜드(뉴발란스·오클리 — `editshop_slugs`를 빈 값으로) 반영. 편집숍 전체 검색어의 브랜드 이름은 태그 글자 대신 **편집숍이 쓰는 이름(`editshop_names`, 예: 뉴발란스)** 또는 한글 별칭을 써서 태그마다 "new", "NB"처럼 다르게 읽혀도 같은 검색어가 되게 함. 품번은 색상 꼬리를 뗀 스타일 번호(`{code_base}`, NBNQG41923-01 → NBNQG41923)로 검색. 뉴발란스 별칭에 "new" 추가.
+- (2026-11-10 보완) **무신사를 직접 여는 브랜드를 다시 좁힘**: 젊은 브랜드(찾는 순서가 편집숍부터), 무신사 입점이 확인된 브랜드(`editshop_brands` — 자동 학습 포함, 아디다스), `editshop_first`(뉴발란스)만. 공식몰 주소 규칙이 없는 브랜드(반스 등)에서 무신사가 사실상 1순위가 되던 문제 수정. 모르는 브랜드는 무신사를 직접 열지 않고 공식몰부터(검색 단계). 마뗑킴(태그 KIMMATIN → 무신사 `matinkim`)·반스 브랜드 주소 반영.
+- (2026-11-10) **공식몰 사이트 검색**(`site_search.py` 신규): 브랜드별 주소 규칙이 없어도, 공식몰 도메인(브랜드 목록·QR·태그 웹사이트·구글 검색)을 알면 그 사이트 검색창에 품번을 넣어 찾는다. 쇼핑몰 플랫폼 검색 주소 모양(카페24 `/product/search.html?keyword=`, 고도몰 `/goods/goods_search.php?keyword=`, 쇼피파이·일반 `/search?q=`)을 차례로 열고, 같은 사이트 상품 상세 링크를 골라 페이지 안 품번을 확인. 엔진은 다른 방법이 다 실패했을 때 마지막 수단으로 최대 3가지 모양(`match.via = official_search`). 분석 도구는 사이트 홈의 schema.org SearchAction(사이트가 직접 알려 주는 검색 주소)까지 보고, 한 번 확인되면 그 사이트 검색 규칙을 바로 학습(`product_id_pattern: "@generic"`).
+- `failure_store.py`(신규): `TAG_FAILURE_DIR` 또는 `TAG_FAILURE_S3_BUCKET`일 때만, 실패 원인(찾음·태그 아님 제외)의 사진(JPEG 재저장으로 EXIF 제거) + 기록 JSON 저장. 백그라운드·실패 무시. `boto3` 추가.
+- `tools/discover_rules.py`(신규): 실패 기록/테스트 결과를 다시 시도(무신사 2종 → 공식몰 도메인 찾기 → 카페24·쇼피파이 검색), 페이지에서 품번이 확인된 방법만 채택, 서로 다른 품번 2개 이상이면 `brand_rules.learned.json`에 자동 반영.
+- ⚠️ 운영에서 사진 보관을 켜기 전에 개인정보 처리방침 반영 필요. 무신사 llms.txt가 검색 결과(?keyword=) 주소를 자동 수집 제외 대상으로 적고 있어 검토 필요(README 참고).
+
+---
+
+## 2026-11-09 - 태그 찾기: 실패 모으기·원인 정리·자동 학습
+
+🌟 **쉬운 설명**
+- 사용자가 태그를 찍었는데 못 찾으면, **왜 못 찾았는지**(검색 결과 없음, 사이트가 막음, 품번 못 읽음 등)가 자동으로 기록돼요.
+- 매주 월요일 아침, 지난 일주일 기록을 모아 **리포트**를 만들고, 확실한 것(같은 사이트에서 여러 번 확인된 판매처, 품번만 바뀌는 주소 모양)은 **브랜드 규칙에 자동으로 추가**해서 PR로 올려요. 사람은 보고 머지만 하면 돼요.
+- 못 찾은 뒤 사용자가 직접 판매 링크를 넣어 저장하면, 그게 가장 좋은 정답이라 같이 배워요.
+
+🔧 **기술 설명**
+- 엔진 `failure_report.py`(신규): `diagnose`(원인 11종), `build_report`(익명 기록). `/identify-tag` 응답에 `trace_id`·`cause`, 로그에 `[identify-report] {json}`.
+- `brand_rules.learned.json`(자동 생성) 병합 로드 — 사람 규칙 우선, 학습 판매처는 검색 힌트 맨 앞.
+- `tools/learn_from_feedback.py`(신규): 엔진 로그·CloudWatch 내보내기·테스트 결과 + TagFeedback(DynamoDB scan)을 trace_id로 이어 리포트·학습.
+- `.github/workflows/tag-learning.yml`(신규): 주 1회 실행 → PR. **AWS 읽기 전용 키·테이블 이름 설정 필요**(파일 맨 위 주석).
+- 앱·백엔드: `IdentifiedTag.traceId/cause`, `TagFeedback.traceId/cause/userUrl`, 답 `user_link` 추가(**Amplify 배포 필요**).
+- 테스트: `test_failure_learning.py`, Dart `product_tag_store_test`.
+
+---
+
+## 2026-11-09 - 태그 찾기: 실제 83장 테스트 반영
+
+🌟 **쉬운 설명**
+- 8seconds·노스페이스·ZARA·비이커는 QR과 쇼핑몰 규칙으로 거의 다 찾았어요.
+- 못 찾은 건 대부분 **검색이 후보를 하나도 못 가져온** 경우였어요. 그래서 검색 말고도 찾을 길을 늘렸어요: 무신사에서 직접 품번으로 찾아보기(시험), 브랜드를 못 읽어도 품번 모양으로 브랜드 알아내기(반스·뉴발란스), 아디다스 진짜 품번 골라내기.
+- 공식몰이 우리 서버를 막아서 페이지를 못 열어도, 품번으로 만든 주소가 있으면 "이 상품이 맞나요?"로 물어봐요(뉴발란스).
+
+🔧 **기술 설명**
+- `brand_rules.json`: `code_brands`(VN0… → 반스, NB… → 뉴발란스), 아디다스 `code_format`(2글자+4숫자), `editshop_rules`(무신사 검색 → `/products/{id}` → 품번 확인, **미확인 규칙**).
+- `brand_rules.py`: `brand_from_code`, `promote_code`. `plan_for`가 브랜드를 못 읽으면 품번 모양으로 정함(`brand_decided_by: 품번 모양`), 정한 브랜드를 tag.brand에 다시 씀(원래 값은 `brand_ocr`). 편집숍이 찾는 순서에 있으면 편집숍 검색 규칙도 후보에 넣음.
+- `tag_identify.py`: 규칙 주소(품번으로 만든 상품 주소)를 못 읽으면(봇 차단·about:blank) 예비 후보로 두었다가 검색까지 못 찾으면 `needs_confirm`(`verified_by: rule`). 검색 출처가 구글 리다이렉트(vertexaisearch…)면 안전한 주소 따라가기로 진짜 주소로 풀어서 판단.
+- 테스트 184개.
+
+---
+
+## 2026-11-09 - 태그 찾기: 브랜드 이름 정리 + 모회사 쇼핑몰 규칙
+
+🌟 **쉬운 설명**
+- 태그에서 "8 seconds", "에잇세컨즈"처럼 다르게 읽힌 브랜드 이름을 하나로 정리해요.
+- 삼성물산 브랜드(8seconds·비이커·빈폴·구호 등)는 SSF샵에서 **품번으로 상품 페이지를 바로 열어** 확인해요. 검색보다 빠르고 정확해요.
+- LF몰·더한섬닷컴·SI빌리지 브랜드는 아직 주소 규칙을 확인 못 해서, 검색할 때 "이 몰에서 판다"는 힌트만 줘요.
+
+🔧 **기술 설명**
+- `engine/server/brand_rules.json`(신규): 브랜드 별칭, 브랜드→모회사 몰, 몰·브랜드별 주소 템플릿. 코드 수정·배포 없이 데이터만 고쳐 규칙 추가.
+- `brand_rules.py`(신규): `canonical_brand`, `candidate_urls`(품번→주소, `code_pattern` 정규식 그룹 지원), `seller_hint`.
+- `identify()`: QR 다음, 검색 전에 규칙 주소를 렌더링해 **페이지 본문에서** 품번 확인(만든 주소 자체는 증거로 안 씀). 검색 시간을 남기려고 시간이 모자라면 건너뜀. `match.via = "brand_rule"`. 응답 tag에 `brand_canonical`, `seller_hint`.
+- 확인된 규칙: SSF `m.ssfshop.com/public/goods/detail/{품번}/sapView`(8seconds QR 리다이렉트로 확인), 뉴발란스 `styleCode/colCode`(실제 테스트로 확인).
+- 테스트: `test_brand_rules.py`.
+- (추가) LF몰 `/app/product/{상품코드}`, 더한섬닷컴 `/ko/PM/productDetail/{상품번호}` 규칙(사용자가 실제 주소로 확인). SI빌리지(shinsegaev.com)는 상품 주소가 내부 번호라 검색 결과 주소 확인 전까지 판매처 힌트만.
+- (추가) 브랜드 채널: 백화점 브랜드 → 모회사 몰, 젊은 브랜드·처음 보는 브랜드 → 무신사·29CM, SPA·글로벌 → 공식몰(`official_domain`을 검색의 공식몰 판단에 사용). tag에 `brand_channel`, `seller_hints`, `official_domain_hint`.
+- (추가) SI빌리지: 검색 결과 규칙(`totalSearch.siv?search_kwd={품번}` → 첫 상품 `goods_no` → 상품 페이지에서 품번 확인). 규칙 종류에 `search_url`/`product_id_pattern`/`product_url` 추가, PageView에 `html`.
+- (추가) 브랜드 122개로 확장: 백화점(SSF·LF·한섬·SI빌리지·코오롱·이랜드), SPA·글로벌 공식몰(ZARA·H&M·COS·유니클로·나이키·아디다스 등), 젊은 브랜드 별칭. `tools/check_brand_rules.py`로 별칭 겹침·도메인 점검.
+- (추가) 어디서 찾을지 정하는 순서(`brand_rules.plan_for`): QR → 브랜드 목록 → **태그에 인쇄된 회사명**(삼성물산·한섬·LF·신세계인터·코오롱·이랜드·롯데GFR → 모회사 몰) → **태그에 인쇄된 웹사이트**(신생·자사몰 브랜드) → 모르면 무신사·29CM. 태그 읽기 스키마에 `company`·`website` 추가, 응답 tag에 `brand_decided_by`.
+- (추가) 백화점 브랜드 공통 판매처(롯데온·SSG·더현대닷컴)를 검색 힌트에 같이 줌. 키네틱 그라운드 등 백화점 K패션관 브랜드 별칭 추가(코이세이오·예스아이씨·999휴머니티·더바넷 등).
+- (추가) **브랜드 분류(백화점 층 구성 기준)**: luxury·contemporary·career·casual·sports·spa·k_designer·shoes_acc·lifestyle·unknown. 백화점 브랜드만이 아니라 길거리·온라인 브랜드 전부에 적용. 분류마다 찾는 순서(official / parent_mall / dept_store / editshop). 응답 tag에 `brand_category`, `find_order`, `find_official_first`.
+- (변경) **모르는 브랜드는 공식몰부터**: 검색 프롬프트가 공식 홈페이지(자사몰)를 먼저 찾게 하고, 그다음 편집숍(무신사·29CM·4910·W컨셉).
+- (추가) 편집숍 입점 브랜드(`editshop_brands`) — 입점한 편집숍을 먼저 찾음. `tools/import_mall_brands.py`로 사람이 모은 목록을 넣음(크롤링 아님).
+- (추가) **브랜드도 품번도 못 읽은 태그는 찾지 않음**(무인양품처럼 태그에 브랜드가 없는 경우): QR이 없으면 검색·규칙을 건너뛰고 바로 `not_found` + `skip_reason: "no_brand_no_code"`. 앱은 태그에서 읽은 이름·가격만으로 직접 기록을 열고, "실패"가 아닌 안내 문구를 보여 줌. 피드백에도 `skipReason`이 남아 엔진 성능 통계에서 따로 봄. GraphQL `IdentifiedTag.skipReason`, `TagFeedback.skipReason` 추가(**Amplify 배포 필요**).
+- (추가) 태그 찾기 피드백(익명): `TagFeedback` 모델(만들기만 허용, ownerId·사진·가격 없음). 앱이 "맞아요"=yes, "다른 상품이에요"=no, 엔진 못 찾음=not_found를 기다리지 않고 남긴다. **Amplify 배포 필요.**
+
+---
+
+## 2026-11-12 - 안내 문구를 화면 가운데 반투명 카드로 + 살까말까 보내기 창 정리
+
+🌟 **쉬운 설명**
+- 앱의 모든 안내 문구("보냈어요", "담았어요", 에러 등)가 **화면 가운데 반투명 카드**(짙은 회색 50% + 뒤 흐림)로 잠깐 떠요. 아래쪽 버튼·탭 바, 위쪽 제목을 가리지 않아요.
+- 보통 문구는 한 줄로 떠요. 아주 긴 안내·에러만 줄바꿈돼요.
+- 1.8초 뒤 사라지고(에러는 3.5초), 화면을 어둡게 덮지 않아 뒤 화면을 그대로 누를 수 있어요.
+- 친구에게 보내기 창: "투표 보내기"와 "복수 선택 가능"이 버튼 바로 위 같은 자리에 항상 보여요. 복수 선택은 투표를 켰을 때만 누를 수 있고, 밑의 설명 줄은 없앴어요.
+- 보내기 창이 닫힐 때 나던 오류, 키보드를 올리면 화면이 넘치던 문제를 고쳤어요.
+
+🔧 **기술 설명**
+- `lib/widgets/top_toast.dart`: `showTopToast(context, msg, {error, icon, duration})`, `showTopError(context, e, {prefix})`, 비동기 전에 잡아 두는 `TopToast.of(context)`. 루트 Overlay 에 한 번에 하나만, 가운데에 반투명 카드로 띄우고 터치는 통과시킨다.
+- `ScaffoldMessenger.showSnackBar` 38곳을 모두 바꿈(15개 파일, 신고·차단·문의 포함).
+- `moderation_sheets.dart` 신고 대화상자: 닫히는 애니메이션 뒤에 메모 컨트롤러를 정리(같은 dispose 오류 예방).
+- `share_to_friends_sheet.dart`: StatefulWidget 으로 바꿔 메모 컨트롤러를 시트 dispose 에서 정리. 메모·친구 목록은 스크롤, 투표 설정·보내기 버튼은 아래 고정, 키보드 높이에 맞춰 시트 높이 조절.
 ## 2026-11-12 - Google Play 출시 필수 수정 (Android): 업로드 키 서명, cleartext, 계정 삭제 페이지, 차단 검사·투표 삭제 보강
 
 PR #28(chore/play-release-requirements)의 Android 전용 부분을 지금 main(#32·#33 iOS 작업) 위에 옮긴 것. 신고·차단·약관·처리방침은

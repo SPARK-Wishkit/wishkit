@@ -1,0 +1,94 @@
+# 태그 찾기 주간 학습 — 실패 모으기 · 원인 정리 · 브랜드 규칙 자동 학습
+#
+# 매주 월요일 오전 9시(한국)에 지난 7일치 엔진 기록([identify-report])과 앱 피드백(TagFeedback)을 모아
+# engine/tools/learn_from_feedback.py를 돌리고, 리포트와 학습 규칙(brand_rules.learned.json)을 PR로 올린다.
+# 사람은 PR을 보고 머지만 하면 된다(머지 후 엔진을 다시 배포해야 학습 규칙이 반영된다).
+#
+# 준비(한 번만) — 저장소 Settings → Secrets and variables → Actions:
+#   secrets.TAG_LEARNING_AWS_ACCESS_KEY_ID / secrets.TAG_LEARNING_AWS_SECRET_ACCESS_KEY
+#       아래 두 권한만 있는 전용 IAM 사용자(읽기 전용):
+#         logs:FilterLogEvents  on  /ecs/wishkit-engine 로그 그룹
+#         dynamodb:Scan         on  TagFeedback 테이블
+#   vars.TAG_FEEDBACK_TABLE   Amplify가 만든 TagFeedback 테이블 이름(예: TagFeedback-xxxx-NONE, DynamoDB 콘솔에서 확인)
+#   vars.AWS_REGION           (선택) 기본 ap-northeast-2
+#   (선택) 실패 태그 자동 분석까지 하려면:
+#   vars.TAG_FAILURE_S3_BUCKET  엔진이 실패 태그를 보관하는 버킷(TAG_FAILURE_S3_BUCKET과 같게)
+#                               → IAM 사용자에 그 버킷 tag-failures/ 접두사의 s3:ListBucket·s3:GetObject 추가
+#   secrets.GEMINI_API_KEY      공식몰 도메인 찾기에 쓰는 Gemini 키
+name: Tag learning (weekly)
+
+on:
+  schedule:
+    - cron: "0 0 * * 1" # 월요일 00:00 UTC = 09:00 KST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  learn:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 엔진 의존성 설치(브라우저는 설치하지 않음)
+        run: pip install -r engine/server/requirements-dev.txt
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.TAG_LEARNING_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.TAG_LEARNING_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
+
+      - name: 지난 7일 엔진 기록 내보내기
+        run: |
+          START=$(( ( $(date +%s) - 7*24*3600 ) * 1000 ))
+          aws logs filter-log-events \
+            --log-group-name /ecs/wishkit-engine \
+            --start-time "$START" \
+            --filter-pattern '"identify-report"' \
+            --output json > /tmp/reports.json
+          echo "기록 $(python -c "import json;print(len(json.load(open('/tmp/reports.json'))['events']))")건"
+
+      - name: 앱 피드백 내보내기
+        run: |
+          aws dynamodb scan --table-name "${{ vars.TAG_FEEDBACK_TABLE }}" --output json > /tmp/feedback.json
+          echo "피드백 $(python -c "import json;print(len(json.load(open('/tmp/feedback.json'))['Items']))")건"
+
+      - name: 분석하고 학습
+        run: |
+          python engine/tools/learn_from_feedback.py \
+            --reports /tmp/reports.json --feedback /tmp/feedback.json --write-learned
+
+      - name: 실패 태그 자동 분석(브랜드별 새 규칙 찾기)
+        if: ${{ vars.TAG_FAILURE_S3_BUCKET != '' }}
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          aws s3 sync "s3://${{ vars.TAG_FAILURE_S3_BUCKET }}/tag-failures/" /tmp/failures \
+            --exclude "*" --include "*.json"
+          python -m playwright install --with-deps chromium
+          python engine/tools/discover_rules.py --failures /tmp/failures --write-learned --limit 100
+
+      - name: 학습 결과가 엔진을 깨지 않는지 확인
+        run: |
+          python engine/tools/check_brand_rules.py --offline
+          cd engine/server && python -m pytest -q
+
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: auto/tag-learning
+          title: "태그 찾기 주간 학습 리포트"
+          commit-message: "태그 찾기: 주간 학습 리포트·학습 규칙 갱신"
+          body: |
+            지난 7일 실패 원인 정리와 자동 학습 결과예요. 리포트(engine/reports/)를 보고 이상 없으면 머지해 주세요.
+            학습 규칙은 엔진이 페이지에서 품번을 확인해야만 "찾음"이 되므로, 틀린 규칙이 섞여도 잘못된 상품을 내보내지는 않아요.
+            머지 후 엔진을 다시 배포해야 반영돼요.
+          add-paths: |
+            engine/reports/*.md
+            engine/server/brand_rules.learned.json

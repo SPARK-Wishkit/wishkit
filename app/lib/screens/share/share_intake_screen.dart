@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../ads/tag_search_banner.dart';
+import '../../config/features.dart';
 import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../services/aws/gql_runner.dart';
@@ -15,24 +16,36 @@ import '../../services/share_input.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/add_folder_dialog.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 
 /// Shown when another app shares a product URL into this app.
 class ShareIntakeScreen extends StatefulWidget {
-  const ShareIntakeScreen({super.key, this.sharedUrl});
+  const ShareIntakeScreen({super.key, this.sharedUrl, this.bridge});
 
   final String? sharedUrl;
+
+  /// 테스트에서 가짜 서버를 넣을 때만 쓴다.
+  final ParsingBridge? bridge;
 
   @override
   State<ShareIntakeScreen> createState() => _ShareIntakeScreenState();
 }
 
 class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
-  final bridge = ParsingBridge();
+  late final ParsingBridge bridge = widget.bridge ?? ParsingBridge();
+  late final AppStore _store;
   final urlCtrl = TextEditingController();
   final titleCtrl = TextEditingController();
   final priceCtrl = TextEditingController();
   final memoCtrl = TextEditingController();
+
+  /// 직접 기록할 때의 브랜드(선택). 비우면 "직접 기록"으로 저장한다.
+  final brandCtrl = TextEditingController();
   bool loading = false;
+
+  /// 지금 진행 중인 "상품 불러오기"의 번호. 취소하거나 새 공유가 들어오면 올려서, 늦게 도착한 이전 결과를
+  /// 버린다(서버 요청 자체는 끊을 수 없다 — 엔진이 25초 안에 알아서 끝낸다).
+  int _parseSeq = 0;
   bool saving = false;
   String? error;
   ParsedProductInfo? parsed;
@@ -61,31 +74,76 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
   /// 이때는 옷 사진 자리를 보여 주고, 태그에서 읽은 상품명·가격을 자동으로 채운다.
   bool manualMode = false;
 
+  /// 태그로 못 찾았거나 "다른 상품이에요"였던 결과. 이후 사용자가 직접 판매 주소로 저장하면(링크를 붙여
+  /// 읽어도) 그 주소를 정답으로 익명 피드백(user_link)에 남긴다. 새 태그 사진을 찍으면 지운다.
+  TagIdentifyResult? missedTag;
+
   @override
   void initState() {
     super.initState();
-    final store = context.read<AppStore>();
+    _store = context.read<AppStore>();
     // 리스트를 고르지 않으면 '전체'에만 저장된다(폴더 칩을 누르면 그 폴더로).
     selectedListId = 'all';
-    final initial = widget.sharedUrl ?? store.pendingShareUrl;
+    // 꺼내면서 비운다 — 저장하지 않고 나갔다가 다시 열 때 예전 공유 주소를 또 읽지 않게.
+    final pending = _store.takePendingShareUrl();
+    final initial = widget.sharedUrl ?? pending;
     if (initial != null) {
       urlCtrl.text = ShareInput.normalize(initial);
       WidgetsBinding.instance.addPostFrameCallback((_) => _parse());
     }
+    // 이 화면이 이미 열려 있을 때 다른 앱에서 또 공유하면 화면을 새로 만들지 않는다(같은 '/share' 경로).
+    // 그래서 initState 만으로는 새 주소가 안 들어와 이전 링크가 남았다(2026-11-19, 에이블리 → 무신사).
+    _store.addListener(_onStoreChanged);
+  }
+
+  void _onStoreChanged() {
+    if (_store.pendingShareUrl == null || !mounted) return;
+    _applySharedUrl(_store.takePendingShareUrl()!);
+  }
+
+  /// 새로 공유받은 주소로 바꾸고 바로 읽는다. 앞의 상품을 읽는 중이었으면 그 결과는 버린다.
+  void _applySharedUrl(String url) {
+    _parseSeq++;
+    setState(() {
+      urlCtrl.text = ShareInput.normalize(url);
+      parsed = null;
+      error = null;
+      loading = false;
+      tagResult = null;
+      tagConfirmPending = false;
+    });
+    titleCtrl.clear();
+    priceCtrl.clear();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _parse();
+    });
+  }
+
+  /// "상품 불러오기" 취소 — 결과를 기다리지 않고 바로 입력 상태로 돌아간다.
+  void _cancelParse() {
+    if (!loading) return;
+    _parseSeq++;
+    setState(() {
+      loading = false;
+      error = null;
+    });
   }
 
   @override
   void dispose() {
+    _store.removeListener(_onStoreChanged);
     urlCtrl.dispose();
     titleCtrl.dispose();
     priceCtrl.dispose();
     memoCtrl.dispose();
+    brandCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _parse({bool fromTag = false}) async {
     final input = urlCtrl.text.trim();
     if (input.isEmpty) return;
+    final seq = ++_parseSeq;
     setState(() {
       loading = true;
       error = null;
@@ -93,6 +151,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
         tagResult = null;
         tagConfirmPending = false;
         tagPhoto = null; // URL로 직접 읽으면 앞서 찍은 태그 사진과는 다른 상품일 수 있다.
+        clothesPhoto = null; // 링크로 담으면 쇼핑몰 사진을 쓴다(사진 칸은 직접 기록에만 있다).
       }
       // 링크로 읽으면 쇼핑몰 사진이 생긴다. 직접 찍은 옷 사진은 남겨 두되(카드에서 뺄 수 있음) 직접 기록은 끝.
       manualMode = false;
@@ -101,13 +160,16 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
       final info = input.contains('http') && !input.trim().contains(' ')
           ? await bridge.parseProductUrl(input)
           : await bridge.scrapShareInput(input);
+      if (!mounted || seq != _parseSeq) return; // 취소했거나 새 공유로 바뀜
       titleCtrl.text = info.name == '공유된 상품' ? '' : info.name;
       priceCtrl.text = info.price > 0 ? '${info.price}' : '';
-      if (mounted) setState(() => parsed = info);
+      setState(() => parsed = info);
     } catch (e) {
-      if (mounted) setState(() => error = '상품 정보를 읽지 못했어요');
+      if (mounted && seq == _parseSeq) {
+        setState(() => error = '상품 정보를 불러오지 못했어요');
+      }
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted && seq == _parseSeq) setState(() => loading = false);
     }
   }
 
@@ -147,7 +209,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
         imageQuality: 75,
       );
     } catch (_) {
-      if (mounted) setState(() => error = '카메라나 사진을 열 수 없어요. 권한을 확인해 주세요');
+      if (mounted) setState(() => error = '카메라나 사진을 열 수 없어요.\n권한을 확인해 주세요');
       return null;
     }
     if (picked == null || !mounted) return null;
@@ -160,8 +222,19 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
     if (identifying || loading) return;
     final photo = await _pickPhoto(cameraLabel: '태그 사진 찍기');
     if (photo == null) return;
+    if (!kTagAutoFind) {
+      // 출시 범위: 태그 사진은 첨부만 한다(엔진으로 보내 읽거나 찾지 않음). 저장할 때 함께 올라간다.
+      setState(() {
+        tagPhoto = photo.$1;
+        tagPhotoMime = photo.$2;
+        error = null;
+      });
+      return;
+    }
     await _identifyFromTag(photo.$1, photo.$2);
   }
+
+  void _removeTagPhoto() => setState(() => tagPhoto = null);
 
   /// 옷 사진을 고른다. 저장할 때 올려서 상품의 대표 사진으로 쓴다(쇼핑몰 사진이 있어도 이 사진이 우선).
   Future<void> _pickClothesPhoto() async {
@@ -212,6 +285,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
       error = null;
       tagResult = null;
       tagConfirmPending = false;
+      missedTag = null;
     });
     TagIdentifyResult result;
     try {
@@ -230,7 +304,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
           identifying = false;
           error = e.isNetwork
               ? e.toString()
-              : '사진에서 상품을 찾지 못했어요. 잠시 후 다시 시도해 주세요';
+              : '사진에서 상품을 찾지 못했어요.\n잠시 후 다시 시도해 주세요';
         });
       }
       return;
@@ -238,7 +312,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
       if (mounted) {
         setState(() {
           identifying = false;
-          error = '사진에서 상품을 찾지 못했어요. 잠시 후 다시 시도해 주세요';
+          error = '사진에서 상품을 찾지 못했어요.\n잠시 후 다시 시도해 주세요';
         });
       }
       return;
@@ -275,6 +349,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
           }
         }
       case TagIdentifyStatus.notFound:
+        context.read<AppStore>().recordTagFeedback(TagFeedbackAnswer.notFound, result);
         _fillFromTagOnly(result);
     }
   }
@@ -306,6 +381,10 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
   /// 기록하는 이 경우엔 그대로 쓰는 게 맞다. 이미 직접 기록 중이었다면 사용자가 입력한 칸은 덮어쓰지 않는다.
   /// 옷 사진 자리를 보여 주므로 사용자가 찍은 옷 사진이 대표 사진이 된다.
   void _fillFromTagOnly(TagIdentifyResult result) {
+    missedTag = result;
+    if (brandCtrl.text.trim().isEmpty && (result.brand ?? '').trim().isNotEmpty) {
+      brandCtrl.text = result.brand!.trim();
+    }
     final keepTyped = manualMode;
     final suggested = result.suggestedName.trim();
     final name = suggested.isNotEmpty ? suggested : result.tagOnlyName.trim();
@@ -343,6 +422,10 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
   void _answerTagConfirm({required bool same}) {
     final r = tagResult;
     if (r == null) return;
+    context.read<AppStore>().recordTagFeedback(
+      same ? TagFeedbackAnswer.yes : TagFeedbackAnswer.no,
+      r,
+    );
     if (same) {
       setState(() {
         tagConfirmPending = false;
@@ -412,6 +495,16 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
           lines.add('태그에서 읽은 이름·가격으로 채웠어요. 옷 사진을 넣고 확인해서 저장해 주세요');
           break;
         }
+        if (r.skipped) {
+          // 찾을 근거가 없어 일부러 안 찾은 것 — "실패"처럼 보이지 않게, 이유 문구도 붙이지 않는다.
+          lines.add(switch (r.skipReason) {
+            'no_brand' => '태그에서 브랜드를 알 수 없어서, 태그에서 읽은 내용으로만 채웠어요',
+            'no_code' => '태그에서 품번을 읽지 못해서, 태그에서 읽은 내용으로만 채웠어요',
+            _ => '태그에 브랜드와 품번이 없어서, 태그에서 읽은 내용으로만 채웠어요',
+          });
+          lines.add('옷 사진을 넣고 확인해서 저장해 주세요');
+          break;
+        }
         lines.add('판매 페이지는 찾지 못해서, 태그에서 읽은 이름·가격으로 채웠어요');
         lines.add('옷 사진을 넣고 확인해서 저장해 주세요');
         // 서버가 알려 준 이유(예: 시간이 모자람, 품번이 적힌 페이지가 없음) — 다시 시도할지 판단하게.
@@ -461,7 +554,9 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
     final info = ParsedProductInfo(
       name: name,
       price: price,
-      platform: parsed!.platform,
+      platform: manualMode
+          ? (brandCtrl.text.trim().isEmpty ? '직접 기록' : brandCtrl.text.trim())
+          : parsed!.platform,
       image: parsed!.image,
       productUrl: productUrl,
       originalPrice: parsed!.originalPrice,
@@ -548,17 +643,29 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
         await discardUploads();
         return;
       }
+      // 태그로 못 찾았는데(또는 "다른 상품이에요") 사용자가 직접 판매 주소를 넣어 저장했다 —
+      // 엔진이 배울 수 있는 정답이라 익명으로 남긴다(주소와 태그 결과만, 사용자 정보 없음).
+      final missed = missedTag;
+      if (missed != null && toSave.productUrl.isNotEmpty) {
+        store.recordTagFeedback(
+          TagFeedbackAnswer.userLink,
+          missed,
+          userUrl: toSave.productUrl,
+        );
+        missedTag = null;
+      }
       store.setPendingShareUrl(null);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(switch ((clothesPhotoFailed, tagPhotoFailed)) {
-              (true, true) => '${product.name} 을(를) 저장했어요. 옷 사진과 태그 사진은 저장하지 못했어요',
-              (true, false) => '${product.name} 을(를) 저장했어요. 옷 사진은 저장하지 못했어요',
-              (false, true) => '${product.name} 을(를) 저장했어요. 태그 사진은 저장하지 못했어요',
-              (false, false) => '${product.name} 을(를) 저장했어요',
-            }),
-          ),
+        final photoFailed = clothesPhotoFailed || tagPhotoFailed;
+        showTopToast(
+          context,
+          switch ((clothesPhotoFailed, tagPhotoFailed)) {
+            (true, true) => '${product.name} 을(를) 저장했어요.\n옷 사진과 태그 사진은 저장하지 못했어요',
+            (true, false) => '${product.name} 을(를) 저장했어요.\n옷 사진은 저장하지 못했어요',
+            (false, true) => '${product.name} 을(를) 저장했어요.\n태그 사진은 저장하지 못했어요',
+            (false, false) => '${product.name} 을(를) 저장했어요',
+          },
+          duration: Duration(seconds: photoFailed ? 4 : 2),
         );
         context.go('/');
       }
@@ -567,32 +674,28 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
     }
   }
 
-  String _statusText(ParsedProductInfo info) {
-    if (manualMode) {
-      return tagResult != null && tagResult!.status != TagIdentifyStatus.notATag
-          ? '직접 기록 · 태그에서 읽은 값을 채웠어요'
-          : '직접 기록';
-    }
+  /// 상품 정보를 다 못 불러왔을 때 아래에 보여 줄 안내. 서버 상태 같은 내부 사정은 말하지 않고,
+  /// 사용자가 할 일(직접 입력·다시 시도·연결 확인)만 알려 준다. 문장마다 줄을 바꾼다.
+  String _failureText(ParsedProductInfo info) {
     switch (info.extractFailureReason) {
-      case ExtractFailureReason.notLoggedIn:
-        return '로그인하면 상품 정보를 자동으로 읽어요. 지금은 이름과 가격을 직접 입력해 주세요.';
-      case ExtractFailureReason.engineOff:
-        return '지금은 자동 읽기 서버가 꺼져 있어요. 이름과 가격을 직접 입력해 주세요.';
       case ExtractFailureReason.timeout:
-        return '페이지를 읽는 데 시간이 너무 걸렸어요. 다시 시도하거나 직접 입력해 주세요.';
+        return '상품 정보를 불러오는 데 시간이 오래 걸렸어요.\n다시 시도하거나 직접 입력해 주세요.';
       case ExtractFailureReason.network:
-        return '인터넷 연결을 확인해 주세요. 이름과 가격은 직접 입력할 수 있어요.';
-      case ExtractFailureReason.failed:
-        return '이 페이지는 자동으로 읽지 못했어요. 이름과 가격을 직접 입력해 주세요.';
+        return '인터넷 연결을 확인해 주세요.\n상품명과 가격은 직접 입력할 수 있어요.';
       case ExtractFailureReason.ambiguous:
-        return '가격이 여러 개라 확실하지 않아요. 가격을 직접 입력해 주세요.';
+        return '가격이 여러 개라 정확하지 않을 수 있어요.\n가격을 확인해 주세요.';
+      // 로그인 안 한 사람은 이 화면에 못 들어온다(로그인 화면으로 보냄) — 로그인이 중간에 풀린 드문 경우도
+      // 다른 실패와 같은 문구로.
+      case ExtractFailureReason.notLoggedIn:
+      case ExtractFailureReason.engineOff:
+      case ExtractFailureReason.failed:
+        return '상품 정보를 다 불러오지 못했어요.\n상품명과 가격을 확인해 주세요.';
       default:
-        return info.needsManualPrice ? '가격을 직접 입력해 주세요' : 'AI로 읽음';
+        return '가격을 불러오지 못했어요.\n가격을 직접 입력해 주세요.';
     }
   }
 
-  /// 카드의 사진 자리. 직접 찍은 옷 사진이 있으면 그 사진(저장하면 대표 사진이 됨), 없으면 쇼핑몰 사진,
-  /// 직접 기록 중인데 사진이 없으면 눌러서 옷 사진을 넣는 자리.
+  /// 링크로 불러온 상품 카드의 사진 자리(쇼핑몰 사진).
   Widget _imageSlot(ParsedProductInfo info) {
     const size = 72.0;
     final radius = BorderRadius.circular(DiaryTheme.radius);
@@ -616,31 +719,72 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
         ),
       );
     }
-    if (!manualMode) return const SizedBox.shrink();
-    return Semantics(
-      button: true,
-      label: '옷 사진 넣기',
-      child: InkWell(
-        borderRadius: radius,
-        onTap: saving ? null : _pickClothesPhoto,
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            color: DiaryColors.paper,
-            borderRadius: radius,
-            border: Border.all(color: DiaryColors.lineStrong),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.add_a_photo_outlined, color: DiaryColors.inkMuted, size: 22),
-              const SizedBox(height: 2),
-              Text('옷 사진', style: DiaryTheme.body(11, color: DiaryColors.inkMuted)),
-            ],
-          ),
+    return const SizedBox.shrink(); // 직접 기록의 사진은 _photoSlot이 맡는다
+  }
+
+  /// 직접 기록의 사진 칸. 비었으면 눌러서 넣고, 넣은 뒤에는 눌러서 바꾸거나 오른쪽 위 X로 뺀다.
+  Widget _photoSlot({
+    required String label,
+    required Uint8List? bytes,
+    required VoidCallback onAdd,
+    required VoidCallback onRemove,
+    bool loading = false,
+  }) {
+    const size = 88.0;
+    final radius = BorderRadius.circular(DiaryTheme.radius);
+    final disabled = saving || loading;
+    return Column(
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Semantics(
+              button: true,
+              label: bytes == null ? '$label 넣기' : '$label 바꾸기',
+              child: InkWell(
+                borderRadius: radius,
+                onTap: disabled ? null : onAdd,
+                child: Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    color: DiaryColors.paper,
+                    borderRadius: radius,
+                    border: Border.all(color: DiaryColors.lineStrong),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: loading
+                      ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                      : bytes != null
+                      ? Image.memory(bytes, width: size, height: size, fit: BoxFit.cover)
+                      : const Icon(Icons.add_a_photo_outlined, color: DiaryColors.inkMuted, size: 24),
+                ),
+              ),
+            ),
+            if (bytes != null && !loading)
+              Positioned(
+                top: -8,
+                right: -8,
+                child: Semantics(
+                  button: true,
+                  label: '$label 빼기',
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: saving ? null : onRemove,
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: const BoxDecoration(color: DiaryColors.ink, shape: BoxShape.circle),
+                      child: const Icon(Icons.close, size: 14, color: DiaryColors.white),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
-      ),
+        const SizedBox(height: 4),
+        Text(label, style: DiaryTheme.body(11, color: DiaryColors.inkMuted)),
+      ],
     );
   }
 
@@ -652,7 +796,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
     return Scaffold(
       backgroundColor: DiaryColors.paper,
       appBar: AppBar(
-        title: const Text('공유 담기'),
+        title: const Text('상품 추가'),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => context.go('/'),
@@ -667,7 +811,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
               children: [
                 // 한 줄로 — 좁은 화면에서는 줄바꿈 대신 글자를 살짝 줄인다.
                 OneLineText(
-                  '다른 앱에서 공유한 링크를 wishkit 카드로 정리해요',
+                  '쇼핑몰 링크를 붙이거나, 매장에서 본 옷을 기록해요',
                   style: DiaryTheme.body(13, color: DiaryColors.inkMuted),
                 ),
                 const SizedBox(height: 14),
@@ -675,7 +819,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   controller: urlCtrl,
                   maxLines: 3,
                   decoration: InputDecoration(
-                    labelText: '상품 URL 또는 공유 텍스트',
+                    labelText: '상품 링크',
                     filled: true,
                     fillColor: DiaryColors.white,
                     border: OutlineInputBorder(
@@ -690,28 +834,39 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                 const SizedBox(height: 10),
                 // 읽는 동안은 버튼 글자 왼쪽에 도는 표시.
                 DiaryButton(
-                  label: loading ? '상품 페이지를 읽는 중...' : '상품 읽기',
+                  label: loading ? '상품 정보를 불러오는 중...' : '상품 불러오기',
                   filled: true,
                   loading: loading,
                   onPressed: loading || identifying ? () {} : _parse,
                 ),
-                const SizedBox(height: 8),
-                DiaryButton(
-                  label: identifying
-                      ? '태그를 읽고 판매 페이지를 찾는 중... (최대 30초)'
-                      : '태그 사진으로 찾기',
-                  icon: Icons.photo_camera_outlined,
-                  loading: identifying,
-                  onPressed: loading || identifying ? null : _pickTagPhoto,
-                ),
+                // 읽는 중에만 — 기다리지 않고 직접 입력하거나 다른 링크를 넣을 수 있게.
+                if (loading) ...[
+                  const SizedBox(height: 8),
+                  DiaryButton(
+                    label: '불러오기 취소',
+                    icon: Icons.close,
+                    onPressed: _cancelParse,
+                  ),
+                ],
+                if (kTagAutoFind) ...[
+                  const SizedBox(height: 8),
+                  DiaryButton(
+                    label: identifying
+                        ? '태그를 읽고 판매 페이지를 찾는 중... (최대 30초)'
+                        : '태그 사진으로 찾기',
+                    icon: Icons.photo_camera_outlined,
+                    loading: identifying,
+                    onPressed: loading || identifying ? null : _pickTagPhoto,
+                  ),
+                ],
                 // 아직 아무것도 못 읽었거나 링크 읽기가 실패했을 때만 — 읽은 쇼핑몰 정보를 덮어쓰지 않게.
                 if (!manualMode &&
                     !identifying &&
                     (parsed == null || parsed!.extractFailureReason != null)) ...[
                   const SizedBox(height: 8),
-                  // 링크도 없고 태그로도 못 찾을 때(오프라인 매장 등) — 옷 사진·이름·가격만으로 기록.
+                  // 링크가 없을 때(오프라인 매장 등) — 옷 사진·태그 사진·이름·가격으로 직접 기록.
                   DiaryButton(
-                    label: '사진으로 직접 기록하기',
+                    label: kTagAutoFind ? '사진으로 직접 기록하기' : '매장에서 본 옷 직접 기록하기',
                     icon: Icons.edit_note_outlined,
                     onPressed: loading ? null : _startManual,
                   ),
@@ -761,7 +916,7 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                                 ),
                               if (tagPhoto != null)
                                 Text(
-                                  '저장하면 태그 사진도 함께 저장돼요 (나만 볼 수 있어요)',
+                                  '태그 사진은 함께 저장되고, 나만 볼 수 있어요',
                                   style: DiaryTheme.body(
                                     11,
                                     color: DiaryColors.inkSoft,
@@ -817,7 +972,47 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                 ],
                 if (parsed != null) ...[
                   const SizedBox(height: 16),
-                  WhiteProductCard(
+                  if (manualMode) ...[
+                    // 직접 기록: 사진 칸 두 개만 — 누르면 넣고, 넣은 사진은 X로 빼고 다시 넣는다.
+                    WhiteProductCard(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _photoSlot(
+                            label: '옷 사진',
+                            bytes: clothesPhoto,
+                            onAdd: _pickClothesPhoto,
+                            onRemove: _removeClothesPhoto,
+                          ),
+                          const SizedBox(width: 12),
+                          _photoSlot(
+                            label: '태그 사진 (선택)',
+                            bytes: tagPhoto,
+                            onAdd: _pickTagPhoto,
+                            onRemove: _removeTagPhoto,
+                            loading: identifying,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (tagPhoto != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '태그 사진은 나만 볼 수 있어요',
+                        style: DiaryTheme.body(11, color: DiaryColors.inkSoft),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: brandCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '브랜드 (선택)',
+                        filled: true,
+                        fillColor: DiaryColors.white,
+                      ),
+                    ),
+                  ] else
+                    WhiteProductCard(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -834,53 +1029,12 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                                   color: DiaryColors.inkMuted,
                                 ),
                               ),
-                              Text(
-                                _statusText(parsed!),
-                                style: DiaryTheme.body(
-                                  11,
-                                  color: DiaryColors.accent,
-                                ),
-                              ),
                             ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                  if (clothesPhoto != null || manualMode) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DiaryButton(
-                            label: clothesPhoto == null ? '옷 사진 넣기' : '옷 사진 바꾸기',
-                            icon: Icons.checkroom_outlined,
-                            onPressed: saving ? null : _pickClothesPhoto,
-                          ),
-                        ),
-                        if (clothesPhoto != null) ...[
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: DiaryButton(
-                              label: '옷 사진 빼기',
-                              icon: Icons.close,
-                              onPressed: saving ? null : _removeClothesPhoto,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    // 직접 기록 중인데 아직 태그를 안 찍었으면 — 찍으면 이름·가격을 읽어 채우고, 태그 사진도 남는다.
-                    if (manualMode && tagPhoto == null) ...[
-                      const SizedBox(height: 8),
-                      DiaryButton(
-                        label: identifying ? '태그를 읽는 중...' : '태그 사진 넣기 (이름·가격 자동 입력)',
-                        icon: Icons.sell_outlined,
-                        loading: identifying,
-                        onPressed: identifying || saving ? null : _pickTagPhoto,
-                      ),
-                    ],
-                  ],
                   const SizedBox(height: 12),
                   TextField(
                     controller: titleCtrl,
@@ -935,30 +1089,20 @@ class _ShareIntakeScreenState extends State<ShareIntakeScreen> {
                   // 제대로 읽었으면 가격 기준 안내, 못 읽었으면 직접 입력 안내.
                   if (manualMode)
                     Text(
-                      '매장에서 본 상품을 직접 기록해요. 가격이 비어 있으면 직접 입력해 주세요.',
+                      '매장에서 본 옷을 직접 기록해요.\n상품명과 가격을 입력해 주세요.',
                       style: DiaryTheme.body(11, color: DiaryColors.inkMuted),
                     )
                   else if (parsed!.extractFailureReason != null ||
                       parsed!.needsManualPrice)
                     Text(
-                      '상품 정보를 읽지 못했어요. 상품명과 판매가를 직접 입력해 주세요.',
+                      _failureText(parsed!),
                       style: DiaryTheme.body(12, color: DiaryColors.pin),
                     )
                   else
                     Text(
-                      '쿠폰을 제외한 기본 판매가예요. 옵션에 따라 가격이 달라질 수 있어요.',
+                      '쿠폰을 제외한 기본 판매가예요.\n옵션에 따라 가격이 달라질 수 있어요.',
                       style: DiaryTheme.body(11, color: DiaryColors.inkMuted),
                     ),
-                  if (!manualMode &&
-                      parsed!.missingFields.isNotEmpty &&
-                      parsed!.extractFailureReason == null &&
-                      !parsed!.needsManualPrice) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '보완 필요: ${parsed!.missingFields.join(', ')}',
-                      style: DiaryTheme.body(12, color: DiaryColors.pin),
-                    ),
-                  ],
                   const SizedBox(height: 14),
                   Text(
                     '어느 폴더로 보낼까요?',

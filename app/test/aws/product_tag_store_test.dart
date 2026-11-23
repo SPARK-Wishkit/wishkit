@@ -25,11 +25,18 @@ class _FakeRunner implements GqlRunner {
     return response;
   }
 
+  String? lastMutation;
+  Map<String, dynamic>? lastMutationVariables;
+
   @override
   Future<Map<String, dynamic>> mutate(
     String document, {
     Map<String, dynamic> variables = const {},
-  }) => throw UnimplementedError();
+  }) async {
+    lastMutation = document;
+    lastMutationVariables = variables;
+    return {'createTagFeedback': {'id': 'x'}};
+  }
 }
 
 void main() {
@@ -109,6 +116,92 @@ void main() {
     expect(r.hasMatchDetails, isTrue);
     expect(r.matchPrice, 269100);
     expect(r.matchRegularPrice, 299000);
+  });
+
+  test('피드백은 익명으로, 엔진 결과와 답만 보낸다', () async {
+    final runner = _FakeRunner(const {});
+    final store = AwsProductTagStore(runner: runner);
+    const result = TagIdentifyResult(
+      status: TagIdentifyStatus.needsConfirm,
+      brand: 'BEAKER',
+      productCode: 'QQ6X39EP20',
+      matchUrl: 'https://www.ssfshop.com/BEAKER/GM0026101660266/good',
+      matchHost: 'ssfshop.com',
+      verifiedBy: 'search',
+      tagPrice: 298000,
+    );
+    await store.sendFeedback(TagFeedbackAnswer.no, result);
+
+    expect(runner.lastMutation, Gql.createTagFeedback);
+    final input = runner.lastMutationVariables!['input'] as Map<String, dynamic>;
+    expect(input['answer'], 'no');
+    expect(input['engineStatus'], 'needs_confirm');
+    expect(input['productCode'], 'QQ6X39EP20');
+    // 가격·사용자 정보는 보내지 않고, 빈 값(matchVia)은 아예 빠진다.
+    expect(input.keys, isNot(contains('tagPrice')));
+    expect(input.keys, isNot(contains('ownerId')));
+    expect(input.containsKey('matchVia'), isFalse);
+  });
+
+  test('직접 넣은 링크는 user_link와 userUrl, traceId로 보낸다', () async {
+    final runner = _FakeRunner(const {});
+    await AwsProductTagStore(runner: runner).sendFeedback(
+      TagFeedbackAnswer.userLink,
+      const TagIdentifyResult(
+        status: TagIdentifyStatus.notFound,
+        brand: 'PIEDPIPER',
+        traceId: 'abc123',
+        cause: 'search_empty',
+      ),
+      userUrl: 'https://www.musinsa.com/products/1234567',
+    );
+    final input = runner.lastMutationVariables!['input'] as Map<String, dynamic>;
+    expect(input['answer'], 'user_link');
+    expect(input['userUrl'], 'https://www.musinsa.com/products/1234567');
+    expect(input['traceId'], 'abc123');
+    expect(input['cause'], 'search_empty');
+  });
+
+  test('userUrl은 user_link일 때만 보낸다', () async {
+    final runner = _FakeRunner(const {});
+    await AwsProductTagStore(runner: runner).sendFeedback(
+      TagFeedbackAnswer.yes,
+      const TagIdentifyResult(status: TagIdentifyStatus.found),
+      userUrl: 'https://example.com/x',
+    );
+    final input = runner.lastMutationVariables!['input'] as Map<String, dynamic>;
+    expect(input.containsKey('userUrl'), isFalse);
+  });
+
+  test('못 불러옴은 not_found로 보낸다', () async {
+    final runner = _FakeRunner(const {});
+    await AwsProductTagStore(runner: runner).sendFeedback(
+      TagFeedbackAnswer.notFound,
+      const TagIdentifyResult(status: TagIdentifyStatus.notFound, brand: 'PIEDPIPER'),
+    );
+    final input = runner.lastMutationVariables!['input'] as Map<String, dynamic>;
+    expect(input, {'answer': 'not_found', 'engineStatus': 'not_found', 'brand': 'PIEDPIPER'});
+  });
+
+  test('브랜드·품번이 없어 찾지 않은 결과는 skippedNoBrand', () {
+    final r = TagIdentifyResult.fromJson({
+      'status': 'not_found',
+      'productName': '야크 울 리브 하프 집업 스웨터',
+      'tagPrice': 99900,
+      'skipReason': 'no_brand_no_code',
+    });
+    expect(r.status, TagIdentifyStatus.notFound);
+    expect(r.skippedNoBrand, isTrue);
+    expect(r.tagPrice, 99900);
+    expect(TagIdentifyResult.fromJson({'status': 'not_found'}).skippedNoBrand, isFalse);
+  });
+
+  test('브랜드나 품번 하나만 없어도 skipped', () {
+    for (final reason in ['no_brand', 'no_code', 'no_brand_no_code']) {
+      final r = TagIdentifyResult.fromJson({'status': 'not_found', 'skipReason': reason});
+      expect(r.skipped, isTrue, reason: reason);
+    }
+    expect(TagIdentifyResult.fromJson({'status': 'not_found'}).skipped, isFalse);
   });
 
   test('태그 QR로 찾은 결과는 foundByQr', () {
