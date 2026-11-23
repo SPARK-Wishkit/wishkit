@@ -12,6 +12,8 @@ import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../theme/list_card.dart';
+import '../../tutorial/tutorial_content.dart';
+import '../../tutorial/tutorial_target.dart';
 import '../../widgets/diary_widgets.dart';
 import '../../widgets/top_toast.dart';
 
@@ -126,41 +128,45 @@ class _WishlistScreenState extends State<WishlistScreen> {
                                         onDelete: () =>
                                             store.removeProduct(p.id),
                                       );
-                                      return LayoutBuilder(
-                                        builder: (context, constraints) {
-                                          return LongPressDraggable<Product>(
-                                            data: p,
-                                            onDragStarted: () =>
-                                                HapticFeedback.mediumImpact(),
-                                            onDragUpdate: (details) =>
-                                                _tabsRowKey.currentState
-                                                    ?.updateAutoScroll(
-                                                      details.globalPosition,
-                                                    ),
-                                            onDragEnd: (_) => _tabsRowKey
-                                                .currentState
-                                                ?.endAutoScrollDrag(),
-                                            // See-through while dragging, so the
-                                            // folder tab underneath stays visible.
-                                            feedback: Opacity(
-                                              opacity: 0.6,
-                                              child: Material(
-                                                color: Colors.transparent,
-                                                borderRadius:
-                                                    BorderRadius.circular(DiaryTheme.radius),
-                                                child: SizedBox(
-                                                  width: constraints.maxWidth,
-                                                  child: card,
+                                      return TutorialTarget(
+                                        id: TutorialTargets.firstCard,
+                                        enabled: adFeed.itemIndex(i) == 0,
+                                        child: LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            return LongPressDraggable<Product>(
+                                              data: p,
+                                              onDragStarted: () =>
+                                                  HapticFeedback.mediumImpact(),
+                                              onDragUpdate: (details) =>
+                                                  _tabsRowKey.currentState
+                                                      ?.updateAutoScroll(
+                                                        details.globalPosition,
+                                                      ),
+                                              onDragEnd: (_) => _tabsRowKey
+                                                  .currentState
+                                                  ?.endAutoScrollDrag(),
+                                              // See-through while dragging, so the
+                                              // folder tab underneath stays visible.
+                                              feedback: Opacity(
+                                                opacity: 0.6,
+                                                child: Material(
+                                                  color: Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(DiaryTheme.radius),
+                                                  child: SizedBox(
+                                                    width: constraints.maxWidth,
+                                                    child: card,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                            childWhenDragging: Opacity(
-                                              opacity: 0.35,
+                                              childWhenDragging: Opacity(
+                                                opacity: 0.35,
+                                                child: card,
+                                              ),
                                               child: card,
-                                            ),
-                                            child: card,
-                                          );
-                                        },
+                                            );
+                                          },
+                                        ),
                                       );
                                     },
                                   ),
@@ -636,7 +642,10 @@ class _TabsRowState extends State<_TabsRow> {
       ),
       footer: Padding(
         padding: const EdgeInsets.only(right: 12),
-        child: _AddListTab(onTap: widget.onAdd),
+        child: TutorialTarget(
+          id: TutorialTargets.addFolder,
+          child: _AddListTab(onTap: widget.onAdd),
+        ),
       ),
       itemCount: custom.length,
       itemBuilder: (context, index) {

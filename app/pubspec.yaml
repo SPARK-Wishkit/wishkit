@@ -96,6 +96,8 @@ flutter:
     - assets/share/og-wishkit.png
     # 앱 안 wishkit 로고(공유 미리보기 이미지와 같은 그림, 별 포함)
     - assets/brand/wishkit-logo.png
+    # 첫 방문 튜토리얼 가운데 상자의 그림(자리표시자 — 팀이 실제 그림으로 교체)
+    - assets/tutorial/share_guide.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

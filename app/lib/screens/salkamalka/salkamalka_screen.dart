@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
+import '../../tutorial/tutorial_content.dart';
+import '../../tutorial/tutorial_target.dart';
 import '../../widgets/diary_widgets.dart';
 import '../../widgets/top_toast.dart';
 import '../share/share_link.dart';
@@ -186,18 +188,24 @@ class SalkamalkaScreen extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: DiaryButton(
-                      label: '상품 추가하기',
-                      icon: Icons.add,
-                      onPressed: () =>
-                          _openPickFromWishlistSheet(context, store),
+                    child: TutorialTarget(
+                      id: TutorialTargets.basketAdd,
+                      child: DiaryButton(
+                        label: '상품 추가하기',
+                        icon: Icons.add,
+                        onPressed: () =>
+                            _openPickFromWishlistSheet(context, store),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _ShareBasketButton(
-                      store: store,
-                      selected: selected,
+                    child: TutorialTarget(
+                      id: TutorialTargets.basketShare,
+                      child: _ShareBasketButton(
+                        store: store,
+                        selected: selected,
+                      ),
                     ),
                   ),
                 ],
