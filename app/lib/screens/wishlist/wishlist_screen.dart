@@ -31,6 +31,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
   Widget build(BuildContext context) {
     final store = context.watch<AppStore>();
     final tab = store.selectedTab;
+    if (tab == null) return _LoadingHome(error: store.backendError);
     final products = store.displayedProducts;
     final adFeed = AdFeed(products.length, every: AdsConfig.feedEvery);
 
@@ -409,6 +410,43 @@ class _WishlistScreenState extends State<WishlistScreen> {
 /// Double-tap opens the edit sheet (rename / delete / privacy).
 /// Plain swipe scrolls; ReorderableDelayedDragStartListener's delay is what
 /// lets that swipe pass through to the scrollable instead of starting a drag.
+/// 폴더를 아직 못 불러왔을 때(가입·로그인 직후) 홈 화면. 불러오기가 실패했으면 그 안내를 보여 준다.
+class _LoadingHome extends StatelessWidget {
+  const _LoadingHome({this.error});
+
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: DiaryColors.canvas,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: WishkitLogo(size: 30),
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: error == null
+                    ? const CircularProgressIndicator()
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(error!, textAlign: TextAlign.center),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TabsRow extends StatefulWidget {
   const _TabsRow({
     super.key,
@@ -574,7 +612,8 @@ class _TabsRowState extends State<_TabsRow> {
   Widget build(BuildContext context) {
     final store = widget.store;
     final custom = store.customTabs;
-    final allTab = store.tabs.first;
+    final allTab = store.tabs.firstOrNull;
+    if (allTab == null) return const SizedBox.shrink();
     final validIds = {allTab.id, ...custom.map((t) => t.id)};
     _chipKeys.removeWhere((id, _) => !validIds.contains(id));
     return ReorderableListView.builder(

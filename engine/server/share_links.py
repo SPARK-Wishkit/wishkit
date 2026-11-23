@@ -34,6 +34,9 @@ SHORT_LINK_SUFFIXES = (
     "bit.ly",
     "han.gl",
     "url.kr",
+    # Airbridge(에이블리 앱 공유). PC UA 로 열면 302 → m.a-bly.com/goods/…, 휴대폰 UA 면 ably.airbridge.io(앱
+    # 이동 페이지)로 간다 — 휴대폰 UA 로 그대로 렌더링하면 12초 시간 초과였다(2026-11-19 운영 로그).
+    "applink.a-bly.com",
 )
 
 # 앱으로 보내는 주소 안에 들어 있는 "웹으로 열 때 갈 주소" 파라미터 (앞에 있을수록 우선)
@@ -45,6 +48,44 @@ DESKTOP_UA = (
 )
 MAX_HOPS = 6
 TOTAL_TIMEOUT_S = 4.0  # 엔진 전체 25초 안에서 렌더링·AI 에 시간을 남긴다
+
+
+def strip_query(url: str) -> str:
+    """로그·오류 메시지용: 쿼리·조각을 뺀 `scheme://host/path`. 공유로 풀린 주소에는 공유한 사람을 가리키는
+    값(af_referrer_customer_id 등)이 붙어 있어 그대로 남기지 않는다. 주소가 아니면 그대로 돌려준다."""
+    parts = urllib.parse.urlsplit(url or "")
+    if not parts.scheme or not parts.netloc:
+        return url
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
+# 저장용 주소에서 지울 공유·광고 추적 파라미터(이름 기준, 대소문자 무시). 여기 없는 파라미터는 절대 지우지 않는다
+# — 쿼리에 상품 번호가 들어 있는 몰(`goods?no=123` 등)이 있어서 쿼리 전체를 지우면 안 된다.
+TRACKING_PARAM_PREFIXES = ("utm_", "af_", "airbridge", "deep_link_")
+TRACKING_PARAM_NAMES = frozenset({
+    "shortlink", "pid", "is_retargeting", "source_caller", "onelink_id", "fbclid", "gclid", "igshid",
+})
+
+
+def _is_tracking_param(name: str) -> bool:
+    name = name.lower()
+    return name in TRACKING_PARAM_NAMES or name.startswith(TRACKING_PARAM_PREFIXES)
+
+
+def strip_tracking_params(url: str | None) -> str | None:
+    """저장용: 앱이 상품 주소로 저장하는 주소에서 **알려진 추적 파라미터만** 지운다(공유한 사람 식별값 등 —
+    무신사 `af_referrer_customer_id`, 에이블리 `airbridge_referrer`, `utm_*`). 나머지 쿼리와 순서·인코딩은
+    그대로 두고, 남는 쿼리가 없으면 `?` 도 없앤다. 쿼리 전체를 지우는 `strip_query`(로그용)와 다르다."""
+    if not url:
+        return url
+    parts = urllib.parse.urlsplit(url)
+    if not parts.query:
+        return url
+    kept = [
+        piece for piece in parts.query.split("&")
+        if piece and not _is_tracking_param(urllib.parse.unquote_plus(piece.split("=", 1)[0]))
+    ]
+    return urllib.parse.urlunsplit(parts._replace(query="&".join(kept)))
 
 
 def _host(url: str) -> str:
@@ -159,7 +200,12 @@ def resolve_share_link(url: str, *, fetch=_fetch, total_timeout: float = TOTAL_T
             current = nxt
     except Exception as exc:  # noqa: BLE001 — 못 풀면 원래 주소로 렌더링을 시도한다
         logger.warning("공유 링크 풀기 실패(%s): %s", url, exc)
+        # 이미 짧은 링크를 벗어나 쇼핑몰 주소까지 왔으면 그 주소를 쓴다. 쇼핑몰이 서버의 단순 HTTP 요청만
+        # 막는 경우가 있다(2026-11-19 에이블리: applink 302 → m.a-bly.com 에 urllib 403, 브라우저는 열림).
+        if current != url and _is_web(current) and not is_short_link(current):
+            logger.info("공유 링크 → 상품 주소(마지막 요청은 실패, 여기까지 사용): %s → %s", url, strip_query(current))
+            return current
         return web_fallback_in(url) or url
     if current != url:
-        logger.info("공유 링크 → 상품 주소: %s → %s", url, current)
+        logger.info("공유 링크 → 상품 주소: %s → %s", url, strip_query(current))
     return current

@@ -16,7 +16,7 @@
 | 4.9 공개 링크 안내 | 링크 공유 메뉴에 "누구나 28일 동안 볼 수 있어요 (상품 메모 포함)" | — |
 | 5.1–5.2 약관 동의 | 회원가입 [필수] 동의 + 서버(pre-sign-up)가 동의 버전 없으면 거절 | — |
 | 5.3–5.5 신고·차단·관리 | ⋯ 메뉴 신고·차단, 차단 관계면 살까말까·댓글·투표·알림·공개 위시리스트 서버에서 거부, 금칙어 필터, 신고 메일 | ☐ 담당자 (MODERATION.md) |
-| 6.1 AdMob | `android/gradle.properties` 의 `admobAndroidAppId`, 광고 단위는 `--dart-define` | ☐ 실제 ID (2번) |
+| 6.1 AdMob | `android/gradle.properties` 의 `admobAndroidAppId`, 광고 단위는 `scripts/build_android_release.sh` 가 `--dart-define` 으로 | ✅ 실제 ID 적용됨 (2번) · ☐ 광고 콘텐츠 등급 |
 | 6.5 운영 백엔드 | Amplify 앱 `d10l8u76nc8eda`, main, 서울 | — |
 
 ## 1. 업로드 키 만들기 (2.1)
@@ -30,25 +30,36 @@ cp app/android/key.properties.example app/android/key.properties   # 값 채우�
 - Play Console 에서 **Play 앱 서명**을 켠다 (기본값).
 - `key.properties` 가 없으면 빌드 로그에 `debug 키로 서명` 경고가 뜬다. 그 .aab 는 올리지 말 것.
 
-## 2. AdMob 실제 ID (6.1)
+## 2. AdMob 실제 ID (6.1) — 적용됨 (2026-11-22)
 
-1. AdMob 콘솔 → 앱 추가 → Android → 앱 ID(`ca-app-pub-…~…`)를 `app/android/gradle.properties` 의 `admobAndroidAppId` 에.
-2. 네이티브·배너 광고 단위를 만들어 빌드할 때 넣는다.
-3. AdMob → 차단 관리 → 최대 광고 콘텐츠 등급을 앱 등급에 맞춘다.
+팀 AdMob 계정 `pub-8101096133732475`, Android 앱 "WishKit". ID 는 비밀이 아니다(앱에 그대로 들어감).
+
+| 용도 | ID | 넣는 곳 |
+|---|---|---|
+| Android 앱 ID | `ca-app-pub-8101096133732475~2266367309` | `app/android/gradle.properties` 의 `admobAndroidAppId` (→ manifest `APPLICATION_ID`, debug·release 공통) |
+| 네이티브 고급 (`android_native`) | `ca-app-pub-8101096133732475/2293241289` | `--dart-define=ADMOB_NATIVE_ANDROID` — `scripts/build_android_release.sh` 기본값 |
+| 배너 (`android_banner`) | `ca-app-pub-8101096133732475/7327122292` | `--dart-define=ADMOB_BANNER_ANDROID` — 같은 스크립트. 태그 찾기 화면에서만 쓰여 지금 출시 앱(태그 찾기 꺼짐)에서는 안 나옴 |
+
+- 광고 단위를 넣지 않은 빌드(`flutter run`, debug)는 **구글 테스트 광고 단위**가 나온다 — 개발 중 실제 광고를 눌러 계정이 정지되지 않게. 실제 광고는 아래 스크립트로 만든 출시 빌드에서만.
+- [x] 앱 ID · 광고 단위 ID
+- [ ] AdMob → 차단 관리 → 최대 광고 콘텐츠 등급을 앱 등급에 맞춘다.
 
 ## 3. 빌드
 
 ```bash
-cd app
-npx ampx generate outputs --app-id d10l8u76nc8eda --branch main --format dart --out-dir lib   # 운영 백엔드 주소록
-flutter build appbundle --release \
-  --build-number="$(git rev-list --count HEAD)" \
-  --dart-define=ADMOB_NATIVE_ANDROID=ca-app-pub-…/… \
-  --dart-define=ADMOB_BANNER_ANDROID=ca-app-pub-…/…
-# → build/app/outputs/bundle/release/app-release.aab
+# 운영 백엔드 주소록(처음 한 번, 백엔드가 바뀌었을 때) — AWS 자격 증명 필요
+(cd app && npx ampx generate outputs --app-id d10l8u76nc8eda --branch main --format dart --out-dir lib)
+
+scripts/build_android_release.sh
+# → app/build/app/outputs/bundle/release/app-release.aab
 ```
-버전 코드(빌드 번호)는 git 커밋 수로 정해서 업로드마다 저절로 커진다 — `pubspec.yaml` 의 `+N` 은 안 고쳐도 된다.
-같은 커밋으로 다시 올려야 하면 `--build-number` 에 이전보다 큰 숫자를 직접 넣는다.
+스크립트가 하는 일: 주소록에 `siteBaseUrl` 이 있는지 · `android/key.properties` 와 키 파일이 있는지 · AdMob 앱 ID·광고 단위가
+구글 테스트 값이 아닌지 검사 → `flutter analyze`(오류만 실패) · `flutter test` → `flutter build appbundle --release`
+(빌드 번호 = 커밋 수, 광고 단위 dart-define 포함) → debug 키 서명이면 실패.
+
+- 버전 코드(빌드 번호)는 git 커밋 수로 정해서 업로드마다 저절로 커진다 — `pubspec.yaml` 의 `+N` 은 안 고쳐도 된다.
+  같은 커밋으로 다시 올려야 하면 `BUILD_NUMBER=148 scripts/build_android_release.sh` 처럼 이전보다 큰 숫자를 직접 넣는다.
+- 테스트를 이미 돌렸으면 `SKIP_TESTS=1`. 광고 단위를 바꾸려면 `ADMOB_NATIVE_ANDROID=… ADMOB_BANNER_ANDROID=…`.
 
 ## 4. Play Console 입력
 

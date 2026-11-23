@@ -98,3 +98,111 @@ def test_identify_tag_rejects_oversized_base64_before_decoding(monkeypatch):
         resp = client.post("/identify-tag", json={"image_base64": "A" * 12})
     assert resp.status_code == 413
     assert str(config.IDENTIFY_MAX_IMAGE_BYTES) in resp.json()["detail"]
+
+
+def test_extract_blocked_logs_reason_without_share_query(monkeypatch, caplog):
+    """차단 502 는 엔진 로그에도 이유(문구·status)를 남기고, 주소의 쿼리(공유자 식별값)는 빼고 남긴다."""
+    import logging
+
+    import main
+    from render import RenderResult
+
+    async def fake_render(browser, url, *, nav_timeout_ms):
+        return RenderResult(final_url=url, blocked=True, status_code=403,
+                            block_reason='"Access Denied" | Access Denied You don\'t have permission')
+
+    monkeypatch.setattr(main, "render", fake_render)
+    url = "https://www.musinsa.com/products/7489748?af_referrer_customer_id=abc123&shortlink=wwp934zk"
+    with caplog.at_level(logging.WARNING, logger="extract-server"), TestClient(app) as client:
+        resp = client.post("/extract", json={"url": url})
+
+    assert resp.status_code == 502
+    detail = resp.json()["detail"]
+    assert "status=403" in detail and "final_url=https://www.musinsa.com/products/7489748)" in detail
+    assert "abc123" not in detail
+    lines = [r.getMessage() for r in caplog.records if "[extract] 차단" in r.getMessage()]
+    assert len(lines) == 1
+    assert "host=www.musinsa.com status=403" in lines[0]
+    assert "Access Denied" in lines[0] and "final_url=https://www.musinsa.com/products/7489748 " in lines[0]
+    assert "abc123" not in caplog.text
+
+
+def test_extract_log_line_shows_the_nested_price(monkeypatch, caplog):
+    """[extract] host=… price=… 줄은 응답의 price.unconditional_price 를 찍는다(예전엔 바깥에서 찾아 늘 None)."""
+    import logging
+
+    import main
+    from providers import ProviderResult
+    from render import RenderResult
+
+    async def fake_render(browser, url, *, nav_timeout_ms):
+        return RenderResult(final_url=url, cleaned_html="<p>후드집업 21,500원</p>", raw_text="후드집업 21,500원")
+
+    data = {"product_name": "후드집업", "image_url": None, "ambiguous": False, "ambiguity_reason": None,
+            "confidence": "high", "price": {"unconditional_price": 21500, "regular_price": None, "currency": "KRW"}}
+    monkeypatch.setattr(main, "render", fake_render)
+    monkeypatch.setattr(main, "call_gemini", lambda html: ProviderResult("gemini", "fake", True, data, 1))
+    with caplog.at_level(logging.INFO, logger="extract-server"), TestClient(app) as client:
+        resp = client.post("/extract", json={"url": "https://m.a-bly.com/goods/51469717"})
+
+    assert resp.status_code == 200
+    assert resp.json()["price"]["unconditional_price"] == 21500
+    lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("[extract] host=")]
+    assert len(lines) == 1 and "host=m.a-bly.com price=21500 " in lines[0]
+
+
+def test_extract_success_final_url_drops_only_tracking_params(monkeypatch):
+    """성공 응답의 render.final_url(앱이 상품 주소로 저장)은 공유 추적값만 빠지고 나머지 쿼리는 남는다."""
+    import main
+    from providers import ProviderResult
+    from render import RenderResult
+
+    rendered = "https://example.com/goods?no=123&af_referrer_customer_id=abc123&utm_source=share"
+
+    async def fake_render(browser, url, *, nav_timeout_ms):
+        return RenderResult(final_url=rendered, cleaned_html="<p>후드집업 21,500원</p>", raw_text="후드집업 21,500원")
+
+    data = {"product_name": "후드집업", "image_url": None, "ambiguous": False, "ambiguity_reason": None,
+            "confidence": "high", "price": {"unconditional_price": 21500, "regular_price": None, "currency": "KRW"}}
+    monkeypatch.setattr(main, "render", fake_render)
+    monkeypatch.setattr(main, "call_gemini", lambda html: ProviderResult("gemini", "fake", True, data, 1))
+    with TestClient(app) as client:
+        resp = client.post("/extract", json={"url": "https://example.com/goods?no=123"})
+
+    assert resp.status_code == 200
+    assert resp.json()["render"]["final_url"] == "https://example.com/goods?no=123"
+    assert "abc123" not in resp.text
+
+
+def test_extract_ably_coupon_price_corrected_without_vision(monkeypatch, caplog):
+    """에이블리: AI 가 웹 전용 쿠폰가(29,210)를 골라도 즉시할인가(32,450)로 바로잡고, 스크린샷 폴백은 부르지 않는다."""
+    import logging
+
+    import main
+    from providers import ProviderResult
+    from render import RenderResult
+    from test_price_rules import ABLY_77103060
+
+    async def fake_render(browser, url, *, nav_timeout_ms):
+        return RenderResult(final_url="https://mobile.a-bly.com/goods/77103060",
+                            cleaned_html="<p>후드집업</p>", raw_text=ABLY_77103060, screenshot=b"jpg")
+
+    data = {"product_name": "[컬러포인트🖤] 루이 홀스 후드집업 (5color)", "image_url": None, "ambiguous": True,
+            "ambiguity_reason": "가격 후보 여러 개", "confidence": "medium",
+            "price": {"unconditional_price": 29210, "regular_price": 34900, "currency": "KRW"}}
+
+    def no_vision(*args, **kwargs):
+        raise AssertionError("규칙으로 확정되면 스크린샷 폴백을 부르지 않아야 한다")
+
+    monkeypatch.setattr(main, "render", fake_render)
+    monkeypatch.setattr(main, "call_gemini", lambda html: ProviderResult("gemini", "fake", True, data, 1))
+    monkeypatch.setattr(main, "call_gemini_vision", no_vision)
+    with caplog.at_level(logging.INFO, logger="extract-server"), TestClient(app) as client:
+        resp = client.post("/extract", json={"url": "https://m.a-bly.com/goods/77103060"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["price"]["unconditional_price"] == 32450
+    assert body["price"]["regular_price"] == 34900
+    assert body["ambiguous"] is False and body["screenshot_fallback_used"] is False
+    assert "[price-rule] host=mobile.a-bly.com 에이블리 즉시할인가로 교정: 29210 → 32450" in caplog.text

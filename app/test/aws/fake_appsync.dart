@@ -371,7 +371,6 @@ class FakeAppSync implements GqlRunner {
           'parentId': parentId, 'participantIds': participants,
           'data': jsonEncode(comment),
         };
-        final owner = thread['ownerId'] as String;
         final targets = <String>{};
         if (owner != caller) targets.add(owner);
         if (parentId.isNotEmpty) {
