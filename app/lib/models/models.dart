@@ -281,6 +281,8 @@ class SharedBasket {
     this.publicUrlExpiresAt,
     this.memo = '',
     this.threadId = '',
+    this.allowMultipleVotes = true,
+    this.voteEnabled = true,
   });
 
   final String id;
@@ -316,6 +318,14 @@ class SharedBasket {
   /// recipient copy point at the same thread.
   final String threadId;
 
+  /// Whether participants may select more than one product in this poll.
+  /// Defaults to true for baskets created before this setting existed.
+  final bool allowMultipleVotes;
+
+  /// Whether the sender attached a poll at all. Fixed at the first send;
+  /// baskets from before this setting count as having one.
+  final bool voteEnabled;
+
   /// Only friend-sent baskets belong in the 내 친구 탭 feed; link / KakaoTalk
   /// shares stay in 마이페이지 > 내가 보낸 살까말까.
   bool get sharedToFriends => channels.contains(SharedChannel.friends);
@@ -342,6 +352,8 @@ class SharedBasket {
     DateTime? publicUrlExpiresAt,
     String? memo,
     String? threadId,
+    bool? allowMultipleVotes,
+    bool? voteEnabled,
   }) {
     return SharedBasket(
       id: id,
@@ -361,6 +373,8 @@ class SharedBasket {
       publicUrlExpiresAt: publicUrlExpiresAt ?? this.publicUrlExpiresAt,
       memo: memo ?? this.memo,
       threadId: threadId ?? this.threadId,
+      allowMultipleVotes: allowMultipleVotes ?? this.allowMultipleVotes,
+      voteEnabled: voteEnabled ?? this.voteEnabled,
     );
   }
 
@@ -382,6 +396,8 @@ class SharedBasket {
         'publicUrlExpiresAt': publicUrlExpiresAt?.toIso8601String(),
         'memo': memo,
         'threadId': threadId,
+        'allowMultipleVotes': allowMultipleVotes,
+        'voteEnabled': voteEnabled,
       };
 
   factory SharedBasket.fromJson(Map<String, dynamic> json) => SharedBasket(
@@ -417,6 +433,8 @@ class SharedBasket {
             DateTime.tryParse(json['publicUrlExpiresAt'] as String? ?? ''),
         memo: json['memo'] as String? ?? '',
         threadId: json['threadId'] as String? ?? '',
+        allowMultipleVotes: json['allowMultipleVotes'] as bool? ?? true,
+        voteEnabled: json['voteEnabled'] as bool? ?? true,
       );
 }
 
@@ -488,6 +506,45 @@ class BasketComment {
         text: json['text'] as String? ?? '',
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
             DateTime.now(),
+        updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),
+      );
+}
+
+/// One person's vote on a shared 살까말까 — the products they picked.
+/// Like a KakaoTalk poll with multiple choice; there is no deadline, the vote
+/// lives as long as the basket's thread.
+class BasketVote {
+  BasketVote({
+    required this.threadId,
+    required this.voterUid,
+    required this.voterName,
+    required this.voterHandle,
+    required this.voterAvatar,
+    required this.productIds,
+    this.updatedAt,
+  });
+
+  final String threadId;
+  final String voterUid;
+  final String voterName;
+  final String voterHandle;
+  final String voterAvatar;
+
+  /// [Product.id] values as strings.
+  final List<String> productIds;
+  final DateTime? updatedAt;
+
+  bool picked(Product p) => productIds.contains(p.id.toString());
+
+  factory BasketVote.fromJson(Map<String, dynamic> json) => BasketVote(
+        threadId: json['threadId'] as String? ?? '',
+        voterUid: json['voterUid'] as String? ?? '',
+        voterName: json['voterName'] as String? ?? '',
+        voterHandle: json['voterHandle'] as String? ?? '',
+        voterAvatar: json['voterAvatar'] as String? ?? '',
+        productIds: (json['productIds'] as List? ?? [])
+            .map((e) => e.toString())
+            .toList(),
         updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),
       );
 }
@@ -725,9 +782,29 @@ class ParsedProductInfo {
 /// 태그 사진으로 상품을 찾은 결과 (서버 identifyProductTag).
 ///
 /// - [found]: [matchUrl]에 그 상품 페이지가 있다. 가격은 앱이 이 URL을 다시 읽어서 얻는다.
+/// - [needsConfirm]: 검색이 [matchUrl]을 찾았지만 서버가 페이지를 못 읽어(차단·빈 화면·시간 부족)
+///   품번을 확인하지 못했다. 사용자가 "같은 상품이 맞아요"를 눌러야만 저장할 수 있다.
 /// - [notFound]: 태그 정보([brand]·[productName] 등)만 있다. 사용자가 직접 입력한다.
 /// - [notATag]: 사진에서 상품 태그를 찾지 못했다.
-enum TagIdentifyStatus { found, notFound, notATag }
+enum TagIdentifyStatus { found, needsConfirm, notFound, notATag }
+
+/// 태그 찾기 결과에 대한 사용자 반응 — 엔진 개선용 익명 피드백([AwsProductTagStore.sendFeedback]).
+enum TagFeedbackAnswer {
+  /// "맞아요"
+  yes('yes'),
+
+  /// "다른 상품이에요"
+  no('no'),
+
+  /// 엔진이 판매 페이지를 못 찾음(사용자가 누른 게 아니라 결과 자체)
+  notFound('not_found'),
+
+  /// 못 찾은 뒤 사용자가 직접 판매 주소를 넣어 저장함 — 엔진이 배울 수 있는 가장 값진 정답
+  userLink('user_link');
+
+  const TagFeedbackAnswer(this.wire);
+  final String wire;
+}
 
 class TagIdentifyResult {
   const TagIdentifyResult({
@@ -743,6 +820,14 @@ class TagIdentifyResult {
     this.matchSource,
     this.verifiedBy,
     this.note,
+    this.matchName,
+    this.matchPrice,
+    this.matchRegularPrice,
+    this.matchImage,
+    this.matchVia,
+    this.skipReason,
+    this.traceId,
+    this.cause,
   });
 
   final TagIdentifyStatus status;
@@ -760,15 +845,68 @@ class TagIdentifyResult {
   /// 'official'(브랜드 공식몰) | 'mall'(공식몰에 없어 쇼핑몰에서 찾음)
   final String? matchSource;
 
-  /// 'product_code' | 'barcode' | 'name'
+  /// 'product_code' | 'barcode' | 'product_code_base' | 'name' | 'search'(needsConfirm)
   final String? verifiedBy;
   final String? note;
+
+  /// 찾은 페이지에서 읽은 상품명·판매가·정가·대표 사진. 서버가 구글의 페이지 사본으로 읽은 값이라
+  /// 최신이 아닐 수 있다. 없으면 null.
+  final String? matchName;
+  final int? matchPrice;
+  final int? matchRegularPrice;
+  final String? matchImage;
+
+  /// 'qr'(태그에 인쇄된 QR이 가리킨 페이지로 찾음) | 'search'(품번·브랜드 검색으로 찾음). 링크가 없으면 null.
+  final String? matchVia;
+
+  /// 엔진이 일부러 찾지 않은 이유. 'no_brand_no_code' = 태그에 브랜드·품번이 없음.
+  final String? skipReason;
+
+  /// 엔진 기록과 피드백을 잇는 무작위 id(사용자와 무관).
+  final String? traceId;
+
+  /// 엔진이 진단한 원인(ok, search_empty, page_blocked …).
+  final String? cause;
+
+  /// 태그에 브랜드·품번이 없어서 찾지 않았는지(무인양품처럼). 엔진 실패가 아니다.
+  bool get skippedNoBrand => skipReason == 'no_brand_no_code';
+
+  /// 엔진이 일부러 찾지 않았는지(브랜드나 품번 중 하나라도 없음 — QR이 없을 땐 둘 다 있어야 찾는다).
+  bool get skipped =>
+      skipReason == 'no_brand_no_code' ||
+      skipReason == 'no_brand' ||
+      skipReason == 'no_code';
+
+  /// 태그 QR로 찾은 결과인지 — 안내 문구를 고르는 데 쓴다.
+  bool get foundByQr => hasMatch && matchVia == 'qr';
+
+  /// 페이지 정보(상품명·가격)를 이미 받아서, 링크를 다시 읽지 않아도 되는지.
+  bool get hasMatchDetails =>
+      hasMatch && (matchName ?? '').isNotEmpty && (matchPrice ?? 0) > 0;
+
+  /// 태그 정보만으로 만든 상품명. 상품명이 없으면 품번을 넣는다. 예: "BEAKER QQ6X39EP20"
+  String get tagOnlyName {
+    final b = (brand ?? '').trim();
+    final n = (productName ?? '').trim();
+    final code = (productCode ?? '').trim();
+    final parts = [
+      if (b.isNotEmpty) b,
+      if (n.isNotEmpty) n,
+      if (n.isEmpty && code.isNotEmpty) code,
+    ];
+    final base = parts.join(' ');
+    return n.isNotEmpty && code.isNotEmpty ? '$base ($code)' : base;
+  }
 
   bool get foundOnOfficialSite => matchSource == 'official';
 
   /// 품번·바코드 없이 이름만으로 찾은 경우 — 사용자가 같은 상품인지 확인해야 한다.
-  /// 품번·바코드 없이 이름만으로 찾은 경우 — 사용자가 같은 상품인지 확인해야 한다.
   bool get needsUserCheck => verifiedBy == 'name';
+
+  /// 링크(매칭 URL)가 있는 결과 — 앱이 그 페이지를 읽어 상품 정보를 채운다.
+  bool get hasMatch =>
+      status == TagIdentifyStatus.found ||
+      status == TagIdentifyStatus.needsConfirm;
 
   /// 태그 정보로 만든 상품명 후보. 예: "NIKE 에어 포스 1 '07 (WHITE)"
   String get suggestedName {
@@ -790,10 +928,17 @@ class TagIdentifyResult {
 
     final status = switch (json['status']) {
       'found' when s('matchUrl') != null => TagIdentifyStatus.found,
+      'needs_confirm' when s('matchUrl') != null =>
+        TagIdentifyStatus.needsConfirm,
       'not_a_tag' => TagIdentifyStatus.notATag,
       _ => TagIdentifyStatus.notFound,
     };
     final price = (json['tagPrice'] as num?)?.toInt();
+    int? won(String k) {
+      final v = (json[k] as num?)?.toInt();
+      return v != null && v > 0 ? v : null;
+    }
+
     return TagIdentifyResult(
       status: status,
       brand: s('brand'),
@@ -807,6 +952,16 @@ class TagIdentifyResult {
       matchSource: s('matchSource'),
       verifiedBy: s('verifiedBy'),
       note: s('note'),
+      matchName: s('matchName'),
+      matchPrice: won('matchPrice'),
+      matchRegularPrice: won('matchRegularPrice'),
+      matchImage: (s('matchImage') ?? '').startsWith('http')
+          ? s('matchImage')
+          : null,
+      matchVia: s('matchVia'),
+      skipReason: s('skipReason'),
+      traceId: s('traceId'),
+      cause: s('cause'),
     );
   }
 }

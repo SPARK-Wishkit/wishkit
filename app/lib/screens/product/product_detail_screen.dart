@@ -7,6 +7,7 @@ import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 
 /// Detail route for a product that may belong to someone else.
 /// IDs collide across owners, so friend/basket/friend scopes must travel
@@ -71,6 +72,65 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     memoCtrl = TextEditingController(text: product?.memo ?? '');
   }
 
+  /// 친구 상품을 내 wishkit의 어느 폴더에 담을지 고르고 담는다.
+  Future<void> _addToMyWishkit(
+    BuildContext context,
+    AppStore store,
+    Product product,
+  ) async {
+    final folders = store.customTabs;
+    final listId = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+                child: Text(
+                  '내 wishkit 어디에 담을까요?',
+                  style: DiaryTheme.ui(16, weight: FontWeight.w700),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: Text('폴더 없이 담기', style: DiaryTheme.ui(15)),
+                subtitle: Text(
+                  "'전체' 폴더에만 보여요",
+                  style: DiaryTheme.ui(12, color: DiaryColors.inkSoft),
+                ),
+                onTap: () => Navigator.of(sheetCtx).pop('all'),
+              ),
+              for (final t in folders)
+                ListTile(
+                  leading: Icon(
+                    t.isPublic ? Icons.public : Icons.lock_outline,
+                  ),
+                  title: Text(t.name, style: DiaryTheme.ui(15)),
+                  onTap: () => Navigator.of(sheetCtx).pop(t.id),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (listId == null || !context.mounted) return;
+    final result = await store.addToMyWishkit(product, listId: listId);
+    if (!context.mounted) return;
+    showTopToast(
+      context,
+      result.alreadyHad
+          ? '이미 내 wishkit에 있는 상품이에요'
+          : result.product == null
+              ? '담지 못했어요. 잠시 후 다시 시도해 주세요'
+              : '내 wishkit에 담았어요',
+      error: !result.alreadyHad && result.product == null,
+    );
+  }
+
   @override
   void dispose() {
     memoCtrl.dispose();
@@ -98,6 +158,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
     if (!mounted) return;
     final message = switch (result.status) {
+      // updated = 판매가가 바뀐 경우만(정가·할인 표시만 바뀌면 unchanged).
       PriceRefreshStatus.updated =>
         '가격이 바뀌었어요: ${formatWon(result.previousPrice ?? 0)} → '
             '${formatWon(result.newPrice ?? 0)}',
@@ -108,9 +169,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       PriceRefreshStatus.unavailable => '상품 링크가 없어 새로고침할 수 없어요',
       PriceRefreshStatus.needsConfirm => '가격을 확인하지 못했어요',
     };
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showTopToast(context, message);
   }
 
   Future<bool> _confirmUncertainPrice(PriceRefreshResult result) async {
@@ -156,38 +215,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
     final isOwn =
         !_openedFromSomeoneElse && store.productById(product.id) != null;
-    final tab = store.tabs.firstWhere(
-      (t) => t.id == product.listId,
-      orElse: () => store.tabs.first,
-    );
-    final folderColor = store.tabColor(tab);
-
     return Scaffold(
-      backgroundColor: folderColor,
+      backgroundColor: DiaryColors.paper,
       appBar: AppBar(
         backgroundColor: DiaryColors.white,
+        // 돌아가기 버튼만 둔다(예전 오른쪽 X는 같은 일을 해서 뺐다).
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: () => context.go('/'),
-          ),
-        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: Container(
-                margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                child: ClipPath(
-                  clipper: _TornTopClipper(),
+                child: ClipRect(
                   child: DiaryGridPaper(
                     borderRadius: 0,
-                    padding: const EdgeInsets.fromLTRB(14, 28, 14, 14),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                     child: ListView(
                       children: [
                         WhiteProductCard(
@@ -196,7 +242,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(DiaryTheme.radius),
                                 child: AspectRatio(
                                   aspectRatio: 1,
                                   child: Image.network(
@@ -248,6 +294,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   ],
                                 ],
                               ),
+                              // 가격·상품 정보는 쇼핑몰에서 읽어 온 것 (App Store 5.2: 출처를 밝히고 제휴로 오해하지 않게).
+                              // 매장에서 본 옷을 직접 기록한 상품(판매 페이지 주소 없음)은 사용자가 쓴 값이라 띄우지 않는다.
+                              if (product.productUrl?.trim().isNotEmpty ?? false) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  '가격과 상품 정보는 ${product.platform.isEmpty ? '판매처' : product.platform} 기준이며, '
+                                  '실제 결제 가격과 다를 수 있어요.',
+                                  style: DiaryTheme.body(
+                                    11,
+                                    color: DiaryColors.inkSoft,
+                                  ),
+                                ),
+                              ],
                               if (product.discount != null) ...[
                                 const SizedBox(height: 8),
                                 Container(
@@ -256,14 +315,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: DiaryColors.folderPeach,
-                                    borderRadius: BorderRadius.circular(8),
+                                    color: DiaryColors.sale.withValues(
+                                      alpha: 0.08,
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      DiaryTheme.radius,
+                                    ),
                                   ),
                                   child: Text(
-                                    '↘ ${product.discount}% 할인 중',
+                                    '${product.discount}% 할인 중',
                                     style: DiaryTheme.body(
                                       12,
-                                      weight: FontWeight.w600,
+                                      weight: FontWeight.w700,
+                                      color: DiaryColors.sale,
                                     ),
                                   ),
                                 ),
@@ -286,10 +350,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(DiaryTheme.radius),
                             border: Border.all(
-                              color: DiaryColors.ink.withValues(alpha: 0.7),
-                              width: 1.4,
+                              color: DiaryColors.lineStrong,
                             ),
                           ),
                           child: Column(
@@ -341,27 +404,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         Row(
                           children: [
                             Expanded(
-                              child: DiaryButton(
-                                label: '바구니에 추가',
-                                icon: Icons.shopping_basket_outlined,
-                                onPressed: () async {
-                                  await store.addToBasket(product);
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('살까말까 바구니에 담았어요'),
-                                      ),
-                                    );
-                                  }
-                                },
-                              ),
+                              // 친구 상품은 내 wishkit으로 가져오고, 내 상품은 살까말까 바구니에 담는다.
+                              child: _openedFromSomeoneElse
+                                  ? DiaryButton(
+                                      label: '내 wishkit에 추가',
+                                      icon: Icons.add,
+                                      onPressed: () =>
+                                          _addToMyWishkit(context, store, product),
+                                    )
+                                  : DiaryButton(
+                                      label: '바구니에 추가',
+                                      icon: Icons.shopping_basket_outlined,
+                                      onPressed: () async {
+                                        await store.addToBasket(product);
+                                        if (context.mounted) {
+                                          showTopToast(
+                                            context,
+                                            '살까말까 바구니에 담았어요',
+                                          );
+                                        }
+                                      },
+                                    ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: DiaryButton(
                                 label: '상품 보러가기',
                                 filled: true,
-                                color: DiaryColors.folderMint,
                                 icon: Icons.open_in_new,
                                 onPressed: () async {
                                   final url =
@@ -439,20 +508,19 @@ class _TagPhotoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () => _openFull(context),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(DiaryTheme.radius),
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(DiaryTheme.radius),
           border: Border.all(
-            color: DiaryColors.ink.withValues(alpha: 0.7),
-            width: 1.4,
+            color: DiaryColors.lineStrong,
           ),
         ),
         child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(DiaryTheme.radius),
               child: Image.network(
                 url,
                 width: 56,
@@ -545,23 +613,4 @@ String relativeCheckedLabel(DateTime at, DateTime now) {
   if (diff.inHours < 1) return '${diff.inMinutes}분 전';
   if (diff.inDays < 1) return '${diff.inHours}시간 전';
   return '${diff.inDays}일 전';
-}
-
-class _TornTopClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path()..moveTo(0, 18);
-    const step = 18.0;
-    for (double x = 0; x <= size.width; x += step) {
-      path.quadraticBezierTo(x + step / 2, 0, x + step, 18);
-    }
-    path
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }

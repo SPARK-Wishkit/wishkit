@@ -1,0 +1,7 @@
+// AdMob iOS 앱 ID (광고 단위 ID와 다름 — 광고 단위 ID는 --dart-define 으로 넣는다, lib/ads/ads_config.dart).
+// Info.plist 의 GADApplicationIdentifier 가 이 값을 쓴다.
+//
+// ⚠️ 출시 전: AdMob 콘솔 → 앱 → 앱 설정 → "앱 ID"(ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY)로 바꿀 것.
+//    지금 값은 구글 공식 테스트 앱 ID 라서 실제 광고 수익이 나지 않는다.
+//    scripts/build_ios_release.sh 는 이 값이 테스트 ID면 빌드를 멈춘다.
+ADMOB_IOS_APP_ID = ca-app-pub-3940256099942544~1458002511

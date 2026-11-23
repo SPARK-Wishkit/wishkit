@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 
 import '../auth/auth_controller.dart';
 import '../auth/auth_models.dart';
+import '../models/moderation.dart';
 import '../models/models.dart';
 import '../services/account_repository.dart';
 import '../services/parsing_bridge.dart';
@@ -80,6 +81,9 @@ class AppStore extends ChangeNotifier {
   bool notificationsEnabled = true;
 
   List<WishlistTab> tabs = [];
+
+  /// 폴더 목록 불러오기가 끝내 실패했는지. tabs 가 비어 있고 이 값이 false 면 "불러오는 중".
+  bool tabsLoadFailed = false;
   List<Product> products = [];
   List<BasketItem> basket = [];
   List<Friend> friends = [];
@@ -88,6 +92,10 @@ class AppStore extends ChangeNotifier {
   List<AppNotification> notifications = [];
   List<SharedBasket> receivedBaskets = [];
   final Map<String, SharedBasket> sharedBaskets = {};
+
+  /// 내가 차단한 사람들의 uid. 이 사람들의 살까말까·댓글·알림·프로필은 화면에서 바로 숨긴다.
+  /// (서버도 서로 살까말까를 보내지 못하게 막는다 — social-actions/logic.ts)
+  Set<String> blockedUids = {};
 
   /// Baskets the user X-ed out of the 내 친구 탭 feed. The profile doc is the
   /// source of truth; this is the local cache the UI reads, kept so nothing
@@ -148,13 +156,27 @@ class AppStore extends ChangeNotifier {
 
   /// 데이터 불러오기가 실패해도 로그인 자체는 막지 않는다.
   Future<void> _hydrateSessionSafely(AuthUserInfo user) async {
+    tabsLoadFailed = false;
     try {
       await _hydrateSession(user);
+      backendError = null;
     } catch (e) {
       debugPrint('AppStore: 데이터 불러오기 실패 (${e.runtimeType})');
       backendError = '데이터를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
       isLoggedIn = true;
+      // 폴더 목록을 못 채운 채 끝났다면 로딩이 아니라 실패 상태로 본다.
+      tabsLoadFailed = tabs.isEmpty;
     }
+  }
+
+  /// 폴더 목록 불러오기가 실패한 뒤 "다시 시도" — 데이터 불러오기를 처음부터 다시 한다.
+  Future<void> retryLoadTabs() async {
+    final user = _auth?.user;
+    if (user == null) return;
+    tabsLoadFailed = false;
+    notifyListeners();
+    await _hydrateSessionSafely(user);
+    notifyListeners();
   }
 
   Future<void> _hydrateSession(AuthUserInfo fresh) async {
@@ -172,14 +194,22 @@ class AppStore extends ChangeNotifier {
     tabs = await _repo.loadTabs(fresh.uid);
     products = await _repo.loadProducts(fresh.uid);
 
+    // 차단 목록 — 친구·받은함을 불러오기 전에 읽어 둬야 차단한 사람이 잠깐이라도 보이지 않는다.
+    try {
+      blockedUids = await _repo.loadBlockedIds(fresh.uid);
+    } catch (e) {
+      debugPrint('AppStore: 차단 목록 불러오기 실패 (${e.runtimeType})');
+    }
+
     // 친구·팔로우 — 불러오기가 실패해도 내 데이터 화면은 쓸 수 있게 한다.
     try {
       final following = (await _repo.followingIds(fresh.uid)).toSet();
-      friends =
-          await _repo.loadDirectory(myUid: fresh.uid, following: following);
+      friends = _withoutBlockedFriends(
+        await _repo.loadDirectory(myUid: fresh.uid, following: following),
+      );
       friendWishlists = await _repo.loadFriendWishlists(friends);
       followerUsers =
-          await _repo.loadUsers(await _repo.followerIds(fresh.uid));
+          await _repo.loadUsers(await _followerIdsWithoutBlocked(fresh.uid));
       currentUser = currentUser.copyWith(
         following: following.length,
         followers: followerUsers.length,
@@ -223,7 +253,8 @@ class AppStore extends ChangeNotifier {
       notifications = [];
     }
     try {
-      receivedBaskets = await _repo.loadReceivedBaskets(userId);
+      receivedBaskets =
+          _withoutBlockedBaskets(await _repo.loadReceivedBaskets(userId));
     } catch (_) {
       receivedBaskets = [];
     }
@@ -275,6 +306,7 @@ class AppStore extends ChangeNotifier {
     _stopInboxWatch();
     isLoggedIn = false;
     tabs = [];
+    tabsLoadFailed = false;
     products = [];
     basket = [];
     friends = [];
@@ -282,6 +314,7 @@ class AppStore extends ChangeNotifier {
     followerUsers = [];
     notifications = [];
     receivedBaskets = [];
+    blockedUids = {};
     _hiddenFeedIds = {};
     _pendingHideIds = {};
     _pendingUnhideIds = {};
@@ -355,13 +388,22 @@ class AppStore extends ChangeNotifier {
   String? get uid =>
       currentUser.uid.isNotEmpty ? currentUser.uid : _auth?.uid;
 
+  /// 최근에 담은 상품이 위로. 상품 id가 담은 시각(밀리초)이라 id 큰 순서가 최신순이다.
+  List<Product> get productsNewestFirst =>
+      [...products]..sort((a, b) => b.id.compareTo(a.id));
+
   List<Product> get displayedProducts {
-    if (selectedTabId == 'all') return products;
-    return products.where((p) => p.listId == selectedTabId).toList();
+    final newest = productsNewestFirst;
+    if (selectedTabId == 'all') return newest;
+    return newest.where((p) => p.listId == selectedTabId).toList();
   }
 
-  WishlistTab get selectedTab =>
-      tabs.firstWhere((t) => t.id == selectedTabId, orElse: () => tabs.first);
+  /// 폴더 목록이 비어 있으면 null (불러오는 중이거나 실패).
+  WishlistTab? get selectedTab =>
+      tabs.where((t) => t.id == selectedTabId).firstOrNull ?? tabs.firstOrNull;
+
+  /// 고정 '전체' 탭. 아직 없으면 null.
+  WishlistTab? get allTab => tabs.where((t) => t.id == 'all').firstOrNull;
 
   List<WishlistTab> get customTabs => tabs.where((t) => t.id != 'all').toList();
 
@@ -391,14 +433,15 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> reorderTabs(int oldIndex, int newIndex) async {
-    final allTab = tabs.firstWhere((t) => t.id == 'all');
+    final all = allTab;
+    if (all == null) return;
     final rest = tabs.where((t) => t.id != 'all').toList();
     if (oldIndex < 0 || oldIndex >= rest.length) return;
     final target = newIndex;
     if (target < 0 || target >= rest.length) return;
     final item = rest.removeAt(oldIndex);
     rest.insert(target, item);
-    tabs = [allTab, ...rest];
+    tabs = [all, ...rest];
     await _persistTabs();
     notifyListeners();
   }
@@ -422,12 +465,16 @@ class AppStore extends ChangeNotifier {
   Future<void> _persistTabs() async {
     final id = uid;
     if (id == null) return;
+    // 목록이 비었거나 불러오기에 실패한 상태로 저장하면 서버의 실제 폴더를 덮어쓸 수 있다.
+    if (tabs.isEmpty || tabsLoadFailed) return;
     await _repo.saveTabs(id, tabs);
   }
 
   /// Returns false when another list is already being created.
   Future<bool> addTab(String name, {bool isPublic = false}) async {
     final created = await _withLock('addTab', () async {
+      // 폴더 목록을 못 불러온 상태에서 만들면 새 폴더만 저장돼 기존 폴더를 덮어쓸 수 있다.
+      if (tabsLoadFailed) return false;
       final color = nextFileColor();
       final hex =
           '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
@@ -480,6 +527,7 @@ class AppStore extends ChangeNotifier {
 
   Future<void> removeProduct(int id) async {
     final tagImageUrl = productById(id)?.tagImageUrl;
+    final image = productById(id)?.image ?? '';
     products = products.where((p) => p.id != id).toList();
     basket = basket.where((b) => b.product.id != id).toList();
     final userId = uid;
@@ -489,6 +537,12 @@ class AppStore extends ChangeNotifier {
       if (tagImageUrl != null) {
         try {
           await _repo.deleteTagPhoto(tagImageUrl);
+        } catch (_) {}
+      }
+      // 직접 찍은 옷 사진(대표 사진)도 지운다. 쇼핑몰 사진 주소면 저장소가 알아서 건너뛴다.
+      if (image.isNotEmpty) {
+        try {
+          await _repo.deleteProductPhoto(image);
         } catch (_) {}
       }
     }
@@ -544,6 +598,21 @@ class AppStore extends ChangeNotifier {
     return _repo.identifyProductFromTag(image, mimeType: mimeType);
   }
 
+  /// 태그 찾기 결과에 대한 반응을 익명으로 남긴다(엔진 개선용). 기다리지 않고, 실패해도 조용히 넘어간다 —
+  /// 피드백 때문에 상품 담기가 늦어지거나 막히면 안 된다.
+  void recordTagFeedback(
+    TagFeedbackAnswer answer,
+    TagIdentifyResult result, {
+    String? userUrl,
+  }) {
+    if (!backendReady || uid == null) return;
+    unawaited(
+      _repo
+          .sendTagFeedback(answer, result, userUrl: userUrl)
+          .catchError((Object _) {}),
+    );
+  }
+
   /// 태그 사진을 저장소에 올리고 주소를 돌려준다. 상품 저장([addParsedProduct]) 전에 부른다.
   Future<String> uploadTagPhoto(
     Uint8List image, {
@@ -559,6 +628,25 @@ class AppStore extends ChangeNotifier {
   Future<void> discardTagPhoto(String url) async {
     try {
       await _repo.deleteTagPhoto(url);
+    } catch (_) {}
+  }
+
+  /// 직접 찍은 옷 사진을 저장소에 올리고 주소를 돌려준다. 상품 저장([addParsedProduct]) 전에 부르고,
+  /// 그 주소를 상품의 대표 사진(image)으로 쓴다.
+  Future<String> uploadProductPhoto(
+    Uint8List image, {
+    String mimeType = 'image/jpeg',
+  }) async {
+    if (!backendReady || uid == null) {
+      throw const TagIdentifyUnavailable();
+    }
+    return _repo.uploadProductPhoto(image, mimeType: mimeType);
+  }
+
+  /// 올렸지만 상품 저장에 쓰이지 못한 옷 사진을 지운다. 실패해도 조용히 넘어간다.
+  Future<void> discardProductPhoto(String url) async {
+    try {
+      await _repo.deleteProductPhoto(url);
     } catch (_) {}
   }
 
@@ -603,7 +691,9 @@ class AppStore extends ChangeNotifier {
         );
       }
       const trusted = {'high', 'medium'};
-      if (!trusted.contains(info.priceConfidence)) {
+      // 판매가가 그대로면 확신이 낮아도 물어볼 필요가 없다("36,000원이 맞나요? 지금 36,000원").
+      if (!trusted.contains(info.priceConfidence) &&
+          info.price != product.price) {
         return PriceRefreshResult(
           PriceRefreshStatus.needsConfirm,
           previousPrice: product.price,
@@ -650,10 +740,12 @@ class AppStore extends ChangeNotifier {
       isPublic: product.isPublic,
       tagImageUrl: product.tagImageUrl,
     );
+    // 저장할지: 판매가나 정가가 다르면 조용히 맞춰 둔다(할인율은 두 값에서 계산되는 값이라 비교 안 함).
     final changed =
-        product.price != newPrice ||
-        product.originalPrice != original ||
-        product.discount != discount;
+        product.price != newPrice || product.originalPrice != original;
+    // 사용자에게 "바뀜"으로 알릴지: **판매가만** 기준. 사는 사람에게 중요한 건 판매가라서,
+    // 정가·할인 표시만 바뀐 건 "변동 없음"으로 둔다(예전엔 "36,000원 → 36,000원"이 떴다).
+    final priceChanged = product.price != newPrice;
 
     final previousProducts = products;
     final previousBasket = basket;
@@ -683,7 +775,7 @@ class AppStore extends ChangeNotifier {
     await _persistPriceChecks();
     notifyListeners();
     return PriceRefreshResult(
-      changed ? PriceRefreshStatus.updated : PriceRefreshStatus.unchanged,
+      priceChanged ? PriceRefreshStatus.updated : PriceRefreshStatus.unchanged,
       previousPrice: product.price,
       newPrice: newPrice,
     );
@@ -726,6 +818,18 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 선택(체크)한 상품을 살까말까 바구니에서 한 번에 뺀다. 위시리스트의 상품은 그대로 둔다.
+  /// 뺀 개수를 돌려준다.
+  Future<int> removeSelectedFromBasket() async {
+    final before = basket.length;
+    basket = basket.where((b) => !b.isSelected).toList();
+    final removed = before - basket.length;
+    if (removed == 0) return 0;
+    await _persistBasket();
+    notifyListeners();
+    return removed;
+  }
+
   /// Returns null when a save for the same product is already in flight.
   Future<Product?> addParsedProduct(
     ParsedProductInfo info, {
@@ -762,9 +866,44 @@ class AppStore extends ChangeNotifier {
     });
   }
 
+  /// 친구 위시리스트·받은 바구니의 상품을 내 wishkit에 복사해 담는다(친구의 메모는 가져오지 않는다).
+  /// 같은 상품 주소가 이미 내 wishkit에 있으면 새로 만들지 않고 그 상품을 돌려준다([alreadyHad]=true).
+  Future<({Product? product, bool alreadyHad})> addToMyWishkit(
+    Product source, {
+    String listId = 'all',
+  }) async {
+    final url = (source.productUrl ?? '').trim();
+    if (url.isNotEmpty) {
+      final existing =
+          products.where((p) => (p.productUrl ?? '').trim() == url).firstOrNull;
+      if (existing != null) return (product: existing, alreadyHad: true);
+    }
+    final added = await addParsedProduct(
+      ParsedProductInfo(
+        name: source.name,
+        price: source.price,
+        platform: source.platform,
+        image: source.image,
+        productUrl: source.productUrl ?? '',
+        originalPrice: source.originalPrice,
+        discount: source.discount,
+      ),
+      listId: listId,
+    );
+    return (product: added, alreadyHad: false);
+  }
+
   void setPendingShareUrl(String? url) {
     pendingShareUrl = url;
     notifyListeners();
+  }
+
+  /// 공유로 받은 주소를 꺼내고 비운다(한 번만 쓰이게). 상품 추가 화면이 읽는다 — 저장하지 않고 나갔다가
+  /// 다시 열 때 예전 공유 주소를 또 읽지 않도록. 화면을 그리는 중에도 부를 수 있게 알림은 보내지 않는다.
+  String? takePendingShareUrl() {
+    final url = pendingShareUrl;
+    pendingShareUrl = null;
+    return url;
   }
 
   Product? productById(int id) {
@@ -799,7 +938,8 @@ class AppStore extends ChangeNotifier {
   /// OS banner (see _watchInbox), not the in-app list.
   List<AppNotification> get visibleNotifications => notifications.where((n) {
     return n.type != AppNotificationType.review &&
-        n.type != AppNotificationType.list;
+        n.type != AppNotificationType.list &&
+        !blockedUids.contains(n.fromUid);
   }).toList();
 
   List<FriendSalkamalka> get friendSalkamalkaGroups {
@@ -939,7 +1079,7 @@ class AppStore extends ChangeNotifier {
   Future<List<AppUser>> loadFollowers() async {
     final id = uid;
     if (id == null) return [];
-    final ids = await _repo.followerIds(id);
+    final ids = await _followerIdsWithoutBlocked(id);
     followerUsers = await _repo.loadUsers(ids);
     notifyListeners();
     return followerUsers;
@@ -956,21 +1096,36 @@ class AppStore extends ChangeNotifier {
     final userId = uid;
     if (userId == null) return;
     final following = (await _repo.followingIds(userId)).toSet();
-    friends = await _repo.loadDirectory(myUid: userId, following: following);
+    friends = _withoutBlockedFriends(
+      await _repo.loadDirectory(myUid: userId, following: following),
+    );
     friendWishlists = await _repo.loadFriendWishlists(friends);
-    followerUsers = await _repo.loadUsers(await _repo.followerIds(userId));
+    followerUsers =
+        await _repo.loadUsers(await _followerIdsWithoutBlocked(userId));
     await _loadInboxSafely(userId);
     _syncFriendCounts();
     final profile = await _repo.loadProfile(userId);
-    if (profile != null) {
-      currentUser = profile;
-    } else {
+    // 숫자는 방금 불러온 실제 목록으로 — 프로필 문서에 저장된 팔로워 수는 옛 값일 수 있다.
+    currentUser = (profile ?? currentUser).copyWith(
+      following: following.length,
+      followers: followerUsers.length,
+    );
+    notifyListeners();
+  }
+
+  /// 팔로워·팔로잉 숫자만 가볍게 다시 센다(마이페이지 당겨서 새로고침, 팔로우 알림이 왔을 때).
+  Future<void> refreshSocialCounts() async {
+    final userId = uid;
+    if (userId == null) return;
+    try {
+      final following = await _repo.followingIds(userId);
+      final followers = await _followerIdsWithoutBlocked(userId);
       currentUser = currentUser.copyWith(
         following: following.length,
-        followers: followerUsers.length,
+        followers: followers.length,
       );
-    }
-    notifyListeners();
+      notifyListeners();
+    } catch (_) {}
   }
 
   Future<void> refreshNotifications() async {
@@ -1006,15 +1161,13 @@ class AppStore extends ChangeNotifier {
     final idx = friends.indexWhere((f) => f.id == friendId);
     if (idx < 0) return false;
     if (!_actionCooldown.begin('follow:$friendId')) return false;
+    final previousFriends = friends;
+    final previousFollowing = currentUser.following;
     try {
       final wasFollowing = friends[idx].isFollowing;
       final next = !wasFollowing;
-      await _repo.setFollowing(
-        myUid: userId,
-        targetUid: friendId,
-        follow: next,
-        actor: next ? currentUser.copyWith(uid: userId) : null,
-      );
+      // 버튼·팔로잉 숫자는 바로 바꾸고(낙관적 반영), 서버 저장이 실패하면 되돌린다.
+      // 예전에는 저장 + 친구 위시리스트 다시 불러오기가 끝난 뒤에야 숫자가 바뀌어 반박자 늦었다.
       friends = [
         for (var i = 0; i < friends.length; i++)
           if (i == idx) friends[i].copyWith(isFollowing: next) else friends[i],
@@ -1022,9 +1175,25 @@ class AppStore extends ChangeNotifier {
       currentUser = currentUser.copyWith(
         following: friends.where((f) => f.isFollowing).length,
       );
-      friendWishlists = await _repo.loadFriendWishlists(friends);
-      _syncFriendCounts();
       notifyListeners();
+      try {
+        await _repo.setFollowing(
+          myUid: userId,
+          targetUid: friendId,
+          follow: next,
+          actor: next ? currentUser.copyWith(uid: userId) : null,
+        );
+      } catch (_) {
+        friends = previousFriends;
+        currentUser = currentUser.copyWith(following: previousFollowing);
+        notifyListeners();
+        rethrow;
+      }
+      try {
+        friendWishlists = await _repo.loadFriendWishlists(friends);
+        _syncFriendCounts();
+        notifyListeners();
+      } catch (_) {}
       return true;
     } finally {
       _actionCooldown.end('follow:$friendId');
@@ -1042,10 +1211,96 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── 신고 · 차단 (App Store 심사 1.2) ──────────────────────────
+
+  bool isBlocked(String userId) => blockedUids.contains(userId);
+
+  List<Friend> _withoutBlockedFriends(List<Friend> list) => [
+        for (final f in list)
+          if (!blockedUids.contains(f.id)) f,
+      ];
+
+  /// 나를 팔로우하는 사람 uid. 차단한 사람이 다시 팔로우했으면 그 팔로우를 지우고 목록에서 뺀다.
+  /// (팔로우는 앱이 직접 만드는 표라 서버가 막지 못한다 → 차단한 쪽 앱이 열릴 때마다 정리)
+  Future<List<String>> _followerIdsWithoutBlocked(String myUid) async {
+    final ids = await _repo.followerIds(myUid);
+    final blocked = [for (final id in ids) if (blockedUids.contains(id)) id];
+    for (final id in blocked) {
+      unawaited(
+        _repo.removeFollower(myUid: myUid, followerUid: id).catchError((_) {}),
+      );
+    }
+    return [for (final id in ids) if (!blockedUids.contains(id)) id];
+  }
+
+  List<SharedBasket> _withoutBlockedBaskets(List<SharedBasket> list) => [
+        for (final b in list)
+          if (b.fromUid.isEmpty || !blockedUids.contains(b.fromUid)) b,
+      ];
+
+  /// 댓글·살까말까·사용자 신고. 운영팀이 24시간 안에 확인한다.
+  Future<void> reportContent(
+    ReportTarget target, {
+    required ReportReason reason,
+    String detail = '',
+  }) async {
+    _ensureBackend();
+    if (uid == null) throw Exception('로그인된 계정이 없어요.');
+    await _repo.reportContent(target, reason: reason, detail: detail);
+  }
+
+  /// 사용자 차단: 그 사람의 살까말까·댓글·알림을 바로 숨기고, 서로의 팔로우를 끊는다.
+  Future<void> blockUser(String targetUid) async {
+    _ensureBackend();
+    final userId = uid;
+    if (userId == null) throw Exception('로그인된 계정이 없어요.');
+    if (targetUid.isEmpty || targetUid == userId) return;
+    await _repo.blockUser(myUid: userId, targetUid: targetUid);
+    blockedUids = {...blockedUids, targetUid};
+    friends = _withoutBlockedFriends(friends);
+    friendWishlists =
+        friendWishlists.where((w) => w.friendId != targetUid).toList();
+    followerUsers = followerUsers.where((u) => u.uid != targetUid).toList();
+    receivedBaskets = _withoutBlockedBaskets(receivedBaskets);
+    currentUser = currentUser.copyWith(
+      followers: followerUsers.length,
+      following: friends.where((f) => f.isFollowing).length,
+    );
+    notifyListeners();
+    unawaited(refreshSocialCounts());
+  }
+
+  /// 차단 해제. 친구 목록에 다시 보이도록 새로 불러온다(팔로우는 저절로 돌아오지 않는다).
+  Future<void> unblockUser(String targetUid) async {
+    _ensureBackend();
+    final userId = uid;
+    if (userId == null) throw Exception('로그인된 계정이 없어요.');
+    await _repo.unblockUser(myUid: userId, targetUid: targetUid);
+    blockedUids = {...blockedUids}..remove(targetUid);
+    notifyListeners();
+    try {
+      await refreshFriends();
+    } catch (_) {}
+  }
+
+  /// 차단한 사람들의 프로필 (탈퇴한 사람은 빠진다).
+  Future<List<AppUser>> loadBlockedUsers() async {
+    if (uid == null || blockedUids.isEmpty) return [];
+    return _repo.loadUsers(blockedUids.toList());
+  }
+
   Future<void> setNotificationsEnabled(bool value) async {
     notificationsEnabled = value;
     await _persistNotificationPrefs();
     notifyListeners();
+    if (value) _askNotificationPermission();
+  }
+
+  /// 알림 권한은 필요한 순간에 묻는다(App Store 4.5.4) — 살까말까를 보냈을 때, 댓글을 달았을 때,
+  /// 알림을 켰을 때. 알림을 꺼 둔 사람에게는 묻지 않는다.
+  void _askNotificationPermission() {
+    if (!notificationsEnabled) return;
+    unawaited(PushNotificationService.instance.requestPermission());
   }
 
   void _watchInbox(String userId) {
@@ -1054,10 +1309,18 @@ class AppStore extends ChangeNotifier {
     final seen = <String>{};
     _notificationSub = _repo.watchNotifications(userId).listen((list) {
       if (primed) {
+        // 누가 나를 팔로우했다는 새 알림이 오면 팔로워 숫자를 바로 다시 센다.
+        final newFollow = list.any(
+          (n) => !seen.contains(n.id) && n.type == AppNotificationType.follow,
+        );
+        if (newFollow) {
+          unawaited(refreshSocialCounts());
+        }
         for (final n in list) {
           if (!seen.contains(n.id) &&
               n.type != AppNotificationType.review &&
-              n.type != AppNotificationType.list) {
+              n.type != AppNotificationType.list &&
+              !blockedUids.contains(n.fromUid)) {
             if (notificationsEnabled) {
               unawaited(PushNotificationService.instance.showInboxBanner(n));
             }
@@ -1072,7 +1335,7 @@ class AppStore extends ChangeNotifier {
       notifyListeners();
     }, onError: (_) {});
     _receivedBasketSub = _repo.watchReceivedBaskets(userId).listen((list) {
-      receivedBaskets = list;
+      receivedBaskets = _withoutBlockedBaskets(list);
       notifyListeners();
     }, onError: (_) {});
   }
@@ -1165,6 +1428,8 @@ class AppStore extends ChangeNotifier {
     String? existingId,
     bool touchSharedAt = false,
     String memo = '',
+    bool allowMultipleVotes = true,
+    bool voteEnabled = true,
   }) async {
     final now = DateTime.now();
     final id = existingId ?? 'sb-${now.millisecondsSinceEpoch}';
@@ -1196,6 +1461,10 @@ class AppStore extends ChangeNotifier {
       publicUrlExpiresAt: existing?.publicUrlExpiresAt,
       memo: memo.isNotEmpty ? memo : (existing?.memo ?? ''),
       threadId: existing?.threadId.isNotEmpty == true ? existing!.threadId : id,
+      // 투표 설정은 처음 정한 대로 (서버도 처음 값만 쓴다).
+      voteEnabled: existing?.voteEnabled ?? voteEnabled,
+      allowMultipleVotes: existing?.allowMultipleVotes ??
+          (voteEnabled && allowMultipleVotes),
     );
     sharedBaskets[id] = shared;
     await _persistShared();
@@ -1225,12 +1494,19 @@ class AppStore extends ChangeNotifier {
   Future<bool> sendBasketToFriends(
     List<String> friendIds, {
     String memo = '',
+    bool allowMultipleVotes = true,
+    bool voteEnabled = true,
   }) async {
-    return resendBasketToFriends(
+    final sent = await resendBasketToFriends(
       items: _selectedBasketProducts(),
       friendIds: friendIds,
       memo: memo,
+      allowMultipleVotes: allowMultipleVotes,
+      voteEnabled: voteEnabled,
     );
+    // 친구의 댓글·투표 알림을 받을 수 있게 이때 알림 권한을 묻는다.
+    if (sent) _askNotificationPermission();
+    return sent;
   }
 
   /// 장바구니에서 고른 상품으로 살까말까를 만들고, 링크로 볼 수 있는 공유 페이지를 올려 주소를 돌려준다.
@@ -1256,6 +1532,8 @@ class AppStore extends ChangeNotifier {
     required List<String> friendIds,
     String? existingId,
     String memo = '',
+    bool allowMultipleVotes = true,
+    bool voteEnabled = true,
   }) async {
     if (items.isEmpty) {
       throw Exception('공유할 상품을 선택해 주세요.');
@@ -1281,6 +1559,10 @@ class AppStore extends ChangeNotifier {
         items: items,
         threadId: threadId,
         memo: memo,
+        // 다시 보낼 때는 처음 설정을 그대로 보낸다.
+        allowMultipleVotes:
+            existingBasket?.allowMultipleVotes ?? allowMultipleVotes,
+        voteEnabled: existingBasket?.voteEnabled ?? voteEnabled,
       );
       final names = [
         for (final id in friendIds) friendById(id)?.name ?? '',
@@ -1294,6 +1576,8 @@ class AppStore extends ChangeNotifier {
         existingId: threadId,
         touchSharedAt: true,
         memo: memo,
+        allowMultipleVotes: allowMultipleVotes,
+        voteEnabled: voteEnabled,
       );
       // Re-sending a basket that was X-ed out of the friends feed brings it back.
       // Covers both re-used ids (마이페이지 > 다시 보내기) and freshly minted ones.
@@ -1307,7 +1591,13 @@ class AppStore extends ChangeNotifier {
     if (threadId.isEmpty || !_backendConfigured || uid == null) {
       return Stream.value(const []);
     }
-    return _repo.watchBasketComments(threadId);
+    // 차단한 사람의 댓글은 보이지 않게 거른다.
+    return _repo.watchBasketComments(threadId).map(
+          (list) => [
+            for (final c in list)
+              if (!blockedUids.contains(c.authorUid)) c,
+          ],
+        );
   }
 
   /// Returns false when a comment on this thread is already being posted.
@@ -1342,6 +1632,8 @@ class AppStore extends ChangeNotifier {
       );
       return true;
     });
+    // 답글 알림을 받을 수 있게 이때 알림 권한을 묻는다.
+    if (posted == true) _askNotificationPermission();
     return posted ?? false;
   }
 
@@ -1407,6 +1699,43 @@ class AppStore extends ChangeNotifier {
     return deleted ?? false;
   }
 
+  Stream<List<BasketVote>> watchBasketVotes(String threadId) {
+    if (threadId.isEmpty || !_backendConfigured || uid == null) {
+      return Stream.value(const []);
+    }
+    // 차단한 사람의 투표는 보이지 않게 거른다(댓글과 같음).
+    return _repo.watchBasketVotes(threadId).map(
+          (list) => [
+            for (final v in list)
+              if (!blockedUids.contains(v.voterUid)) v,
+          ],
+        );
+  }
+
+  /// 살까말까 투표 (여러 개 선택). 빈 목록이면 내 투표를 취소한다.
+  /// Returns false when a vote on this basket is already being sent.
+  Future<bool> voteBasket({
+    required SharedBasket basket,
+    required Iterable<int> productIds,
+  }) async {
+    final threadId = basket.commentThreadId;
+    if (threadId.isEmpty) {
+      throw Exception('이 살까말까에는 투표할 수 없어요.');
+    }
+    final voted = await _withLock('vote:$threadId', () async {
+      _ensureBackend();
+      if (uid == null) {
+        throw Exception('로그인된 계정이 없어요.');
+      }
+      await _repo.voteBasket(
+        threadId: threadId,
+        productIds: [for (final id in productIds.toSet()) id.toString()],
+      );
+      return true;
+    });
+    return voted ?? false;
+  }
+
   /// Hosts an HTML snapshot of [basket] in Storage and returns a public URL.
   /// Re-publishing the same basket overwrites the page and restarts the 28-day
   /// clock so an actively re-shared link stays alive.
@@ -1421,7 +1750,16 @@ class AppStore extends ChangeNotifier {
         ? current.publicPageId!
         : const Uuid().v4();
     final expiresAt = DateTime.now().add(kSharePageTtl);
-    final html = buildSharePageHtml(basket: current, expiresAt: expiresAt);
+    // 미리보기 이미지는 앱 로고. 올리기에 실패해도 공유는 막지 않는다(첫 상품 사진으로 대신).
+    String? ogImageUrl;
+    try {
+      ogImageUrl = await _repo.uploadShareOgImage();
+    } catch (_) {}
+    final html = buildSharePageHtml(
+      basket: current,
+      expiresAt: expiresAt,
+      ogImageUrl: ogImageUrl,
+    );
     final url = await _repo.uploadSharePage(
       uid: userId,
       pageId: pageId,
@@ -1629,6 +1967,7 @@ class PriceRefreshResult {
   final PriceRefreshStatus status;
   final int? previousPrice;
   final int? newPrice;
+
 
   /// [PriceRefreshStatus.needsConfirm]일 때 [AppStore.applyRefreshedPrice]에 넘길 값.
   final ParsedProductInfo? info;

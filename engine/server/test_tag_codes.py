@@ -81,3 +81,42 @@ def test_has_code():
     assert has_code({"product_code": "DV1234-100"})
     assert has_code({"product_code": None, "other_codes": ["CP9644"]})
     assert not has_code({"product_code": "A1", "barcode": None, "other_codes": ["12"]})
+
+
+# ── 화면 밖 단서(hint_evidence) ─────────────────────────────
+
+from tag_codes import hint_evidence  # noqa: E402
+
+
+def test_hint_full_code_in_image_url():
+    tag = {"product_code": "DV1234-100"}
+    assert hint_evidence(tag, ["https://img.x.com/goods/DV1234-100_01.jpg"]) == "product_code"
+
+
+def test_hint_base_code_without_color():
+    tag = {"product_code": "DV1234-100"}
+    assert hint_evidence(tag, ["https://img.x.com/DV1234_01.jpg"]) == "product_code_base"
+
+
+def test_hint_rejects_code_inside_other_numbers():
+    tag = {"product_code": "12345"}
+    assert hint_evidence(tag, ["/goods/3612345/3612345_500.jpg"]) is None
+
+
+def test_hint_rejects_other_color_written_without_separator():
+    tag = {"product_code": "DV1234-100"}
+    assert hint_evidence(tag, ["https://img.x.com/DV1234200.jpg"]) is None
+
+
+def test_hint_accepts_letter_prefix_on_numeric_code():
+    tag = {"product_code": "486612-26"}
+    assert hint_evidence(tag, ["https://www.uniqlo.com/kr/ko/products/E486612-000"]) == "product_code_base"
+
+
+def test_hint_barcode_from_structured_data():
+    tag = {"product_code": None, "barcode": "8801234567893"}
+    assert hint_evidence(tag, ["8801234567893"]) == "barcode"
+
+
+def test_hint_empty():
+    assert hint_evidence({"product_code": "DV1234-100"}, []) is None

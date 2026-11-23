@@ -64,6 +64,7 @@ export function toExtractedProduct(res: EngineExtractResponse): ExtractedProduct
 
 /** 엔진 서버(POST /identify-tag) 응답 모양 — engine/server/tag_identify.py `IdentifyOutcome`. */
 export interface EngineIdentifyResponse {
+  /** 'found' | 'needs_confirm' | 'not_found' | 'not_a_tag' — 앱에 그대로 넘긴다. */
   status: string;
   tag: {
     brand: string | null;
@@ -81,8 +82,21 @@ export interface EngineIdentifyResponse {
     host: string;
     source: string;
     verified_by: string;
+    /** 찾은 페이지에서 읽은 상품명·가격·사진(구글 페이지 사본, 없으면 null/생략). */
+    name?: string | null;
+    price?: number | null;
+    regular_price?: number | null;
+    image?: string | null;
+    /** 'qr' = 태그 QR이 가리킨 페이지로 찾음. 검색으로 찾았으면 생략. */
+    via?: string | null;
   } | null;
   note: string | null;
+  /** 일부러 찾지 않은 이유. 'no_brand_no_code' = 태그에 브랜드·품번이 없음. */
+  skip_reason?: string | null;
+  /** 요청 하나를 가리키는 무작위 id — 엔진 기록과 앱 피드백을 잇는 데만 쓴다. */
+  trace_id?: string | null;
+  /** 엔진이 진단한 결과 원인(failure_report.CAUSES 키). */
+  cause?: string | null;
 }
 
 /** 앱에 돌려주는 모양(GraphQL IdentifiedTag와 1:1). */
@@ -99,6 +113,18 @@ export interface IdentifiedTag {
   matchSource: string | null;
   verifiedBy: string | null;
   note: string | null;
+  matchName: string | null;
+  matchPrice: number | null;
+  matchRegularPrice: number | null;
+  matchImage: string | null;
+  /** 'qr'(태그 QR로 찾음) | 'search'(품번·브랜드 검색으로 찾음) | null(링크 없음) */
+  matchVia: string | null;
+  /** 'no_brand_no_code'(태그에 브랜드·품번이 없어 찾지 않음) | null */
+  skipReason: string | null;
+  /** 엔진 기록과 피드백을 잇는 무작위 id */
+  traceId: string | null;
+  /** 엔진이 진단한 원인(ok, search_empty, page_blocked …) */
+  cause: string | null;
 }
 
 /** 엔진 서버가 받는 사진 형식. */
@@ -116,8 +142,14 @@ export function isValidImageInput(imageBase64: string, mimeType: string): boolea
   );
 }
 
+/** GraphQL Int로 보낼 수 있는 양의 정수 가격만(아니면 null). */
+function wonOrNull(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 && v < 2_000_000_000 ? Math.round(v) : null;
+}
+
 export function toIdentifiedTag(res: EngineIdentifyResponse): IdentifiedTag {
   const price = res.tag?.tag_price;
+  const image = res.match?.image;
   return {
     status: res.status,
     brand: res.tag?.brand ?? null,
@@ -132,5 +164,13 @@ export function toIdentifiedTag(res: EngineIdentifyResponse): IdentifiedTag {
     matchSource: res.match?.source ?? null,
     verifiedBy: res.match?.verified_by ?? null,
     note: res.note,
+    matchName: res.match?.name || null,
+    matchPrice: wonOrNull(res.match?.price),
+    matchRegularPrice: wonOrNull(res.match?.regular_price),
+    matchImage: typeof image === 'string' && /^https?:\/\//.test(image) ? image : null,
+    matchVia: res.match ? (res.match.via === 'qr' ? 'qr' : 'search') : null,
+    skipReason: typeof res.skip_reason === 'string' ? res.skip_reason : null,
+    traceId: typeof res.trace_id === 'string' ? res.trace_id : null,
+    cause: typeof res.cause === 'string' ? res.cause : null,
   };
 }

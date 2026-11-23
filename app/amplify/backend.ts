@@ -1,9 +1,15 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineBackend } from '@aws-amplify/backend';
-import { Duration, Stack } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { auth } from './auth/resource';
 import { engineEnv } from './engine-env';
 import { data } from './data/resource';
@@ -11,6 +17,9 @@ import { parsingProxy } from './functions/parsing-proxy/resource';
 import { publicWishlist } from './functions/public-wishlist/resource';
 import { socialActions } from './functions/social-actions/resource';
 import { storage } from './storage/resource';
+
+/** 신고·차단 알림을 받는 운영팀 메일. 앱의 고객 문의 메일(lib/support/support_info.dart)과 같다. */
+const MODERATION_EMAIL = 'hi.wishkit@gmail.com';
 
 const backend = defineBackend({
   auth,
@@ -46,17 +55,36 @@ function grantTables(fn: FunctionHandle, grants: TableGrant[]) {
 grantTables(backend.publicWishlist, [
   { table: 'WishTab', env: 'WISH_TAB_TABLE' },
   { table: 'WishProduct', env: 'WISH_PRODUCT_TABLE' },
+  // 차단 관계(어느 쪽이든)면 공개 위시리스트를 보여 주지 않는다 (Play UGC 정책 · App Store 1.2).
+  { table: 'Block', env: 'BLOCK_TABLE' },
 ]);
 
-// 살까말까·댓글·알림 함수: 프로필·팔로우는 읽기만, 댓글방·댓글·받은함·알림은 읽고 쓰기.
+// 살까말까·댓글·투표·알림 함수: 프로필·팔로우는 읽기만, 댓글방·댓글·투표·받은함·알림은 읽고 쓰기.
 grantTables(backend.socialActions, [
   { table: 'Profile', env: 'PROFILE_TABLE' },
   { table: 'Follow', env: 'FOLLOW_TABLE' },
   { table: 'BasketThread', env: 'THREAD_TABLE', write: true },
   { table: 'BasketComment', env: 'COMMENT_TABLE', write: true },
+  { table: 'BasketVote', env: 'VOTE_TABLE', write: true },
   { table: 'ReceivedBasket', env: 'RECEIVED_TABLE', write: true },
   { table: 'Notification', env: 'NOTIFICATION_TABLE', write: true },
+  // 신고·차단 (App Store 심사 1.2). 탈퇴 정리(deleteMyContent)는 위의 댓글·받은함·댓글방 표를 함께 쓴다.
+  { table: 'Block', env: 'BLOCK_TABLE', write: true },
+  { table: 'ContentReport', env: 'REPORT_TABLE', write: true },
 ]);
+
+// 신고·차단이 들어오면 운영팀 메일로 알린다 (SNS 이메일 구독).
+// ⚠️ 처음 배포한 뒤 hi.wishkit@gmail.com 으로 오는 "AWS Notification - Subscription Confirmation"
+//    메일에서 Confirm subscription 을 눌러야 메일이 오기 시작한다. 확인 전에도 신고는 ContentReport 표에 쌓인다.
+{
+  const fn = backend.socialActions.resources.lambda;
+  const topic = new sns.Topic(Stack.of(fn), 'ReportAlerts', {
+    displayName: 'wishkit reports',
+  });
+  topic.addSubscription(new subscriptions.EmailSubscription(MODERATION_EMAIL));
+  topic.grantPublish(fn);
+  backend.socialActions.addEnvironment('REPORT_TOPIC_ARN', topic.topicArn);
+}
 
 // ─────────────────────────────────────────────────────────────
 // AI 추출 엔진(parsing-engine, Fargate) 연동: parsing-proxy를 엔진과 같은 VPC에 붙인다
@@ -143,6 +171,41 @@ cfnUserPoolClient.tokenValidityUnits = {
 };
 
 // ─────────────────────────────────────────────────────────────
+// 약관 · 개인정보처리방침 · 고객센터 웹 페이지 (App Store 심사 1.5 · 5.1.1)
+// ─────────────────────────────────────────────────────────────
+// app/site/*.html 을 전용 버킷에 올리고 CloudFront 로 공개한다(나라 제한 없음 — 애플 심사팀이 열어야 함).
+// 주소는 amplify_outputs 의 custom.siteBaseUrl → 앱이 마이페이지·회원가입 화면에서 연다.
+// App Store Connect 의 "개인정보 처리방침 URL"·"지원 URL"에는 <siteBaseUrl>/privacy.html, /support.html 을 넣는다.
+// 페이지 글을 고치면 다음 배포 때 자동으로 다시 올라가고 캐시도 비워진다.
+const siteBaseUrl = (() => {
+  const stack = backend.createStack('site');
+  const bucket = new s3.Bucket(stack, 'SiteBucket', {
+    blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+    enforceSSL: true,
+    removalPolicy: RemovalPolicy.DESTROY,
+    autoDeleteObjects: true,
+  });
+  const cdn = new cloudfront.Distribution(stack, 'SiteCdn', {
+    comment: 'wishkit legal & support pages',
+    defaultRootObject: 'index.html',
+    defaultBehavior: {
+      origin: origins.S3BucketOrigin.withOriginAccessControl(bucket),
+      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+      responseHeadersPolicy: cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,
+    },
+    priceClass: cloudfront.PriceClass.PRICE_CLASS_200,
+  });
+  new s3deploy.BucketDeployment(stack, 'SiteDeploy', {
+    sources: [s3deploy.Source.asset(join(dirname(fileURLToPath(import.meta.url)), '..', 'site'))],
+    destinationBucket: bucket,
+    distribution: cdn,
+    distributionPaths: ['/*'],
+  });
+  return `https://${cdn.distributionDomainName}`;
+})();
+
+// ─────────────────────────────────────────────────────────────
 // 4단계: 파일 배달망(CloudFront) 두 개 + 공유 페이지 28일 자동 삭제
 // ─────────────────────────────────────────────────────────────
 {
@@ -208,6 +271,8 @@ cfnUserPoolClient.tokenValidityUnits = {
       filesBaseUrl: `https://${cdn.distributionDomainName}`,
       // 공유 페이지 주소: https://<공유 배달망>/<주인 폴더>/<페이지>.html (share-pages/ 는 주소에 안 붙음)
       sharePagesBaseUrl: `https://${shareCdn.distributionDomainName}`,
+      // 약관 · 개인정보처리방침 · 고객센터 (위의 SiteCdn)
+      siteBaseUrl,
     },
   });
 }

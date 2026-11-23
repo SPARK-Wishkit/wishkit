@@ -6,6 +6,7 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_storage_s3/amplify_storage_s3.dart';
 
 import '../services/aws/file_store.dart';
+import '../support/support_info.dart';
 
 // `npx ampx sandbox --outputs-format dart --outputs-out-dir lib` 가 만들어 주는 파일.
 // 사람마다(샌드박스마다) 내용이 달라서 깃에 올리지 않는다(.gitignore).
@@ -29,6 +30,8 @@ Future<String?> configureAmplify({
     await Amplify.configure(amplifyConfig);
     FilesConfig.baseUrl = _customValue('filesBaseUrl');
     FilesConfig.sharePagesBaseUrl = _customValue('sharePagesBaseUrl');
+    // 약관 · 개인정보처리방침 · 고객센터 웹 페이지 주소 (backend.ts 의 SiteCdn)
+    SupportInfo.siteBaseUrl = _customValue('siteBaseUrl');
     return null;
   } on AmplifyAlreadyConfiguredException {
     return null;

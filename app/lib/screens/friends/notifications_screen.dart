@@ -32,7 +32,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final items = store.visibleNotifications;
 
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       appBar: AppBar(
         backgroundColor: DiaryColors.white,
         elevation: 0,
@@ -42,7 +42,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
         title: Text(
           '알림',
-          style: DiaryTheme.ui(18, weight: FontWeight.w700),
+          style: DiaryTheme.ui(17, weight: FontWeight.w700),
         ),
       ),
       body: items.isEmpty
@@ -53,7 +53,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               itemCount: items.length,
               itemBuilder: (context, i) {
                 final n = items[i];

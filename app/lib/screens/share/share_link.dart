@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../theme/diary_theme.dart';
+import '../../widgets/top_toast.dart';
 
 /// 살까말까를 어떻게 공유할지.
 enum ShareMethod {
@@ -21,20 +22,28 @@ Future<ShareMethod?> pickShareMethod(BuildContext context) {
     builder: (sheetCtx) => SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+            child: Text(
+              '살까말까를 어떻게 보낼까요?',
+              style: DiaryTheme.ui(16, weight: FontWeight.w700),
+            ),
+          ),
           for (final (method, icon, title, subtitle) in const [
             (
               ShareMethod.friends,
               Icons.people_alt_outlined,
               '앱 친구에게 보내기',
-              '친구가 댓글로 같이 고민해 줘요',
+              'wishkit 친구가 댓글로 살지 말지 같이 고민해 줘요',
             ),
             (
               ShareMethod.link,
               Icons.link,
               '링크로 공유',
-              '카카오톡·인스타그램 등으로 앱이 없는 친구에게도 보내요 (28일 동안 열려요)',
+              '앱이 없는 친구에게도 카카오톡·인스타그램 등으로 보낼 수 있어요. '
+                  '링크를 받은 누구나 28일 동안 볼 수 있어요 (상품 메모 포함).',
             ),
           ])
             ListTile(
@@ -67,7 +76,7 @@ Future<void> shareBasketLink({
   required String message,
   Rect? origin,
 }) async {
-  final messenger = ScaffoldMessenger.of(context);
+  final toast = TopToast.of(context);
   final navigator = Navigator.of(context, rootNavigator: true);
   showDialog<void>(
     context: context,
@@ -79,7 +88,7 @@ Future<void> shareBasketLink({
     url = await publish();
   } catch (e) {
     navigator.pop();
-    messenger.showSnackBar(SnackBar(content: Text(_errorText(e))));
+    toast.show(_errorText(e), error: true);
     return;
   }
   navigator.pop();
@@ -90,8 +99,10 @@ Future<void> shareBasketLink({
     );
   } catch (_) {
     await Clipboard.setData(ClipboardData(text: url));
-    messenger.showSnackBar(
-      const SnackBar(content: Text('공유창을 열 수 없어서 링크를 복사했어요. 원하는 곳에 붙여 넣어 주세요')),
+    toast.show(
+      '공유창을 열 수 없어서 링크를 복사했어요. 원하는 곳에 붙여 넣어 주세요',
+      icon: Icons.link,
+      duration: const Duration(seconds: 4),
     );
   }
 }

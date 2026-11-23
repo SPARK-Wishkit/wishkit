@@ -29,7 +29,10 @@ class FakeAppSync implements GqlRunner {
     'ReceivedBasket': ['recipientId', 'basketId'],
     'BasketThread': ['threadId'],
     'BasketComment': ['threadId', 'commentId'],
+    'BasketVote': ['threadId', 'voterId'],
     'Notification': ['recipientId', 'notificationId'],
+    'Block': ['blockerId', 'blockedId'],
+    'ContentReport': ['reportId'],
   };
 
   /// 표마다 "주인" 칸
@@ -37,20 +40,26 @@ class FakeAppSync implements GqlRunner {
     'Follow': 'followerId',
     'ReceivedBasket': 'recipientId',
     'Notification': 'recipientId',
+    'Block': 'blockerId',
+    'ContentReport': 'reporterId',
   };
 
   /// 앱이 직접 만들 수 없는 표 (서버 함수만)
   static const _serverCreateOnly = {
     'ReceivedBasket', 'Notification', 'BasketThread', 'BasketComment',
+    'BasketVote', 'Block', 'ContentReport',
   };
 
   /// 앱이 직접 고칠 수 없는 표
   static const _noClientUpdate = {
     'Handle', 'Follow', 'ReceivedBasket', 'BasketThread', 'BasketComment',
+    'BasketVote', 'Block', 'ContentReport',
   };
 
   /// 앱이 직접 지울 수 없는 표
-  static const _noClientDelete = {'BasketThread', 'BasketComment'};
+  static const _noClientDelete = {
+    'BasketThread', 'BasketComment', 'BasketVote', 'ContentReport',
+  };
 
   /// list 쿼리 이름 → (표, 조회 기준 필드)
   static const _lists = {
@@ -62,7 +71,9 @@ class FakeAppSync implements GqlRunner {
     'listSentBaskets': ('SentBasket', 'ownerId'),
     'listReceivedBaskets': ('ReceivedBasket', 'recipientId'),
     'listBasketComments': ('BasketComment', 'threadId'),
+    'listBasketVotes': ('BasketVote', 'threadId'),
     'listNotifications': ('Notification', 'recipientId'),
+    'listBlocks': ('Block', 'blockerId'),
   };
 
   /// 로그인한 사람이면 남의 것도 읽을 수 있는 표
@@ -83,7 +94,8 @@ class FakeAppSync implements GqlRunner {
       _owns(model, row) || (model == 'Follow' && row['followeeId'] == caller);
 
   static String _op(String document) =>
-      RegExp(r'\{\s*(\w+)\(').firstMatch(document)!.group(1)!;
+      // 인자 없는 서버 함수(deleteMyContent)도 있어서 '(' 또는 '}' 앞의 첫 이름을 본다.
+      RegExp(r'\{\s*(\w+)\s*[(}]').firstMatch(document)!.group(1)!;
 
   @override
   Future<Map<String, dynamic>> query(
@@ -124,7 +136,7 @@ class FakeAppSync implements GqlRunner {
 
     final (model, field) = _lists[op]!;
     Iterable<Map<String, dynamic>> rows = table(model).values;
-    if (model == 'BasketComment') {
+    if (model == 'BasketComment' || model == 'BasketVote') {
       // 참여자만 읽기: 목록에서 내가 참여자인 댓글만 남긴다 (실제 AppSync 도 거른다)
       final want = variables['ownerId'];
       rows = rows.where((r) =>
@@ -223,7 +235,8 @@ class FakeAppSync implements GqlRunner {
 
   static const _serverOps = {
     'sendBasket', 'addBasketComment', 'editBasketComment',
-    'removeBasketComment', 'notifyFollow',
+    'removeBasketComment', 'notifyFollow', 'voteBasket',
+    'reportContent', 'blockUser', 'deleteMyContent',
   };
   int _seq = 0;
   String _id() => 'srv${++_seq}';
@@ -258,6 +271,9 @@ class FakeAppSync implements GqlRunner {
     };
   }
 
+  bool _blocked(String blocker, String blocked) =>
+      table('Block').containsKey('$blocker#$blocked');
+
   Object? _server(String op, Map<String, dynamic> v) {
     final now = DateTime.utc(2026, 9, 25, 0, 0, _seq).toIso8601String();
     switch (op) {
@@ -268,6 +284,8 @@ class FakeAppSync implements GqlRunner {
             .cast<String>()
             .toSet()
             .where((id) => id != caller && table('Profile').containsKey(id))
+            // 차단 관계(어느 쪽이든)인 사람에게는 보내지 않는다.
+            .where((id) => !_blocked(id, caller) && !_blocked(caller, id))
             .toList();
         if (recipients.isEmpty) _code('NO_RECIPIENTS');
         final thread = table('BasketThread')[threadId];
@@ -277,15 +295,29 @@ class FakeAppSync implements GqlRunner {
           caller,
           ...recipients,
         }.toList();
-        table('BasketThread')[threadId] = {
-          'threadId': threadId, 'ownerId': caller, 'participantIds': participants,
-        };
-        for (final c in table('BasketComment').values) {
-          if (c['threadId'] == threadId) c['participantIds'] = participants;
-        }
         final items = (jsonDecode(v['items'] as String) as List)
             .map((e) => Map<String, dynamic>.from(e as Map)..remove('memo'))
             .toList();
+        // 투표 설정은 처음 보낼 때만 정한다 (logic.ts 와 같음).
+        final voteEnabled = thread != null
+            ? thread['voteEnabled'] != false
+            : v['voteEnabled'] != false;
+        final allowMultipleVotes = !voteEnabled
+            ? false
+            : thread != null
+                ? thread['allowMultipleVotes'] != false
+                : v['allowMultipleVotes'] != false;
+        table('BasketThread')[threadId] = {
+          'threadId': threadId, 'ownerId': caller, 'participantIds': participants,
+          'voteEnabled': voteEnabled, 'allowMultipleVotes': allowMultipleVotes,
+          'itemIds': {
+            ...((thread?['itemIds'] as List?)?.cast<String>() ?? const []),
+            for (final it in items) '${it['id']}',
+          }.toList(),
+        };
+        for (final c in [...table('BasketComment').values, ...table('BasketVote').values]) {
+          if (c['threadId'] == threadId) c['participantIds'] = participants;
+        }
         for (final r in recipients) {
           final bid = _id();
           table('ReceivedBasket')['$r#$bid'] = {
@@ -296,6 +328,7 @@ class FakeAppSync implements GqlRunner {
               'fromHandle': from['handle'], 'fromAvatar': from['avatar'],
               'items': items, 'createdAt': now, 'channels': ['friends'],
               'memo': v['memo'] ?? '', 'threadId': threadId,
+              'voteEnabled': voteEnabled, 'allowMultipleVotes': allowMultipleVotes,
             }),
           };
           _notify(r, from, 'basket', '${from['name']} 님이 살까말까 장바구니를 보냈어요', threadId);
@@ -317,6 +350,8 @@ class FakeAppSync implements GqlRunner {
         }
         final participants = (thread['participantIds'] as List).cast<String>();
         if (!participants.contains(caller)) _code('NOT_PARTICIPANT');
+        final owner = thread['ownerId'] as String;
+        if (_blocked(owner, caller) || _blocked(caller, owner)) _code('BLOCKED');
         final existing = table('BasketComment').values.where((c) => c['threadId'] == threadId).toList();
         var parentId = (v['parentId'] as String?) ?? '';
         final parent = existing.where((c) => c['commentId'] == parentId).firstOrNull;
@@ -336,7 +371,6 @@ class FakeAppSync implements GqlRunner {
           'parentId': parentId, 'participantIds': participants,
           'data': jsonEncode(comment),
         };
-        final owner = thread['ownerId'] as String;
         final targets = <String>{};
         if (owner != caller) targets.add(owner);
         if (parentId.isNotEmpty) {
@@ -369,6 +403,39 @@ class FakeAppSync implements GqlRunner {
         return true;
 
       }
+      case 'voteBasket': {
+        final threadId = v['threadId'] as String;
+        final picked = (v['productIds'] as List).map((e) => '$e').toSet().toList();
+        final thread = table('BasketThread')[threadId];
+        final participants = (thread?['participantIds'] as List?)?.cast<String>() ?? const [];
+        if (thread == null || !participants.contains(caller)) _code('VOTE_NOT_ALLOWED');
+        final owner = thread['ownerId'] as String;
+        if (picked.isNotEmpty && (_blocked(owner, caller) || _blocked(caller, owner))) {
+          _code('BLOCKED');
+        }
+        if (thread['voteEnabled'] == false && picked.isNotEmpty) _code('VOTE_OFF');
+        if (thread['allowMultipleVotes'] == false && picked.length > 1) {
+          _code('MULTIPLE_VOTES_NOT_ALLOWED');
+        }
+        final allowed = (thread['itemIds'] as List?)?.cast<String>() ?? const [];
+        if (allowed.isNotEmpty && picked.any((id) => !allowed.contains(id))) _code('INVALID_INPUT');
+        final key = '$threadId#$caller';
+        if (picked.isEmpty) {
+          table('BasketVote').remove(key);
+          return true;
+        }
+        final from = _author(caller);
+        table('BasketVote')[key] = {
+          'threadId': threadId, 'voterId': caller, 'participantIds': participants,
+          'data': jsonEncode({
+            'threadId': threadId, 'voterUid': caller, 'voterName': from['name'],
+            'voterHandle': from['handle'], 'voterAvatar': from['avatar'],
+            'productIds': picked, 'updatedAt': now,
+          }),
+        };
+        return true;
+
+      }
       case 'notifyFollow': {
         final target = v['targetId'] as String;
         if (target == caller) return false;
@@ -376,6 +443,69 @@ class FakeAppSync implements GqlRunner {
         final from = _author(caller);
         _notify(target, from, 'follow', '팔로우', '', id: 'follow-$caller');
         return true;
+      }
+      case 'reportContent': {
+        final type = v['targetType'] as String;
+        String targetUser;
+        if (type == 'comment') {
+          final row = table('BasketComment')['${v['threadId']}#${v['commentId']}'] ??
+              _code('TARGET_NOT_FOUND');
+          if (!(row['participantIds'] as List).contains(caller)) _code('NOT_PARTICIPANT');
+          targetUser = row['authorId'] as String;
+        } else if (type == 'basket') {
+          final row = table('ReceivedBasket')['$caller#${v['basketId']}'] ??
+              _code('TARGET_NOT_FOUND');
+          targetUser = row['fromUid'] as String;
+        } else if (type == 'user') {
+          targetUser = (v['targetUserId'] as String?) ?? '';
+          if (!table('Profile').containsKey(targetUser)) _code('TARGET_NOT_FOUND');
+        } else {
+          _code('INVALID_INPUT');
+        }
+        if (targetUser == caller) _code('INVALID_INPUT');
+        final id = _id();
+        table('ContentReport')[id] = {
+          'reportId': id, 'reporterId': caller, 'targetType': type,
+          'targetUserId': targetUser, 'reason': v['reason'], 'status': 'open',
+        };
+        return true;
+      }
+      case 'blockUser': {
+        final target = v['targetId'] as String;
+        if (target == caller) _code('INVALID_INPUT');
+        table('Block')['$caller#$target'] = {'blockerId': caller, 'blockedId': target};
+        return true;
+      }
+      case 'deleteMyContent': {
+        var removed = 0;
+        final comments = table('BasketComment');
+        comments.removeWhere((_, c) {
+          final mine = c['authorId'] == caller;
+          if (mine) removed++;
+          return mine;
+        });
+        table('ReceivedBasket').removeWhere((_, b) {
+          final mine = b['fromUid'] == caller;
+          if (mine) removed++;
+          return mine;
+        });
+        final myThreads = [
+          for (final t in table('BasketThread').values)
+            if (t['ownerId'] == caller) t['threadId'] as String,
+        ];
+        for (final t in myThreads) {
+          comments.removeWhere((_, c) => c['threadId'] == t);
+          table('BasketVote').removeWhere((_, x) => x['threadId'] == t);
+          table('BasketThread').remove(t);
+          removed++;
+        }
+        table('BasketVote').removeWhere((_, x) {
+          final mine = x['voterId'] == caller;
+          if (mine) removed++;
+          return mine;
+        });
+        table('Block').removeWhere((_, b) => b['blockerId'] == caller);
+        return removed;
       }
     }
     return null;

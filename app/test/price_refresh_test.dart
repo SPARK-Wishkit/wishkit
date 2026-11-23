@@ -85,6 +85,34 @@ void main() {
     expect(p.discount, isNull);
   });
 
+  test('판매가·정가가 같으면 저장된 할인율이 반올림으로만 달라도 unchanged', () async {
+    final store = await _store(
+      () => extracted(price: 36000, regular: 52000, confidence: 'high'),
+    );
+    // 52,000 → 36,000 은 30.8% → 31%로 계산되지만, 예전에 30%로 저장돼 있던 경우.
+    store.products = [
+      _product(price: 36000, originalPrice: 52000, discount: 30),
+    ];
+
+    final result = await store.refreshProductPrice(1);
+
+    expect(result.status, PriceRefreshStatus.unchanged);
+  });
+
+  test('판매가는 같고 정가만 바뀌면 unchanged(알리지 않음) — 정가는 조용히 맞춰 둔다', () async {
+    final store = await _store(
+      () => extracted(price: 36000, confidence: 'high'),
+    );
+    store.products = [
+      _product(price: 36000, originalPrice: 52000, discount: 31),
+    ];
+
+    final result = await store.refreshProductPrice(1);
+
+    expect(result.status, PriceRefreshStatus.unchanged);
+    expect(store.productById(1)!.originalPrice, isNull);
+  });
+
   test('가격을 못 읽으면 기존 가격을 유지한다', () async {
     final store = await _store(
       () => extracted(name: '클래식 반소매 티셔츠', price: null, ambiguous: true),
@@ -113,6 +141,18 @@ void main() {
     final applied = await store.applyRefreshedPrice(1, result.info!);
     expect(applied.status, PriceRefreshStatus.updated);
     expect(store.productById(1)!.price, 55000);
+  });
+
+  test('확신이 낮아도 판매가가 그대로면 확인 창 없이 unchanged', () async {
+    final store = await _store(
+      () => extracted(price: 100000, confidence: 'low'),
+    );
+    store.products = [_product()];
+
+    final result = await store.refreshProductPrice(1);
+
+    expect(result.status, PriceRefreshStatus.unchanged);
+    expect(store.productById(1)!.price, 100000);
   });
 
   test('같은 가격이면 unchanged, 1분 안에 다시 누르면 쇼핑몰을 다시 읽지 않는다', () async {

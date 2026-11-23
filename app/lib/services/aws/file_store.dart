@@ -21,7 +21,7 @@ class FilesConfig {
 /// 파일 올리기·지우기의 실제 수단. 테스트에서는 가짜로 바꿔 끼운다.
 abstract interface class FileTransport {
   /// [relativePath] 는 "내 폴더" 아래 경로 (예: '1727...jpg').
-  /// [folder] 는 'avatars' · 'share-pages' · 'tag-photos' 중 하나.
+  /// [folder] 는 'avatars' · 'share-pages' · 'tag-photos' · 'product-photos' 중 하나.
   /// 올라간 전체 경로(S3 키)를 돌려준다.
   Future<String> upload({
     required String folder,
@@ -115,7 +115,8 @@ class AwsFileStore {
   static const avatarMaxBytes = 5 * 1024 * 1024;
   static const sharePageMaxBytes = 1 * 1024 * 1024;
   static const tagPhotoMaxBytes = 5 * 1024 * 1024;
-  static const _myFolders = ['avatars', 'share-pages', 'tag-photos'];
+  static const productPhotoMaxBytes = 5 * 1024 * 1024;
+  static const _myFolders = ['avatars', 'share-pages', 'tag-photos', 'product-photos'];
 
   String get baseUrl {
     final b = _trimSlash((_baseUrl ?? FilesConfig.baseUrl).trim());
@@ -176,14 +177,68 @@ class AwsFileStore {
     return sharePageUrlFor(path);
   }
 
+  /// 공유 링크 미리보기(og:image)용 로고 이미지를 공유 페이지와 같은 폴더에 올리고 공개 주소를 돌려준다.
+  ///
+  /// 공유 페이지와 같은 share-pages/ 폴더라서 같은 공개 배달망으로 열리고, 28일 자동 삭제도 같이 받는다.
+  /// 공유할 때마다 다시 올리므로(같은 이름에 덮어쓰기) 이 이미지는 가장 최근 공유 페이지보다 먼저
+  /// 지워지지 않는다.
+  Future<String> uploadShareOgImage(List<int> pngBytes) async {
+    if (pngBytes.isEmpty) throw Exception('미리보기 이미지가 비어 있어요.');
+    final path = await _t.upload(
+      folder: 'share-pages',
+      // 카카오톡 등은 미리보기 이미지를 주소별로 오래 기억한다 — 이미지를 바꾸면 이름도 바꿔야
+      // 새 이미지가 뜬다(2026-11-05: 별 로고로 바꾸며 og-wishkit.png → og-wishkit-star.png).
+      relativePath: 'og-wishkit-star.png',
+      file: null,
+      bytes: pngBytes,
+      contentType: 'image/png',
+    );
+    return sharePageUrlFor(path);
+  }
+
   /// 태그 사진으로 담은 상품의 태그 사진을 올리고 영구 주소를 돌려준다.
   ///
   /// 파일 이름은 추측할 수 없는 무작위 값이다 — 주소는 주인의 상품 기록에만 저장되고,
   /// 친구에게 보이는 공개 목록에는 들어가지 않는다.
-  Future<String> uploadTagPhoto(List<int> bytes, {required String mimeType}) async {
-    if (bytes.isEmpty) throw Exception('태그 사진이 비어 있어요.');
-    if (bytes.length > tagPhotoMaxBytes) {
-      throw Exception('태그 사진은 5MB 이하만 저장할 수 있어요.');
+  Future<String> uploadTagPhoto(List<int> bytes, {required String mimeType}) =>
+      _uploadPhoto(
+        folder: 'tag-photos',
+        bytes: bytes,
+        mimeType: mimeType,
+        maxBytes: tagPhotoMaxBytes,
+        label: '태그 사진',
+      );
+
+  /// 사용자가 직접 찍은 옷 사진을 올리고 영구 주소를 돌려준다. 상품의 대표 사진(Product.image)으로 쓴다.
+  ///
+  /// 태그 사진과 달리 대표 사진이라 친구 공개 목록·살까말까 바구니에도 보인다(쇼핑몰 상품 사진과 같은 자리).
+  /// 이름은 무작위라서 목록에 없는 사진의 주소를 추측할 수는 없다.
+  Future<String> uploadProductPhoto(List<int> bytes, {required String mimeType}) =>
+      _uploadPhoto(
+        folder: 'product-photos',
+        bytes: bytes,
+        mimeType: mimeType,
+        maxBytes: productPhotoMaxBytes,
+        label: '옷 사진',
+      );
+
+  /// [url] 이 내 태그 사진 주소면 그 파일을 지운다. 아니면 아무것도 안 한다.
+  /// (상품을 지울 때 함께 부른다 — 실패해도 상품 삭제는 막지 않게 호출하는 쪽에서 감싼다)
+  Future<void> removeTagPhoto(String url) => _removeMine(url, 'tag-photos/');
+
+  /// [url] 이 내 옷 사진 주소면 그 파일을 지운다. 쇼핑몰 사진 주소 등 다른 주소면 아무것도 안 한다.
+  Future<void> removeProductPhoto(String url) => _removeMine(url, 'product-photos/');
+
+  Future<String> _uploadPhoto({
+    required String folder,
+    required List<int> bytes,
+    required String mimeType,
+    required int maxBytes,
+    required String label,
+  }) async {
+    if (bytes.isEmpty) throw Exception('$label이 비어 있어요.');
+    if (bytes.length > maxBytes) {
+      throw Exception('$label은 ${maxBytes ~/ (1024 * 1024)}MB 이하만 저장할 수 있어요.');
     }
     final (ext, type) = switch (mimeType) {
       'image/png' => ('png', 'image/png'),
@@ -192,7 +247,7 @@ class AwsFileStore {
       _ => ('jpg', 'image/jpeg'),
     };
     final path = await _t.upload(
-      folder: 'tag-photos',
+      folder: folder,
       relativePath: '${_randomName()}.$ext',
       file: null,
       bytes: bytes,
@@ -201,13 +256,11 @@ class AwsFileStore {
     return urlFor(path);
   }
 
-  /// [url] 이 내 태그 사진 주소면 그 파일을 지운다. 아니면 아무것도 안 한다.
-  /// (상품을 지울 때 함께 부른다 — 실패해도 상품 삭제는 막지 않게 호출하는 쪽에서 감싼다)
-  Future<void> removeTagPhoto(String url) async {
+  Future<void> _removeMine(String url, String folderPrefix) async {
     final prefix = '$baseUrl/';
     if (!url.startsWith(prefix)) return;
     final path = url.substring(prefix.length).split('/').map(Uri.decodeComponent).join('/');
-    if (!path.startsWith('tag-photos/')) return;
+    if (!path.startsWith(folderPrefix)) return;
     await _t.removeAll([path]);
   }
 

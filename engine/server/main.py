@@ -7,8 +7,9 @@ engine-ai-prototype(2026-09-18 결정: 몰별 DOM 규칙 폐기, 서버 AI가 �
 흐름: POST /extract {url} → 렌더링(공유 브라우저, 새 컨텍스트) → cleaned_html을 Gemini에 전달
 → ambiguous면 스크린샷으로 Gemini 비전 재시도 → 그라운딩 체크 → JSON 응답.
 
-POST /identify-tag {image_base64, mime_type} → 태그 사진에서 품번을 읽고, 검색으로 찾은 상품
-페이지에 그 품번이 실제로 있는지 확인해 URL을 돌려준다(가격은 읽지 않음 — tag_identify.py 참고).
+POST /identify-tag {image_base64, mime_type} → 태그 사진의 QR을 먼저 따라가 보고(qr_codes.py), 안 되면
+품번을 읽어 검색으로 찾은 상품 페이지에 그 품번이 실제로 있는지 확인해 URL을 돌려준다
+(가격은 읽지 않음 — tag_identify.py 참고).
 
 실행: `uvicorn main:app --host 0.0.0.0 --port 8000` (.env에 GEMINI_API_KEY 필요 — .env.example 참고).
 """
@@ -17,31 +18,42 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import json
 import logging
+import urllib.parse
 from contextlib import asynccontextmanager
 from functools import partial
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
-from playwright.async_api import async_playwright
-from pydantic import BaseModel, HttpUrl
-
+import brand_rules
 import config
 from compare import grounding_check, withhold_off_policy_price
 from metrics import PeakRSSSampler, now_ms
+from playwright.async_api import async_playwright
+from price_rules import apply_price_rules
 from providers import ProviderResult, call_gemini, call_gemini_vision
-from render import launch_browser, render
-from share_links import resolve_share_link
+from pydantic import BaseModel, HttpUrl
+from qr_codes import decode_codes, resolve_qr_url
+from render import launch_browser, render, resolve_in_browser
+from share_links import (
+    is_short_link,
+    resolve_share_link,
+    strip_query,
+    strip_tracking_params,
+)
 from tag_identify import (
     IdentifyError,
     PageView,
+    call_gemini_read_pages,
     call_gemini_search,
     call_gemini_tag,
     identify,
+    search_query,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("extract-server")
+_background: set = set()  # 백그라운드 작업 참조 보관(가비지 컬렉션 방지)
 
 class ExtractRequest(BaseModel):
     url: HttpUrl
@@ -89,20 +101,50 @@ async def _extract(url: str) -> dict:
     t_start = now_ms()
     # 앱 공유용 짧은 링크(musinsa.onelink.me 등)는 실제 상품 주소로 먼저 바꾼다(share_links.py).
     url = await asyncio.to_thread(resolve_share_link, url)
+    if is_short_link(url):
+        # HTTP 요청으로 못 풀었다(2026-11-18: onelink.me 가 서버 요청에 403). 브라우저로 이동 주소만 얻는다.
+        # 그래도 못 풀면 짧은 링크를 렌더링하지 않는다 — 앱/스토어로 보내는 중간 페이지라 끝까지 기다리다
+        # 전체 시간을 다 써서 504 가 났다. 빨리 실패해야 앱이 바로 직접 입력 화면을 보여 준다.
+        short_url = url
+        async with app.state.render_semaphore:
+            resolved = await resolve_in_browser(
+                app.state.browser, short_url, timeout_s=config.SHORT_LINK_BROWSER_TIMEOUT_S
+            )
+        if not resolved:
+            logger.warning("[extract] 공유 링크를 상품 주소로 못 바꿈 — 렌더링하지 않고 종료: %s", short_url)
+            raise HTTPException(502, f"공유 링크를 상품 주소로 바꾸지 못함: {short_url}")
+        logger.info("공유 링크 → 상품 주소(브라우저): %s → %s", short_url, strip_query(resolved))
+        url = resolved
 
     async with app.state.render_semaphore:
         r = await render(app.state.browser, url, nav_timeout_ms=config.RENDER_NAV_TIMEOUT_MS)
     render_elapsed_ms = now_ms() - t_start
 
+    # 502 이유는 원래 HTTPException detail(→ parsing-proxy Lambda 로그)에만 남았다. 엔진 로그에도 한 줄씩 남긴다.
+    # 주소는 쿼리를 뺀다(공유로 풀린 주소에 공유한 사람 식별값이 붙어 있음). 성공 응답의 final_url 은 쿼리를
+    # 통째로 지우지 않는다(앱이 상품 주소로 저장하고, 쿼리에 상품 번호가 있는 몰도 있다) — 대신 알려진 추적
+    # 파라미터만 지운다(strip_tracking_params).
+    host = urllib.parse.urlparse(r.final_url or url).hostname
     if r.error:
+        logger.warning("[extract] 렌더링 오류 host=%s error=%s url=%s (%dms)",
+                       host, r.error, strip_query(url), render_elapsed_ms)
         raise HTTPException(502, f"렌더링 오류: {r.error}")
     if r.blocked:
-        raise HTTPException(502, f"상품 페이지 접근이 차단됨(final_url={r.final_url})")
+        final_url = strip_query(r.final_url or url)
+        logger.warning("[extract] 차단 host=%s status=%s reason=%r final_url=%s (%dms)",
+                       host, r.status_code, r.block_reason, final_url, render_elapsed_ms)
+        raise HTTPException(502, f"상품 페이지 접근이 차단됨(status={r.status_code}, final_url={final_url})")
 
     text_result, text_elapsed_ms = await _run_gemini(call_gemini, r.cleaned_html, r.price_candidates)
     if not text_result.ok or not text_result.data:
+        logger.warning("[extract] AI 호출 실패 host=%s error=%s (%dms)",
+                       host, text_result.error, now_ms() - t_start)
         raise HTTPException(502, f"AI 호출 실패: {text_result.error}")
     extracted = text_result.data
+    # 몰별 가격 규칙(price_rules.py — 지금은 에이블리 즉시할인가). 페이지 글자로 확인되면 AI 값을 바로잡고
+    # ambiguous 를 풀어 스크린샷 폴백을 건너뛴다.
+    if note := apply_price_rules(extracted, r.raw_text, host):
+        logger.info("[price-rule] host=%s %s", host, note)
 
     screenshot_fallback_used = False
     vision_elapsed_ms = 0
@@ -113,6 +155,8 @@ async def _extract(url: str) -> dict:
         if vision_result.ok and vision_result.data:
             extracted = vision_result.data
             screenshot_fallback_used = True
+            if note := apply_price_rules(extracted, r.raw_text, host):
+                logger.info("[price-rule] host=%s (스크린샷 결과) %s", host, note)
         else:
             logger.warning("스크린샷 폴백 실패(%s) — 텍스트 결과를 그대로 사용", vision_result.error)
 
@@ -127,7 +171,7 @@ async def _extract(url: str) -> dict:
         **final,
         "grounding": grounding,
         "screenshot_fallback_used": screenshot_fallback_used,
-        "render": {"ok": r.ok, "blocked": r.blocked, "final_url": r.final_url},
+        "render": {"ok": r.ok, "blocked": r.blocked, "final_url": strip_tracking_params(r.final_url)},
         "metrics": {
             "total_elapsed_ms": now_ms() - t_start,
             "render_elapsed_ms": render_elapsed_ms,
@@ -135,6 +179,15 @@ async def _extract(url: str) -> dict:
             "gemini_vision_elapsed_ms": vision_elapsed_ms,
         },
     }
+    # 한 줄 요약 로그(/identify-tag의 [identify]와 같은 목적): 어느 사이트였고, 본문이 얼마나 있었고,
+    # 가격을 읽었는지, 못 읽었으면 AI가 적은 이유.
+    logger.info(
+        "[extract] host=%s price=%r ambiguous=%s reason=%r body_chars=%d vision=%s (%dms, 렌더 %dms)",
+        # 가격은 응답의 "price" 안에 있다(prompts.py 스키마). 11/2 부터 바깥에서 찾아 로그엔 늘 None 이었다.
+        urllib.parse.urlparse(r.final_url or url).hostname, (extracted.get("price") or {}).get("unconditional_price"),
+        bool(extracted.get("ambiguous")), extracted.get("ambiguity_reason"), len(r.raw_text.strip()),
+        screenshot_fallback_used, response["metrics"]["total_elapsed_ms"], render_elapsed_ms,
+    )
     return response
 
 
@@ -181,7 +234,9 @@ async def _render_for_identify(url: str, budget_s: float) -> PageView:
         return PageView(ok=False, final_url=url, raw_text="", error="시간 초과")
     # 품번 확인용 글자에는 메타 태그 글자도 넣는다(/extract 의 grounding 체크는 본문만 그대로 쓴다).
     text = f"{r.meta_text} {r.raw_text}".strip()
-    return PageView(ok=r.ok, final_url=r.final_url or url, raw_text=text, error=r.error)
+    return PageView(ok=r.ok, final_url=r.final_url or url, raw_text=text, error=r.error,
+                    code_hints=r.code_hints, body_chars=len(r.raw_text.strip()) if r.ok else None,
+                    html=r.cleaned_html if r.ok else "")
 
 
 def _decode_image(image_base64: str) -> bytes:
@@ -228,8 +283,14 @@ async def identify_tag(req: IdentifyTagRequest):
                 image, req.mime_type,
                 read_tag=lambda img, mime: timed("read_tag", gemini_once(call_gemini_tag, img, mime)),
                 search=lambda tag: timed("search", gemini_once(call_gemini_search, tag)),
+                read_pages=lambda tag, urls: timed("read_pages", gemini_once(call_gemini_read_pages, tag, urls)),
                 render_page=lambda url: timed("render", _render_for_identify(url, time_left() - 1.0)),
                 time_left=time_left,
+                # QR·바코드 디코딩과 QR 주소 따라가기는 동기 함수라 스레드에서 돈다.
+                read_codes=lambda img: timed("qr_decode", asyncio.to_thread(decode_codes, img)),
+                rule_urls=brand_rules.candidate_urls,
+                resolve_url=lambda url: timed("qr_resolve", asyncio.to_thread(
+                    resolve_qr_url, url, total_timeout=max(1.0, min(4.0, time_left() - 8.0)))),
             ),
             timeout=config.IDENTIFY_TIMEOUT_S,
         )
@@ -244,12 +305,31 @@ async def identify_tag(req: IdentifyTagRequest):
     total_ms = now_ms() - started
     # 한 줄 요약 로그(사진은 남기지 않음): 무엇을 읽고, 어디를 열어 봤고, 왜 떨어졌는지.
     logger.info(
-        "[identify] %s (%dms, 단계 %s) brand=%r code=%r other=%r official=%r note=%r checked=%s",
+        "[identify] %s (%dms, 단계 %s) brand=%r code=%r other=%r barcode=%r(%s) qr=%s official=%r note=%r "
+        "checked=%s match=%s",
         outcome.status, total_ms, stages, outcome.tag.get("brand"), outcome.tag.get("product_code"),
-        outcome.tag.get("other_codes"), outcome.official_domain, outcome.note,
+        outcome.tag.get("other_codes"), outcome.tag.get("barcode"), outcome.tag.get("barcode_source", "ocr"),
+        [(q.get("kind"), q.get("final_url"), q.get("result")) for q in outcome.qr],
+        outcome.official_domain, outcome.note,
         [(c["url"], c["source"], c["verified"], c["reason"]) for c in outcome.checked],
+        {k: (outcome.match or {}).get(k) for k in ("url", "verified_by", "via", "name", "price", "regular_price")}
+        if outcome.match else None,
     )
-    return {**outcome.to_dict(), "metrics": {"total_elapsed_ms": total_ms, "stages_ms": stages}}
+    body = outcome.to_dict()
+    trace_id = failure_report.new_trace_id()
+    report = failure_report.build_report(
+        body, trace_id=trace_id, stages=stages, total_ms=total_ms,
+        search_query=search_query(outcome.tag) if outcome.tag.get("is_product_tag") else None,
+    )
+    # 분석용 기록 한 줄(JSON) — tools/learn_from_feedback.py가 이 줄들을 모아 원인별로 정리한다.
+    logger.info("[identify-report] %s", json.dumps(report, ensure_ascii=False))
+    # 못 찾은 태그는 사진(메타데이터 제거)과 기록을 보관한다 — 켜져 있을 때만, 응답을 기다리게 하지 않고.
+    if failure_store.enabled():
+        task = asyncio.create_task(asyncio.to_thread(failure_store.save, image, report))
+        _background.add(task)
+        task.add_done_callback(_background.discard)
+    return {**body, "trace_id": trace_id, "cause": report["cause"],
+            "metrics": {"total_elapsed_ms": total_ms, "stages_ms": stages}}
 
 
 @app.get("/healthz")

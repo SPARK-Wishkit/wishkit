@@ -82,6 +82,21 @@ void main() {
     expect(url, 'https://cdn.example.net/share-pages/ap-northeast-2%3Ame-id/p1.html');
   });
 
+  test('공유 미리보기 로고: 공유 페이지와 같은 폴더·같은 공개 배달망, 같은 이름에 덮어쓰기', () async {
+    final shareStore = AwsFileStore(
+      transport: s3,
+      baseUrl: 'https://cdn.example.net',
+      sharePagesBaseUrl: 'https://share.example.net',
+    );
+    final a = await shareStore.uploadShareOgImage([1, 2, 3]);
+    final b = await shareStore.uploadShareOgImage([4, 5]);
+    expect(a, 'https://share.example.net/ap-northeast-2%3Ame-id/og-wishkit-star.png');
+    expect(b, a);
+    final saved = s3.files['share-pages/ap-northeast-2:me-id/og-wishkit-star.png']!;
+    expect(saved.$1, [4, 5]);
+    expect(saved.$2, 'image/png');
+  });
+
   test('확장자별 형식 (이미지가 아니면 jpg — 기존 동작)', () {
     expect(AwsFileStore.imageType('a.PNG'), ('png', 'image/png'));
     expect(AwsFileStore.imageType('a.webp'), ('webp', 'image/webp'));
@@ -153,10 +168,41 @@ void main() {
     );
   });
 
+  test('옷 사진: 추측할 수 없는 이름으로 product-photos 에 올리고, 주소로 다시 지운다', () async {
+    final url = await store.uploadProductPhoto([1, 2, 3], mimeType: 'image/png');
+    final path = s3.files.keys.single;
+    expect(path, startsWith('product-photos/${FakeTransport.identity}/'));
+    expect(RegExp(r'/[0-9a-f]{32}\.png$').hasMatch(path), isTrue);
+    expect(s3.files[path]!.$2, 'image/png');
+    expect(url, startsWith('https://cdn.example.net/product-photos/'));
+
+    await store.removeProductPhoto(url);
+    expect(s3.files, isEmpty);
+  });
+
+  test('옷 사진: 쇼핑몰 사진 주소나 태그 사진 주소는 지우지 않는다', () async {
+    final tagUrl = await store.uploadTagPhoto([1], mimeType: 'image/jpeg');
+    await store.removeProductPhoto('https://img.musinsa.com/product-photos/x.jpg');
+    await store.removeProductPhoto(tagUrl);
+    expect(s3.files.length, 1);
+  });
+
+  test('옷 사진: 비었거나 5MB 넘으면 거절', () async {
+    await expectLater(
+      store.uploadProductPhoto(const [], mimeType: 'image/jpeg'),
+      throwsA(predicate((e) => e.toString().contains('비어'))),
+    );
+    await expectLater(
+      store.uploadProductPhoto(List.filled(5 * 1024 * 1024 + 1, 0), mimeType: 'image/jpeg'),
+      throwsA(predicate((e) => e.toString().contains('5MB'))),
+    );
+  });
+
   test('회원 탈퇴: 내 폴더의 파일을 모두 지운다 (태그 사진 포함)', () async {
     await store.uploadAvatar(await fileOf('a.jpg', 1));
     await store.uploadSharePage(pageId: 'p', html: 'x');
     await store.uploadTagPhoto([1], mimeType: 'image/png');
+    await store.uploadProductPhoto([1], mimeType: 'image/jpeg');
     await store.deleteAll();
     expect(s3.files, isEmpty);
   });

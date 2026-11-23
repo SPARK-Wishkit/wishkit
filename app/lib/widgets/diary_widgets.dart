@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../theme/diary_theme.dart';
 
+/// Plain white sheet. Kept under its old name so call sites don't change.
 class DiaryGridPaper extends StatelessWidget {
   const DiaryGridPaper({
     super.key,
     required this.child,
     this.color = DiaryColors.paper,
     this.padding = const EdgeInsets.all(12),
-    this.borderRadius = 16,
+    this.borderRadius = DiaryTheme.radius,
     this.border,
   });
 
@@ -24,14 +25,15 @@ class DiaryGridPaper extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(borderRadius),
-        border: border,
+        // [border] (old thick gray frame) is intentionally no longer drawn.
       ),
       child: Padding(padding: padding, child: child),
     );
   }
 }
 
-/// Grayscale filter for the black & white look.
+/// Flat white page body (formerly a bordered notebook sheet).
+/// [folderColor] / [border] are kept for older call sites but no longer drawn.
 class SpiralNotebook extends StatelessWidget {
   const SpiralNotebook({
     super.key,
@@ -46,17 +48,103 @@ class SpiralNotebook extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: folderColor,
+    return ColoredBox(color: DiaryColors.paper, child: child);
+  }
+}
+
+/// 8px gray band between page sections.
+class SectionBand extends StatelessWidget {
+  const SectionBand({super.key, this.height = 8});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) =>
+      SizedBox(height: height, child: const ColoredBox(color: DiaryColors.band));
+}
+
+/// Settings-style row: icon · label · (trailing) · chevron, hairline below.
+class MenuRow extends StatelessWidget {
+  const MenuRow({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.trailing,
+    this.compact = false,
+    this.height,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final Widget? trailing;
+
+  /// Shorter row (44px, 14pt) for secondary menus.
+  final bool compact;
+
+  /// 줄 높이를 직접 정할 때(기본: compact 44, 아니면 54).
+  final double? height;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-        child: DiaryGridPaper(
-          borderRadius: 12,
-          padding: EdgeInsets.zero,
-          border: border,
-          child: child,
+        height: height ?? (compact ? 44 : 54),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: DiaryColors.line)),
+        ),
+        child: Row(
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: compact ? 18 : 20, color: DiaryColors.ink),
+              SizedBox(width: compact ? 10 : 12),
+            ],
+            Expanded(
+              child: Text(
+                label,
+                style: DiaryTheme.ui(compact ? 14 : 15, weight: FontWeight.w500),
+              ),
+            ),
+            if (trailing != null) ...[trailing!, const SizedBox(width: 4)],
+            Icon(
+              Icons.chevron_right,
+              size: compact ? 18 : 20,
+              color: DiaryColors.inkSoft,
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+/// Square checkbox (black fill when checked).
+class SelectBox extends StatelessWidget {
+  const SelectBox({super.key, required this.checked, this.size = 22});
+
+  final bool checked;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: checked ? DiaryColors.ink : DiaryColors.paper,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: checked ? DiaryColors.ink : DiaryColors.inkSoft,
+          width: 1.4,
+        ),
+      ),
+      child: checked
+          ? Icon(Icons.check, size: size - 6, color: DiaryColors.paper)
+          : null,
     );
   }
 }
@@ -80,13 +168,15 @@ class MineBadge extends StatelessWidget {
   }
 }
 
+/// Flat list row (Musinsa-style): no card, hairline divider underneath.
+/// A non-white [backgroundColor] (e.g. "my" feed entries) tints the row.
 class WhiteProductCard extends StatelessWidget {
   const WhiteProductCard({
     super.key,
     required this.child,
     this.indexColor,
     this.onTap,
-    this.margin = const EdgeInsets.only(bottom: 10),
+    this.margin = EdgeInsets.zero,
     this.backgroundColor = DiaryColors.white,
   });
 
@@ -100,33 +190,28 @@ class WhiteProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: margin,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Row(
-          children: [
-            if (indexColor != null)
-              Container(
-                width: 10,
-                height: 42,
-                margin: const EdgeInsets.only(right: 6),
-                decoration: BoxDecoration(
-                  color: indexColor,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: backgroundColor,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: DiaryColors.ink.withValues(alpha: 0.08)),
-                ),
-                child: child,
-              ),
+      child: Material(
+        color: backgroundColor,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: DiaryColors.line)),
             ),
-          ],
+            child: Row(
+              children: [
+                if (indexColor != null)
+                  Container(
+                    width: 3,
+                    height: 36,
+                    margin: const EdgeInsets.only(right: 10),
+                    color: indexColor,
+                  ),
+                Expanded(child: child),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -141,6 +226,7 @@ class PersonRow extends StatelessWidget {
     required this.handle,
     required this.avatarUrl,
     this.onTap,
+    this.onLongPress,
     this.subtitle,
     this.trailing,
   });
@@ -149,17 +235,30 @@ class PersonRow extends StatelessWidget {
   final String handle;
   final String avatarUrl;
   final VoidCallback? onTap;
+
+  /// 길게 누르기 (친구 목록: 신고 · 차단).
+  final VoidCallback? onLongPress;
   final String? subtitle;
   final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
+    final card = _card();
+    if (onLongPress == null) return card;
+    return GestureDetector(onLongPress: onLongPress, child: card);
+  }
+
+  Widget _card() {
     return WhiteProductCard(
       onTap: onTap,
       child: Row(
         children: [
-          CircleAvatar(radius: 24, backgroundImage: NetworkImage(avatarUrl)),
-          const SizedBox(width: 10),
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: DiaryColors.surfaceSoft,
+            backgroundImage: NetworkImage(avatarUrl),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,20 +267,23 @@ class PersonRow extends StatelessWidget {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: DiaryTheme.body(14, weight: FontWeight.w700),
+                  style: DiaryTheme.body(15, weight: FontWeight.w700),
                 ),
                 Text(
                   handle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
+                  style: DiaryTheme.body(13, color: DiaryColors.inkSoft),
                 ),
                 if (subtitle != null)
-                  Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: DiaryTheme.body(11, color: DiaryColors.accent),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: DiaryTheme.body(12, color: DiaryColors.inkMuted),
+                    ),
                   ),
               ],
             ),
@@ -193,6 +295,8 @@ class PersonRow extends StatelessWidget {
   }
 }
 
+/// Musinsa-style button: black fill (primary) or white with hairline outline.
+/// [color] is kept for older call sites but no longer used.
 class DiaryButton extends StatelessWidget {
   const DiaryButton({
     super.key,
@@ -201,6 +305,7 @@ class DiaryButton extends StatelessWidget {
     this.filled = false,
     this.color = DiaryColors.folderBlue,
     this.icon,
+    this.loading = false,
   });
 
   final String label;
@@ -209,40 +314,60 @@ class DiaryButton extends StatelessWidget {
   final Color color;
   final IconData? icon;
 
+  /// 진행 중이면 글자 왼쪽에 도는 표시를 보여 준다(아이콘 자리).
+  final bool loading;
+
   bool get _disabled => onPressed == null;
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: _disabled ? 0.45 : 1,
-      child: Material(
-        color: filled ? color : DiaryColors.white,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: DiaryColors.ink.withValues(alpha: 0.7), width: 1.2),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 18, color: DiaryColors.ink),
-                  const SizedBox(width: 6),
-                ],
-                Flexible(
-                  child: OneLineText(
-                    label,
-                    textAlign: TextAlign.center,
-                    style: DiaryTheme.body(13, weight: FontWeight.w600),
-                  ),
+    final Color bg;
+    final Color fg;
+    final Color borderColor;
+    if (filled) {
+      bg = _disabled ? DiaryColors.tabIdle : DiaryColors.ink;
+      fg = _disabled ? DiaryColors.inkSoft : DiaryColors.white;
+      borderColor = bg;
+    } else {
+      bg = DiaryColors.white;
+      fg = _disabled ? DiaryColors.inkSoft : DiaryColors.ink;
+      borderColor = DiaryColors.lineStrong;
+    }
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(DiaryTheme.radius),
+      side: BorderSide(color: borderColor),
+    );
+    return Material(
+      color: bg,
+      shape: shape,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: shape,
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (loading) ...[
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: fg),
                 ),
+                const SizedBox(width: 8),
+              ] else if (icon != null) ...[
+                Icon(icon, size: 18, color: fg),
+                const SizedBox(width: 6),
               ],
-            ),
+              Flexible(
+                child: OneLineText(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: DiaryTheme.body(15, weight: FontWeight.w700, color: fg),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -357,4 +482,49 @@ String relativeTime(DateTime t) {
   if (diff.inHours < 24) return '${diff.inHours}시간 전';
   if (diff.inDays < 7) return '${diff.inDays}일 전';
   return '${t.year}.${t.month}.${t.day}';
+}
+
+/// wishkit 로고: 앱 아이콘처럼 "wish"의 i 점 대신 별.
+///
+/// 공유 미리보기 이미지(og-wishkit-star.png)와 **같은 그림**을 쓴다(assets/brand/wishkit-logo.png).
+/// 글꼴 위에 별을 따로 그리면 휴대폰마다 글꼴을 그리는 방식이 조금씩 달라 별 간격이 어긋나서,
+/// 한 번 그려 둔 그림을 크기만 맞춰 보여 준다. 그림은 Righteous 글꼴 기준
+/// 잉크 높이 0.888em · 너비 3.22em(별 너비 0.32em, ı 꼭대기 위 0.05em)이다.
+/// [size]는 예전 텍스트 로고의 글자 크기와 같은 뜻이고, 휴대폰 글자 크기 설정도 따른다.
+class WishkitLogo extends StatelessWidget {
+  const WishkitLogo({super.key, required this.size, this.color});
+
+  final double size;
+  final Color? color;
+
+  static const _inkHeight = 0.888; // em
+  static const _inkWidth = 3.22; // em
+  static const _lineHeight = 1.1; // 예전 텍스트 로고(DiaryTheme.logo)의 줄 높이
+
+  @override
+  Widget build(BuildContext context) {
+    final em = MediaQuery.textScalerOf(context).scale(size);
+    return Semantics(
+      label: 'wishkit',
+      image: true,
+      excludeSemantics: true,
+      // 예전 텍스트 로고와 같은 자리·높이를 차지하게(주변 배치가 바뀌지 않게).
+      child: SizedBox(
+        height: em * _lineHeight,
+        width: em * _inkWidth,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Image.asset(
+            'assets/brand/wishkit-logo.png',
+            height: em * _inkHeight,
+            width: em * _inkWidth,
+            fit: BoxFit.contain,
+            color: color ?? DiaryColors.ink,
+            colorBlendMode: BlendMode.srcIn,
+            filterQuality: FilterQuality.medium,
+          ),
+        ),
+      ),
+    );
+  }
 }

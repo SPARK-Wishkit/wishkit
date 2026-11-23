@@ -6,8 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
-import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'ads/ads_config.dart';
+import 'ads/ads_consent.dart';
 import 'auth/amplify_setup.dart';
 import 'auth/auth_controller.dart';
 import 'auth/auth_routes.dart';
@@ -16,6 +15,7 @@ import 'data/app_store.dart';
 import 'services/push_notification_service.dart';
 import 'screens/friends/friends_screen.dart';
 import 'screens/friends/notifications_screen.dart';
+import 'screens/mypage/blocked_users_screen.dart';
 import 'screens/mypage/follow_list_screen.dart';
 import 'screens/mypage/mypage_screen.dart';
 import 'screens/mypage/sent_baskets_screen.dart';
@@ -28,6 +28,9 @@ import 'screens/wishlist/wishlist_screen.dart';
 import 'services/share_input.dart';
 import 'theme/diary_scale.dart';
 import 'theme/diary_theme.dart';
+import 'tutorial/tutorial_content.dart';
+import 'tutorial/tutorial_controller.dart';
+import 'tutorial/tutorial_overlay.dart';
 import 'widgets/diary_widgets.dart';
 
 Future<void> main() async {
@@ -46,8 +49,7 @@ Future<void> main() async {
   auth.hooks = store.authHooks;
   await store.init();
 
-  // 4) 광고 SDK 준비 — 기다리지 않는다(광고가 늦게 떠도 앱 시작은 막지 않음).
-  if (AdsConfig.supported) unawaited(MobileAds.instance.initialize());
+  // 4) 광고 SDK 준비는 첫 화면이 뜬 뒤 ATT(광고 추적 동의) 팝업 다음에 한다 → _WishlistAppState.initState
 
   runApp(WishlistApp(auth: auth, store: store));
 }
@@ -81,6 +83,10 @@ class _WishlistAppState extends State<WishlistApp> {
       router.go('/notifications');
     };
     _listenShares();
+    // 광고 추적 동의(ATT) → 광고 SDK 시작. iOS는 앱 화면이 떠 있어야 팝업을 띄운다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(AdsConsent.start());
+    });
   }
 
   void _listenNativeShareText() {
@@ -151,6 +157,8 @@ class _WishlistAppState extends State<WishlistApp> {
       providers: [
         ChangeNotifierProvider.value(value: widget.auth),
         ChangeNotifierProvider.value(value: widget.store),
+        // 탭별 첫 방문 튜토리얼 진행 상태 (lib/tutorial/)
+        ChangeNotifierProvider(create: (_) => TutorialController()),
       ],
       child: MaterialApp.router(
         title: 'wishkit',
@@ -169,6 +177,8 @@ GoRouter _buildRouter(AuthController auth, AppStore store) {
     initialLocation: authInitialLocation(auth),
     refreshListenable: Listenable.merge([auth, store]),
     redirect: (context, state) => authRedirect(auth, state),
+    // 다른 화면에서 홈으로 돌아왔을 때 튜토리얼을 다시 확인하려고(HomeShell 참고).
+    observers: [tutorialRouteObserver],
     routes: [
       // /login, /verify-email, /account-recovery, /welcome
       ...authRoutes,
@@ -206,15 +216,18 @@ GoRouter _buildRouter(AuthController auth, AppStore store) {
                   onPressed: () => context.pop(),
                 ),
               ),
-              body: const Center(child: Text('위시리스트를 찾을 수 없어요')),
+              body: const Center(child: Text('이 wishkit을 찾을 수 없어요')),
             );
           }
           return SharedWishlistScreen(
-            title: list.listName,
-            subtitle: '${list.friendName} 님의 공개 위시리스트',
+            // 누구의 무슨 폴더인지: "ella의 shirts"
+            title: '${list.friendName}의 ${list.listName}',
+            subtitle: '${list.friendName} 님의 공개 wishkit · 상품 ${list.items.length}개',
             products: list.items,
             accentColor: DiaryColors.folderPink,
             wishlistId: list.id,
+            safetyUserId: list.friendId,
+            friendName: list.friendName,
           );
         },
       ),
@@ -231,6 +244,10 @@ GoRouter _buildRouter(AuthController auth, AppStore store) {
       GoRoute(
         path: '/sent-baskets',
         builder: (context, state) => const SentBasketsScreen(),
+      ),
+      GoRoute(
+        path: '/blocked-users',
+        builder: (context, state) => const BlockedUsersScreen(),
       ),
       GoRoute(
         path: '/notifications',
@@ -260,6 +277,8 @@ GoRouter _buildRouter(AuthController auth, AppStore store) {
             accentColor: DiaryColors.folderPeach,
             emptyMessage: '보낸 상품이 없어요',
             friendId: friendId,
+            safetyUserId: friendId,
+            friendName: group.friendName,
           );
         },
       ),
@@ -309,72 +328,215 @@ GoRouter _buildRouter(AuthController auth, AppStore store) {
   );
 }
 
-class HomeShell extends StatelessWidget {
+/// 하단 탭 하단 바의 디자인 기준 높이(+ 안전 영역). 튜토리얼 배경이 이 아래는 덮지 않는다.
+const double _kNavBarHeight = 64;
+
+/// HomeShell 이 있는 화면으로 다른 화면에서 돌아왔는지 알기 위한 관찰자.
+final RouteObserver<ModalRoute<void>> tutorialRouteObserver =
+    RouteObserver<ModalRoute<void>>();
+
+class HomeShell extends StatefulWidget {
   const HomeShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   @override
-  Widget build(BuildContext context) {
-    final showWishlistFab = navigationShell.currentIndex == 0;
+  State<HomeShell> createState() => _HomeShellState();
+}
 
-    return Scaffold(
-      body: navigationShell,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: DiaryColors.white,
-          border: Border(
-            top: BorderSide(color: DiaryColors.ink.withValues(alpha: 0.08)),
-          ),
-        ),
-        child: SafeArea(
-          child: SizedBox(
-            height: 64,
-            child: Row(
-              children: [
-                _NavItem(
-                  index: 0,
-                  label: 'wishkit',
-                  icon: Icons.star_border,
-                  activeIcon: Icons.star,
-                  shell: navigationShell,
+class _HomeShellState extends State<HomeShell> with RouteAware {
+  late final TutorialController _tutorial;
+  late final AppStore _store;
+  ModalRoute<void>? _route;
+  bool _scheduled = false;
+  late int _lastIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _tutorial = context.read<TutorialController>();
+    _store = context.read<AppStore>();
+    _lastIndex = widget.navigationShell.currentIndex;
+    _tutorial.onSelectFriendsInnerTab = _store.selectFriendsTab;
+    _tutorial.onGoWishkit = () => widget.navigationShell.goBranch(0);
+    _store.addListener(_scheduleEvaluate);
+    _tutorial.addListener(_onTutorialChanged);
+    _scheduleEvaluate();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null && route != _route) {
+      tutorialRouteObserver.unsubscribe(this);
+      _route = route;
+      tutorialRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didUpdateWidget(HomeShell old) {
+    super.didUpdateWidget(old);
+    final index = widget.navigationShell.currentIndex;
+    if (index != _lastIndex) {
+      _lastIndex = index;
+      // 튜토리얼이 떠 있는 채로 탭을 바꾸면 그 튜토리얼은 닫고 '봤음'으로 기록한다.
+      _tutorial.onTabChanged(index).then((_) => _scheduleEvaluate());
+    }
+  }
+
+  // 다른 화면(공유 담기·상품 상세 등)에서 홈으로 돌아왔다.
+  @override
+  void didPopNext() => _scheduleEvaluate();
+
+  @override
+  void dispose() {
+    tutorialRouteObserver.unsubscribe(this);
+    _store.removeListener(_scheduleEvaluate);
+    _tutorial.removeListener(_onTutorialChanged);
+    _tutorial.onSelectFriendsInnerTab = null;
+    _tutorial.onGoWishkit = null;
+    super.dispose();
+  }
+
+  void _onTutorialChanged() {
+    // 하나가 끝나면 같은 탭에서 이어서 띄울 다음 튜토리얼이 있는지 본다(예: 위시킷 → 첫 상품 카드).
+    if (!_tutorial.isActive) _scheduleEvaluate();
+  }
+
+  /// 화면이 다 그려진 뒤에 한 번만 확인한다.
+  void _scheduleEvaluate() {
+    if (_scheduled) return;
+    _scheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scheduled = false;
+      if (mounted) _evaluate();
+    });
+  }
+
+  void _evaluate() {
+    // 다른 화면이나 시트가 위에 떠 있으면 띄우지 않는다.
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return;
+    if (!_store.isLoggedIn) return;
+    _tutorial.evaluate(
+      tab: widget.navigationShell.currentIndex,
+      facts: _facts(_store),
+    );
+  }
+
+  TutorialFacts _facts(AppStore s) {
+    bool following(String friendId) =>
+        s.friendById(friendId)?.isFollowing ?? false;
+    return TutorialFacts(
+      hasProducts: s.products.isNotEmpty,
+      hasFollowing: s.friends.any((f) => f.isFollowing),
+      hasFriendWishlists:
+          s.friendWishlists.any((w) => following(w.friendId)),
+      hasSalkaFeed: s.salkamalkaFeed.isNotEmpty,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final navigationShell = widget.navigationShell;
+    final showWishlistFab = navigationShell.currentIndex == 0;
+    final navInset = MediaQuery.paddingOf(context).bottom;
+
+    return ListenableBuilder(
+      listenable: _tutorial,
+      builder: (context, _) => PopScope(
+        // 튜토리얼이 떠 있는 동안 Android 뒤로가기는 "건너뛰기"와 같다.
+        canPop: !_tutorial.isActive,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && _tutorial.isActive) _tutorial.skip();
+        },
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Scaffold(
+              body: navigationShell,
+              bottomNavigationBar: Container(
+                decoration: BoxDecoration(
+                  color: DiaryColors.white,
+                  border: Border(
+                    top: BorderSide(color: DiaryColors.ink.withValues(alpha: 0.08)),
+                  ),
                 ),
-                _NavItem(
-                  index: 1,
-                  label: '내 친구',
-                  icon: Icons.people_outline,
-                  activeIcon: Icons.people,
-                  shell: navigationShell,
+                child: SafeArea(
+                  child: SizedBox(
+                    height: 64,
+                    child: Row(
+                      children: [
+                        _NavItem(
+                          index: 0,
+                          label: 'wishkit',
+                          icon: Icons.star_border,
+                          activeIcon: Icons.star,
+                          shell: navigationShell,
+                        ),
+                        _NavItem(
+                          index: 1,
+                          label: '내 친구',
+                          icon: Icons.people_outline,
+                          activeIcon: Icons.people,
+                          shell: navigationShell,
+                        ),
+                        _NavItem(
+                          index: 2,
+                          label: '살까말까',
+                          icon: Icons.chat_bubble_outline,
+                          activeIcon: Icons.chat_bubble,
+                          shell: navigationShell,
+                        ),
+                        _NavItem(
+                          index: 3,
+                          label: '마이페이지',
+                          icon: Icons.person_outline,
+                          activeIcon: Icons.person,
+                          shell: navigationShell,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                _NavItem(
-                  index: 2,
-                  label: '살까말까',
-                  icon: Icons.chat_bubble_outline,
-                  activeIcon: Icons.chat_bubble,
-                  shell: navigationShell,
-                ),
-                _NavItem(
-                  index: 3,
-                  label: '마이페이지',
-                  icon: Icons.person_outline,
-                  activeIcon: Icons.person,
-                  shell: navigationShell,
-                ),
-              ],
+              ),
+              floatingActionButton: showWishlistFab
+                  // 기본 FAB(높이 56)는 목록을 너무 가려서 한 단계 작게(높이 44).
+                  ? SizedBox(
+                      height: 44,
+                      child: FloatingActionButton.extended(
+                        backgroundColor: DiaryColors.surfaceSoft,
+                        foregroundColor: DiaryColors.ink,
+                        elevation: 3,
+                        highlightElevation: 5,
+                        shape: const StadiumBorder(),
+                        extendedPadding: const EdgeInsets.symmetric(horizontal: 18),
+                        extendedIconLabelSpacing: 6,
+                        onPressed: () => context.push('/share'),
+                        label: Text(
+                          '상품 추가',
+                          style: DiaryTheme.ui(14, weight: FontWeight.w700),
+                        ),
+                        icon: const Icon(Icons.add, size: 18),
+                      ),
+                    )
+                  : null,
+              floatingActionButtonLocation: FloatingActionButtonLocation.miniEndFloat,
             ),
-          ),
+            if (_tutorial.isShowing)
+              // 하단 탭바는 덮지 않는다(탭을 바꾸면 튜토리얼이 닫히는 규칙).
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: _kNavBarHeight + navInset,
+                child: TutorialOverlay(controller: _tutorial),
+              ),
+          ],
         ),
       ),
-      floatingActionButton: showWishlistFab
-          ? FloatingActionButton.extended(
-              backgroundColor: DiaryColors.folderYellow,
-              foregroundColor: DiaryColors.ink,
-              onPressed: () => context.push('/share'),
-              label: const Text('공유 담기'),
-              icon: const Icon(Icons.add_link),
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.miniEndFloat,
     );
   }
 }

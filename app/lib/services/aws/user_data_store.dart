@@ -20,6 +20,9 @@ class AwsUserDataStore {
   final Random _random;
 
   static const allTabId = 'all';
+
+  /// 새 계정의 '전체' 탭을 만든 뒤 다시 읽어도 비어 있을 때 기다리는 시간 (테스트에서 줄일 수 있다).
+  static Duration retryDelay = const Duration(seconds: 1);
   static const _pageSize = 1000;
   static const _maxPages = 50;
   static const _parallel = 8;
@@ -280,6 +283,14 @@ class AwsUserDataStore {
     if (rows.isEmpty) {
       await _seedDefaultTabs(uid);
       rows = await _listAll(Gql.listTabs, 'listWishTabs', uid);
+      if (rows.isEmpty) {
+        // 방금 만들었는데 아직 안 보일 수 있어(읽기 지연) 한 번만 더 읽어 본다.
+        await Future<void>.delayed(retryDelay);
+        rows = await _listAll(Gql.listTabs, 'listWishTabs', uid);
+      }
+      if (rows.isEmpty) {
+        throw StateError('폴더 목록이 비어 있어요');
+      }
     }
     rows.sort((a, b) {
       if (a['tabId'] == allTabId) return -1;
@@ -294,6 +305,8 @@ class AwsUserDataStore {
   /// 탭 목록을 순서대로 저장하고, 탭의 공개 여부를 그 탭의 상품에도 맞춘다.
   /// (지워진 탭은 [deleteTab] 으로 따로 지운다 — 기존 동작과 같음)
   Future<void> saveTabs(String uid, List<WishlistTab> tabs) async {
+    // 빈 목록으로는 저장하지 않는다 (서버의 실제 폴더를 덮어쓸 위험).
+    if (tabs.isEmpty) return;
     // 이미 있는 탭은 바로 "수정", 새 탭만 "만들기" — 실패 후 재시도하는 왕복을 줄인다.
     final existing = {
       for (final r in await _listAll(Gql.listTabs, 'listWishTabs', uid))

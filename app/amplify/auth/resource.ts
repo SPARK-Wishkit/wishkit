@@ -23,6 +23,10 @@ export const auth = defineAuth({
   userAttributes: {
     fullname: { required: false, mutable: true },
     preferredUsername: { required: false, mutable: true },
+    // 가입할 때 동의한 이용약관·개인정보처리방침 버전(예: '2026-11-12'). 동의 시각은 계정 생성 시각.
+    // 앱이 가입 요청에 넣고, pre-sign-up 이 없으면 가입을 막는다 (App Store 1.2 · 개인정보 보호법 동의 기록).
+    // 약관을 바꾸면 앱의 SupportInfo.termsVersion 을 올리고, 다시 동의받을 때 이 값을 고친다.
+    'custom:terms_version': { dataType: 'String', mutable: true, maxLen: 32 },
   },
   accountRecovery: 'EMAIL_ONLY',
   triggers: {

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:figmadesign/models/moderation.dart';
 import 'package:figmadesign/models/models.dart';
 import 'package:figmadesign/services/aws/basket_store.dart';
 import 'package:figmadesign/services/aws/gql_runner.dart';
@@ -221,6 +222,121 @@ void main() {
     });
   });
 
+  group('투표', () {
+    setUp(() async {
+      await baskets.sendBasket(
+        recipientUids: ['bob'],
+        items: [product(1), product(2), product(3)],
+        threadId: 'sb-5',
+      );
+    });
+
+    test('여러 개 고를 수 있고, 투표한 사람 정보는 서버가 채운다', () async {
+      appsync.caller = 'bob';
+      await baskets.vote(threadId: 'sb-5', productIds: ['1', '3', '3']);
+      final v = (await baskets.loadVotes('sb-5')).single;
+      expect(v.voterUid, 'bob');
+      expect(v.voterName, '밥');
+      expect(v.productIds, ['1', '3']);
+      expect(v.picked(product(2)), isFalse);
+    });
+
+    test('다시 투표하면 바뀌고, 다 빼면 취소된다', () async {
+      appsync.caller = 'bob';
+      await baskets.vote(threadId: 'sb-5', productIds: ['1']);
+      await baskets.vote(threadId: 'sb-5', productIds: ['2']);
+      expect((await baskets.loadVotes('sb-5')).single.productIds, ['2']);
+      await baskets.vote(threadId: 'sb-5', productIds: []);
+      expect(await baskets.loadVotes('sb-5'), isEmpty);
+    });
+
+    test('받지 않은 사람은 보지도 투표하지도 못한다 (한국어 안내)', () async {
+      appsync.caller = 'bob';
+      await baskets.vote(threadId: 'sb-5', productIds: ['1']);
+      appsync.caller = 'cho';
+      expect(await baskets.loadVotes('sb-5'), isEmpty);
+      await expectLater(
+        baskets.vote(threadId: 'sb-5', productIds: ['1']),
+        throwsA(predicate((e) => e.toString().contains('받은 사람만'))),
+      );
+    });
+
+    test('보내지 않은 상품에는 투표할 수 없다', () async {
+      appsync.caller = 'bob';
+      await expectLater(
+        baskets.vote(threadId: 'sb-5', productIds: ['99']),
+        throwsA(predicate((e) => e.toString().contains('다시 확인'))),
+      );
+    });
+
+    test('나중에 초대된 사람도 이전 투표를 보고, 새 상품에 투표할 수 있다', () async {
+      appsync.caller = 'bob';
+      await baskets.vote(threadId: 'sb-5', productIds: ['1']);
+      appsync.caller = 'amy';
+      await baskets.sendBasket(recipientUids: ['cho'], items: [product(4)], threadId: 'sb-5');
+      appsync.caller = 'cho';
+      expect((await baskets.loadVotes('sb-5')).single.voterUid, 'bob');
+      await baskets.vote(threadId: 'sb-5', productIds: ['1', '4']);
+      expect(await baskets.loadVotes('sb-5'), hasLength(2));
+    });
+
+    test('투표 없이 보내면 받은 사람 화면에 투표가 없고, 서버도 표를 받지 않는다', () async {
+      await baskets.sendBasket(
+        recipientUids: ['bob'],
+        items: [product(1), product(2)],
+        threadId: 'sb-7',
+        voteEnabled: false,
+      );
+      appsync.caller = 'bob';
+      final got = (await baskets.loadReceivedBaskets('bob'))
+          .firstWhere((b) => b.threadId == 'sb-7');
+      expect(got.voteEnabled, isFalse);
+      expect(got.allowMultipleVotes, isFalse);
+      await expectLater(
+        baskets.vote(threadId: 'sb-7', productIds: ['1']),
+        throwsA(predicate((e) => e.toString().contains('투표 없이'))),
+      );
+    });
+
+    test('한 개만 고르기 투표는 2개를 거절하고, 다시 보내도 처음 설정이 유지된다', () async {
+      await baskets.sendBasket(
+        recipientUids: ['bob'],
+        items: [product(1), product(2)],
+        threadId: 'sb-8',
+        allowMultipleVotes: false,
+      );
+      appsync.caller = 'bob';
+      await expectLater(
+        baskets.vote(threadId: 'sb-8', productIds: ['1', '2']),
+        throwsA(predicate((e) => e.toString().contains('한 상품만'))),
+      );
+      await baskets.vote(threadId: 'sb-8', productIds: ['2']);
+
+      appsync.caller = 'amy';
+      await baskets.sendBasket(
+        recipientUids: ['cho'],
+        items: [product(1)],
+        threadId: 'sb-8',
+        allowMultipleVotes: true,
+      );
+      appsync.caller = 'cho';
+      final again = (await baskets.loadReceivedBaskets('cho'))
+          .firstWhere((b) => b.threadId == 'sb-8');
+      expect(again.voteEnabled, isTrue);
+      expect(again.allowMultipleVotes, isFalse);
+    });
+
+    test('투표 화면: 내가 투표하면 기다리지 않고 바로 새로 보인다', () async {
+      appsync.caller = 'bob';
+      final (got, sub) = await listen(baskets.watchVotes('sb-5'));
+      expect(got.single, isEmpty);
+      await baskets.vote(threadId: 'sb-5', productIds: ['2']);
+      await pump();
+      expect(got.last.single.productIds, ['2']);
+      await sub.cancel();
+    });
+  });
+
   group('알림', () {
     test('읽음 표시하면 알림 화면이 바로 갱신된다', () async {
       await baskets.sendBasket(recipientUids: ['bob'], items: [product(1)], threadId: 'sb-3');
@@ -248,10 +364,11 @@ void main() {
     });
   });
 
-  test('회원 탈퇴: 내 알림·받은함·보낸 기록이 지워진다', () async {
+  test('회원 탈퇴: 내 알림·받은함·보낸 기록·투표가 지워진다', () async {
     appsync.caller = 'bob';
     await baskets.sendBasket(recipientUids: ['amy'], items: [product(1)], threadId: 'sb-4');
     appsync.caller = 'amy';
+    await baskets.vote(threadId: 'sb-4', productIds: ['1']);
     await baskets.upsertSentBasket(
       'amy',
       SharedBasket(id: 's1', title: 't', ownerName: '에이미', items: [product(1)], createdAt: DateTime.utc(2026)),
@@ -261,5 +378,141 @@ void main() {
       expect(appsync.table(t).values.where((r) => r['recipientId'] == 'amy'), isEmpty);
     }
     expect(appsync.table('SentBasket'), isEmpty);
+    expect(appsync.table('BasketVote'), isEmpty);
+  });
+
+  group('신고 · 차단 · 탈퇴 정리 (App Store 1.2 · 5.1.1)', () {
+    test('댓글·받은 살까말까·사용자를 신고할 수 있고, 내 것·없는 것은 신고할 수 없다', () async {
+      appsync.caller = 'bob';
+      await baskets.sendBasket(recipientUids: ['amy'], items: [product(1)], threadId: 'sb-r');
+      await baskets.addComment(threadId: 'sb-r', text: '이거 어때?');
+      final comment = appsync.table('BasketComment').values.single;
+      final received = appsync.table('ReceivedBasket').values.single;
+
+      appsync.caller = 'amy';
+      await baskets.report(
+        CommentReportTarget(
+          threadId: 'sb-r',
+          commentId: comment['commentId'] as String,
+          userId: 'bob',
+          userName: '밥',
+        ),
+        reason: ReportReason.abuse,
+      );
+      await baskets.report(
+        BasketReportTarget(
+          basketId: received['basketId'] as String,
+          userId: 'bob',
+          userName: '밥',
+        ),
+        reason: ReportReason.spam,
+        detail: '광고 같아요',
+      );
+      await baskets.report(
+        const UserReportTarget(userId: 'bob', userName: '밥'),
+        reason: ReportReason.other,
+      );
+      expect(appsync.table('ContentReport').length, 3);
+      expect(
+        appsync.table('ContentReport').values.map((r) => r['targetUserId']).toSet(),
+        {'bob'},
+      );
+
+      await expectLater(
+        baskets.report(
+          const BasketReportTarget(basketId: 'nope', userId: 'bob', userName: '밥'),
+          reason: ReportReason.spam,
+        ),
+        throwsA(isA<Exception>()),
+      );
+      await expectLater(
+        baskets.report(
+          const UserReportTarget(userId: 'amy', userName: '에이미'),
+          reason: ReportReason.spam,
+        ),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('차단하면 서로 살까말까를 보낼 수 없고, 해제하면 다시 보낼 수 있다', () async {
+      appsync.caller = 'amy';
+      await social.blockUser(myUid: 'amy', targetUid: 'bob');
+      expect(await social.blockedIds('amy'), {'bob'});
+
+      appsync.caller = 'bob';
+      await expectLater(
+        baskets.sendBasket(recipientUids: ['amy'], items: [product(1)], threadId: 'sb-b1'),
+        throwsA(isA<Exception>()),
+      );
+      appsync.caller = 'amy';
+      await expectLater(
+        baskets.sendBasket(recipientUids: ['bob'], items: [product(1)], threadId: 'sb-b2'),
+        throwsA(isA<Exception>()),
+      );
+
+      await social.unblockUser(myUid: 'amy', targetUid: 'bob');
+      expect(await social.blockedIds('amy'), isEmpty);
+      appsync.caller = 'bob';
+      expect(
+        await baskets.sendBasket(recipientUids: ['amy'], items: [product(1)], threadId: 'sb-b3'),
+        1,
+      );
+    });
+
+    test('탈퇴 정리: 내가 남에게 남긴 댓글·살까말까·댓글방이 지워진다', () async {
+      // amy 가 bob 에게 보낸 살까말까 + bob 이 amy 에게 보낸 살까말까에 amy 가 쓴 댓글
+      appsync.caller = 'amy';
+      await baskets.sendBasket(recipientUids: ['bob'], items: [product(1)], threadId: 'sb-amy');
+      appsync.caller = 'bob';
+      await baskets.sendBasket(recipientUids: ['amy'], items: [product(2)], threadId: 'sb-bob');
+      await baskets.addComment(threadId: 'sb-amy', text: '좋아 보여');
+      appsync.caller = 'amy';
+      await baskets.addComment(threadId: 'sb-bob', text: '사!');
+
+      await baskets.deleteMyContent();
+
+      // bob 받은함에 있던 amy 의 살까말까, amy 가 만든 댓글방과 그 안의 bob 댓글까지 지워진다
+      expect(appsync.table('ReceivedBasket').values.where((r) => r['fromUid'] == 'amy'), isEmpty);
+      expect(appsync.table('BasketThread').containsKey('sb-amy'), isFalse);
+      expect(appsync.table('BasketComment').values.where((c) => c['threadId'] == 'sb-amy'), isEmpty);
+      // bob 의 댓글방에 amy 가 쓴 댓글도 지워지고, bob 의 댓글방 자체는 남는다
+      expect(appsync.table('BasketComment').values.where((c) => c['authorId'] == 'amy'), isEmpty);
+      expect(appsync.table('BasketThread').containsKey('sb-bob'), isTrue);
+    });
+  });
+
+  group('차단 관계 서버 검사 · 탈퇴 시 투표 삭제 (Play UGC · 계정 삭제)', () {
+    test('댓글방 주인이 차단하면 상대는 댓글·투표를 새로 남길 수 없고, 투표 취소는 된다', () async {
+      appsync.caller = 'amy';
+      await baskets.sendBasket(recipientUids: ['bob'], items: [product(1)], threadId: 'sb-blk');
+      appsync.caller = 'bob';
+      await baskets.vote(threadId: 'sb-blk', productIds: ['1']);
+      appsync.caller = 'amy';
+      await social.blockUser(myUid: 'amy', targetUid: 'bob');
+
+      appsync.caller = 'bob';
+      await expectLater(
+        baskets.addComment(threadId: 'sb-blk', text: '안녕'),
+        throwsA(isA<Exception>()),
+      );
+      await expectLater(
+        baskets.vote(threadId: 'sb-blk', productIds: ['1']),
+        throwsA(isA<Exception>()),
+      );
+      await baskets.vote(threadId: 'sb-blk', productIds: []);
+      expect(appsync.table('BasketVote'), isEmpty);
+    });
+
+    test('탈퇴 정리: 남의 살까말까에 한 내 투표도 지워진다', () async {
+      appsync.caller = 'bob';
+      await baskets.sendBasket(recipientUids: ['amy'], items: [product(1)], threadId: 'sb-v');
+      appsync.caller = 'amy';
+      await baskets.vote(threadId: 'sb-v', productIds: ['1']);
+      expect(appsync.table('BasketVote').values.where((v) => v['voterId'] == 'amy'), isNotEmpty);
+
+      await baskets.deleteMyContent();
+      expect(appsync.table('BasketVote').values.where((v) => v['voterId'] == 'amy'), isEmpty);
+      expect(appsync.table('BasketThread').containsKey('sb-v'), isTrue);
+    });
   });
 }

@@ -6,6 +6,7 @@ import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 import '../salkamalka/share_to_friends_sheet.dart';
 import '../share/share_link.dart';
 
@@ -18,7 +19,7 @@ class SentBasketsScreen extends StatelessWidget {
     final baskets = store.sentBaskets;
 
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       appBar: AppBar(
         backgroundColor: DiaryColors.white,
         elevation: 0,
@@ -28,7 +29,7 @@ class SentBasketsScreen extends StatelessWidget {
         ),
         title: Text(
           '내가 보낸 살까말까',
-          style: DiaryTheme.ui(18, weight: FontWeight.w700),
+          style: DiaryTheme.ui(17, weight: FontWeight.w700),
         ),
       ),
       body: baskets.isEmpty
@@ -43,7 +44,7 @@ class SentBasketsScreen extends StatelessWidget {
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               itemCount: baskets.length,
               itemBuilder: (context, i) {
                 final b = baskets[i];
@@ -80,7 +81,7 @@ class SentBasketsScreen extends StatelessWidget {
                               Padding(
                                 padding: const EdgeInsets.only(right: 6),
                                 child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(DiaryTheme.radius),
                                   child: Image.network(
                                     p.image,
                                     width: 56,
@@ -89,7 +90,7 @@ class SentBasketsScreen extends StatelessWidget {
                                     errorBuilder: (_, __, ___) => Container(
                                       width: 56,
                                       height: 56,
-                                      color: DiaryColors.paper,
+                                      color: DiaryColors.surfaceSoft,
                                     ),
                                   ),
                                 ),
@@ -148,6 +149,7 @@ Future<void> showSentBasketShareSheet(
     title: '다시 보낼 친구',
     confirmLabel: '다시 보내기',
     initialMemo: basket.memo,
+    askVoteSettings: false,
   );
   if (picked == null || picked.friendIds.isEmpty || !context.mounted) return;
   try {
@@ -158,13 +160,9 @@ Future<void> showSentBasketShareSheet(
       memo: picked.memo,
     );
     if (!sent || !context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${picked.friendIds.length}명의 친구에게 다시 보냈어요')),
-    );
+    showTopToast(context, '${picked.friendIds.length}명의 친구에게 다시 보냈어요');
   } catch (e) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-    );
+    showTopError(context, e);
   }
 }

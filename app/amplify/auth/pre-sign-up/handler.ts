@@ -30,6 +30,10 @@ export const handler: PreSignUpTriggerHandler = async (event) => {
     throw new Error('PSU_HANDLE_FORMAT');
   }
   if (name.length > NAME_MAX) throw new Error('PSU_NAME_TOO_LONG');
+  // 이용약관(불쾌한 콘텐츠 무관용 포함)·개인정보 수집·만 14세 이상에 동의해야 가입할 수 있다.
+  // 앱이 동의한 약관 버전을 custom:terms_version 으로 보낸다 → 동의 기록이 계정에 남는다.
+  const terms = (attrs['custom:terms_version'] ?? '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(terms)) throw new Error('PSU_TERMS_REQUIRED');
 
   // 자동 확인/자동 인증은 절대 켜지 않는다. 반드시 이메일 코드로 인증한다.
   event.response.autoConfirmUser = false;

@@ -88,5 +88,6 @@ amplify.yml                 Amplify 콘솔 백엔드 배포 설정
 
 - **푸시 알림** (앱이 꺼져 있을 때): 아직 없음. 앱이 켜져 있을 땐 20초마다 새로고침 + 배너.
   안드로이드는 구글 FCM, 아이폰은 애플 개발자 계정의 APNs 키가 필요.
-- **공용 백엔드 환경:** 지금은 백엔드 담당의 sandbox 를 함께 씀. 출시 전에는 Amplify 콘솔에서
-  이 레포의 `main` 브랜치를 연결해 공용 환경을 따로 만들 것.
+- ~~공용 백엔드 환경~~ → 완료: Amplify 콘솔 앱 `d10l8u76nc8eda` 의 `main` 브랜치(서울)가 운영 환경. main 에 머지하면 자동 배포.
+  주소록 받기: `npx ampx generate outputs --app-id d10l8u76nc8eda --branch main --format dart --out-dir lib`
+- **iOS 출시:** `docs/RELEASE_IOS.md`, 스토어 입력 내용 `docs/APP_STORE_SUBMISSION.md`, 신고 처리 `docs/MODERATION.md`.

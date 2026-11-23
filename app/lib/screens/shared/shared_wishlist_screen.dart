@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import '../../ads/ad_feed.dart';
 import '../../ads/ads_config.dart';
 import '../../ads/native_ad_card.dart';
+import '../../models/moderation.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/moderation_sheets.dart';
 import '../product/product_detail_screen.dart';
 import '../wishlist/wishlist_screen.dart';
 
@@ -24,6 +26,8 @@ class SharedWishlistScreen extends StatelessWidget {
     this.wishlistId,
     this.basketId,
     this.friendId,
+    this.safetyUserId,
+    this.friendName,
   });
 
   final String title;
@@ -36,13 +40,16 @@ class SharedWishlistScreen extends StatelessWidget {
   final String? basketId;
   final String? friendId;
 
+  /// 친구 화면일 때 신고·차단 메뉴(⋯)를 띄울 사용자 uid와 이름.
+  final String? safetyUserId;
+  final String? friendName;
+
   @override
   Widget build(BuildContext context) {
-    final border = accentColor ?? DiaryColors.fileSand;
     final adFeed = AdFeed(products.length, every: AdsConfig.feedEvery);
 
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       appBar: AppBar(
         backgroundColor: DiaryColors.white,
         elevation: 0,
@@ -52,7 +59,7 @@ class SharedWishlistScreen extends StatelessWidget {
         ),
         title: Text(
           title,
-          style: DiaryTheme.ui(16, weight: FontWeight.w700),
+          style: DiaryTheme.ui(17, weight: FontWeight.w700),
         ),
         actions: [
           if (onShare != null)
@@ -60,6 +67,22 @@ class SharedWishlistScreen extends StatelessWidget {
               tooltip: '다시 보내기',
               onPressed: onShare,
               icon: const Icon(Icons.ios_share),
+            ),
+          // 친구의 wishkit · 살까말까: 사용자 신고 · 차단
+          if (safetyUserId != null && safetyUserId!.isNotEmpty)
+            IconButton(
+              tooltip: '신고 · 차단',
+              onPressed: () async {
+                final blocked = await showSafetySheet(
+                  context,
+                  target: UserReportTarget(
+                    userId: safetyUserId!,
+                    userName: friendName ?? title,
+                  ),
+                );
+                if (blocked && context.mounted) context.pop();
+              },
+              icon: const Icon(Icons.more_horiz),
             ),
         ],
       ),
@@ -78,18 +101,14 @@ class SharedWishlistScreen extends StatelessWidget {
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                padding: EdgeInsets.zero,
                 child: Container(
-                  decoration: BoxDecoration(
-                    color: border,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(18),
-                    ),
-                    border: Border.all(color: border, width: 3),
+                  decoration: const BoxDecoration(
+                    color: DiaryColors.paper,
                   ),
                   child: ClipRRect(
                     borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(15),
+                      top: Radius.circular(DiaryTheme.radius),
                     ),
                     child: DiaryGridPaper(
                       padding: EdgeInsets.zero,
@@ -105,10 +124,10 @@ class SharedWishlistScreen extends StatelessWidget {
                               ),
                             )
                           : ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
                               itemCount: adFeed.length,
                               separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: 12),
                               itemBuilder: (context, i) {
                                 if (adFeed.isAd(i)) {
                                   return NativeAdCard(

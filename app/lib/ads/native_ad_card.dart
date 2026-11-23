@@ -4,6 +4,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../theme/diary_theme.dart';
 import '../theme/list_card.dart';
 import 'ads_config.dart';
+import 'ads_consent.dart';
 
 /// 상품 카드 사이에 들어가는 광고 카드.
 ///
@@ -35,9 +36,16 @@ class _NativeAdCardState extends State<NativeAdCard>
   void initState() {
     super.initState();
     if (!AdsConfig.supported) return;
+    // 추적 동의(ATT)와 광고 SDK 준비가 끝난 뒤에 불러온다 (ads_consent.dart).
+    AdsConsent.ready.then((_) {
+      if (mounted) _load();
+    });
+  }
+
+  void _load() {
     _ad = NativeAd(
       adUnitId: AdsConfig.nativeUnitId,
-      request: const AdRequest(),
+      request: AdsConsent.request(),
       nativeTemplateStyle: NativeTemplateStyle(
         templateType: TemplateType.small,
         mainBackgroundColor: NativeAdCard.background,
@@ -76,6 +84,7 @@ class _NativeAdCardState extends State<NativeAdCard>
         },
       ),
     )..load();
+    updateKeepAlive();
   }
 
   @override
@@ -92,7 +101,7 @@ class _NativeAdCardState extends State<NativeAdCard>
     // 광고 화면(AdWidget)은 자기 크기가 없어 주어진 최대 크기까지 늘어난다. 예전에는 최대 높이 200 으로
     // 둬서 내용(약 90)보다 훨씬 큰 빈 회색 칸이 생겼다 — 상품 카드와 같은 높이로 고정한다.
     return SizedBox(
-      height: ListCardMetrics.height,
+      height: ListCardMetrics.heightOf(context),
       child: Material(
         color: NativeAdCard.background,
         elevation: ListCardMetrics.elevation,

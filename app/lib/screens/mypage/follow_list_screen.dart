@@ -6,6 +6,7 @@ import '../../data/app_store.dart';
 import '../../models/models.dart';
 import '../../theme/diary_theme.dart';
 import '../../widgets/diary_widgets.dart';
+import '../../widgets/top_toast.dart';
 
 enum FollowListKind { followers, following }
 
@@ -62,7 +63,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
     final emptyText = isFollowers ? '팔로워가 없습니다' : '팔로우하고 있는 사람이 없습니다';
 
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       appBar: AppBar(
         backgroundColor: DiaryColors.white,
         elevation: 0,
@@ -70,7 +71,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
-        title: Text(title, style: DiaryTheme.ui(16, weight: FontWeight.w700)),
+        title: Text(title, style: DiaryTheme.ui(17, weight: FontWeight.w700)),
       ),
       body: SafeArea(
         child: _loading
@@ -91,7 +92,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
                         ),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: _users!.length,
                         itemBuilder: (context, i) {
                           final u = _users![i];
@@ -161,14 +162,10 @@ class _FollowListScreenState extends State<FollowListScreen> {
         _users = _users?.where((u) => u.uid != user.uid).toList();
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${user.name} 님을 팔로워에서 삭제했어요')),
-      );
+      showTopToast(context, '${user.name} 님을 팔로워에서 삭제했어요');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('삭제 실패: $e')),
-      );
+      showTopError(context, e, prefix: '삭제 실패: ');
     }
   }
 }

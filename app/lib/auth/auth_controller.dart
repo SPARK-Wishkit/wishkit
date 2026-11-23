@@ -94,11 +94,13 @@ class AuthController extends ChangeNotifier {
 
   // ── 가입 ─────────────────────────────────────────────────────
 
+  /// [termsVersion]: 사용자가 동의한 약관 버전(SupportInfo.termsVersion). 계정에 기록된다.
   Future<void> register({
     required String email,
     required String password,
     required String name,
     required String handle,
+    required String termsVersion,
   }) =>
       _run(() async {
         _require(AuthValidators.email(email));
@@ -121,6 +123,7 @@ class AuthController extends ChangeNotifier {
           password: password,
           name: name,
           handle: normalizedHandle,
+          termsVersion: termsVersion,
         );
         _enterVerification(normalizedEmail, password);
       });

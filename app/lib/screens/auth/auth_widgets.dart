@@ -19,7 +19,7 @@ class AuthPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: DiaryColors.canvas,
+      backgroundColor: DiaryColors.paper,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -54,12 +54,16 @@ InputDecoration authInput(String label, {String? helper}) {
     filled: true,
     fillColor: DiaryColors.white,
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: DiaryColors.ink.withValues(alpha: 0.2)),
+      borderRadius: BorderRadius.circular(DiaryTheme.radius),
+      borderSide: const BorderSide(color: DiaryColors.lineStrong),
     ),
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: DiaryColors.ink.withValues(alpha: 0.15)),
+      borderRadius: BorderRadius.circular(DiaryTheme.radius),
+      borderSide: const BorderSide(color: DiaryColors.lineStrong),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(DiaryTheme.radius),
+      borderSide: const BorderSide(color: DiaryColors.ink),
     ),
   );
 }

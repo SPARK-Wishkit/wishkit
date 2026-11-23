@@ -22,6 +22,34 @@ import { parsingProxy } from '../functions/parsing-proxy/resource';
  *   그리고 메모(memo)는 빼고 돌려준다. (예전엔 로그인만 하면 비공개·메모까지 읽기 가능)
  */
 const schema = a.schema({
+  /**
+   * 태그 찾기 결과 피드백 — 엔진 개선용 익명 기록(사용자가 "맞아요"/"다른 상품이에요"를 누르거나,
+   * 엔진이 못 찾았을 때 앱이 한 줄 남긴다).
+   *
+   * 개인정보를 모으지 않는다: 누가 보냈는지(ownerId·sub), 사진, 메모, 가격은 넣지 않는다.
+   * 앱은 만들기(create)만 할 수 있고 읽기·수정·삭제는 못 한다 — 집계는 운영자가 DynamoDB 콘솔이나
+   * 관리 스크립트로 한다.
+   * answer: 'yes'(맞아요) | 'no'(다른 상품이에요) | 'not_found'(엔진이 못 불러옴)
+   *         | 'user_link'(못 찾은 뒤 사용자가 직접 넣은 판매 주소로 저장 — 가장 값진 정답, userUrl)
+   * traceId로 엔진 로그의 [identify-report] 기록과 이어서 원인을 본다(tools/learn_from_feedback.py).
+   */
+  TagFeedback: a
+    .model({
+      answer: a.string().required(),
+      engineStatus: a.string(), // found | needs_confirm | not_found
+      brand: a.string(),
+      productCode: a.string(),
+      matchUrl: a.string(),
+      matchHost: a.string(),
+      matchVia: a.string(), // qr | search
+      verifiedBy: a.string(),
+      skipReason: a.string(), // no_brand_no_code — 엔진 성능 통계에서 따로 본다
+      traceId: a.string(),
+      cause: a.string(),
+      userUrl: a.string(), // answer가 user_link일 때만: 사용자가 넣은 상품 주소
+    })
+    .authorization((allow) => [allow.authenticated().to(['create'])]),
+
   /** 친구 목록·검색에 보이는 공개 프로필. */
   Profile: a
     .model({
@@ -181,6 +209,10 @@ const schema = a.schema({
       data: a.json().required(),
     })
     .identifier(['recipientId', 'basketId'])
+    // 탈퇴할 때 내가 보낸 살까말까가 친구들 받은함에 남은 사본을 서버가 찾아 지운다 (deleteMyContent).
+    .secondaryIndexes((index) => [
+      index('fromUid').name('byFromUid').queryField('listReceivedBasketsByFromUid'),
+    ])
     .authorization((allow) => [
       allow.ownerDefinedIn('recipientId').identityClaim('sub').to(['read', 'delete']),
     ]),
@@ -192,8 +224,19 @@ const schema = a.schema({
       ownerId: a.id().required(),
       participantIds: a.id().required().array().required(),
       memo: a.string(),
+      // 투표할 수 있는 상품 번호(Product.id 문자열). 다시 보내면 새 상품이 더해진다.
+      itemIds: a.string().array(),
+      // Existing threads without this field default to allowing multiple choices.
+      allowMultipleVotes: a.boolean(),
+      // 투표를 같이 보냈는지. 없으면(예전 댓글방) 보낸 것으로 본다.
+      // 두 값 모두 처음 보낼 때 정하고, 다시 보내도 바뀌지 않는다.
+      voteEnabled: a.boolean(),
     })
     .identifier(['threadId'])
+    // 탈퇴할 때 내가 만든 댓글방을 서버가 찾아 지운다 (deleteMyContent).
+    .secondaryIndexes((index) => [
+      index('ownerId').name('byOwnerId').queryField('listBasketThreadsByOwnerId'),
+    ])
     .authorization((allow) => [
       allow.ownersDefinedIn('participantIds').identityClaim('sub').to(['read']),
     ]),
@@ -213,6 +256,31 @@ const schema = a.schema({
       data: a.json().required(),
     })
     .identifier(['threadId', 'commentId'])
+    // 탈퇴할 때 내가 쓴 댓글(남의 댓글방 포함)을 서버가 찾아 지운다 (deleteMyContent).
+    .secondaryIndexes((index) => [
+      index('authorId').name('byAuthorId').queryField('listBasketCommentsByAuthorId'),
+    ])
+    .authorization((allow) => [
+      allow.ownersDefinedIn('participantIds').identityClaim('sub').to(['read']),
+    ]),
+
+  /**
+   * 살까말까 투표: 한 사람당 한 줄 = 그 사람이 고른 상품들(여러 개 선택).
+   * 댓글처럼 참여자만 읽고, 쓰기·바꾸기·취소는 서버만 한다(참여자인지, 보낸 상품인지 확인).
+   * 마감은 없다. 살까말까(댓글방)를 따라가고, 다 빼고 투표하면 줄이 지워진다.
+   */
+  BasketVote: a
+    .model({
+      threadId: a.string().required(),
+      voterId: a.id().required(),
+      participantIds: a.id().required().array().required(),
+      data: a.json().required(),
+    })
+    .identifier(['threadId', 'voterId'])
+    // 탈퇴할 때 내가 남의 살까말까에 한 투표(이름·사진이 들어 있음)를 서버가 찾아 지운다 (deleteMyContent).
+    .secondaryIndexes((index) => [
+      index('voterId').name('byVoterId').queryField('listBasketVotesByVoterId'),
+    ])
     .authorization((allow) => [
       allow.ownersDefinedIn('participantIds').identityClaim('sub').to(['read']),
     ]),
@@ -231,6 +299,75 @@ const schema = a.schema({
       allow.ownerDefinedIn('recipientId').identityClaim('sub').to(['read', 'update', 'delete']),
     ]),
 
+  // ── 신고 · 차단 (App Store 심사 1.2) ────────────────────────
+
+  /**
+   * 차단 한 줄 = "blockerId 가 blockedId 를 차단했다".
+   * 만들기는 서버만(blockUser: 운영팀 알림도 같이), 본인은 목록 읽기·해제(삭제)만.
+   * 서버는 이 표를 보고 차단 관계인 사람끼리 살까말까·알림을 막는다.
+   */
+  Block: a
+    .model({
+      blockerId: a.id().required(),
+      blockedId: a.id().required(),
+    })
+    .identifier(['blockerId', 'blockedId'])
+    .authorization((allow) => [
+      allow.ownerDefinedIn('blockerId').identityClaim('sub').to(['read', 'delete']),
+    ]),
+
+  /**
+   * 신고 기록. 서버만 쓴다(reportContent). 운영팀은 AWS 콘솔(DynamoDB)과 신고 메일로 확인한다.
+   * 신고한 사람은 자기 신고만 읽을 수 있다. 처리 방법: docs/MODERATION.md
+   */
+  ContentReport: a
+    .model({
+      reportId: a.string().required(),
+      reporterId: a.id().required(),
+      targetType: a.string().required(), // 'comment' | 'basket' | 'user'
+      targetUserId: a.id().required(),
+      targetKey: a.string().required(), // 댓글: threadId/commentId, 살까말까: basketId, 사용자: uid
+      reason: a.string().required(), // 'spam' | 'abuse' | 'sexual' | 'hate' | 'other'
+      detail: a.string(),
+      snapshot: a.json(), // 신고한 순간의 내용(나중에 지워져도 검토 가능)
+      status: a.string().required(), // 'open' → 운영팀이 'resolved' 로 바꾼다
+    })
+    .identifier(['reportId'])
+    .authorization((allow) => [
+      allow.ownerDefinedIn('reporterId').identityClaim('sub').to(['read']),
+    ]),
+
+  /** 댓글·살까말까·사용자 신고. */
+  reportContent: a
+    .mutation()
+    .arguments({
+      targetType: a.string().required(),
+      targetUserId: a.id(),
+      threadId: a.string(),
+      commentId: a.string(),
+      basketId: a.string(),
+      reason: a.string().required(),
+      detail: a.string(),
+    })
+    .returns(a.boolean().required())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(socialActions)),
+
+  /** 사용자 차단. 해제는 앱이 Block 행을 직접 지운다. */
+  blockUser: a
+    .mutation()
+    .arguments({ targetId: a.id().required() })
+    .returns(a.boolean().required())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(socialActions)),
+
+  /** 탈퇴 첫 단계: 다른 사람 공간에 남은 내 댓글·살까말까·댓글방을 지운다. 지운 개수를 돌려준다. */
+  deleteMyContent: a
+    .mutation()
+    .returns(a.integer().required())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(socialActions)),
+
   /** 살까말까 보내기: 댓글방 준비 → 받은 사람마다 받은함 + 알림. 받은 사람 수를 돌려준다. */
   sendBasket: a
     .mutation()
@@ -239,6 +376,8 @@ const schema = a.schema({
       recipientIds: a.id().required().array().required(),
       items: a.json().required(), // Product.toJson() 목록
       memo: a.string(),
+      allowMultipleVotes: a.boolean(),
+      voteEnabled: a.boolean(),
     })
     .returns(a.integer().required())
     .authorization((allow) => [allow.authenticated()])
@@ -275,6 +414,17 @@ const schema = a.schema({
     .arguments({
       threadId: a.string().required(),
       commentId: a.string().required(),
+    })
+    .returns(a.boolean().required())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(socialActions)),
+
+  /** 투표하기·다시 투표하기. productIds 가 비어 있으면 내 투표를 취소한다. */
+  voteBasket: a
+    .mutation()
+    .arguments({
+      threadId: a.string().required(),
+      productIds: a.string().required().array().required(),
     })
     .returns(a.boolean().required())
     .authorization((allow) => [allow.authenticated()])
@@ -337,9 +487,13 @@ const schema = a.schema({
 
   /**
    * 태그 사진으로 찾은 결과. 필드 설명은 engine/server/tag_identify.py 참고.
-   * status: 'found'(matchUrl 있음) | 'not_found'(태그 정보만 있음) | 'not_a_tag'
+   * status: 'found'(matchUrl 있음) | 'needs_confirm'(matchUrl 있음, 서버가 페이지를 못 읽어 품번 미확인 —
+   *         앱이 사용자에게 같은 상품인지 꼭 묻고 담는다) | 'not_found'(태그 정보만 있음) | 'not_a_tag'
    * matchSource: 'official'(브랜드 공식몰) | 'mall'(공식몰에 없어 국내 쇼핑몰에서 찾음)
-   * verifiedBy: 'product_code' | 'barcode' | 'name'(품번 없이 이름으로만 확인 — 앱이 한 번 더 확인)
+   * verifiedBy: 'product_code' | 'barcode' | 'product_code_base'(색상 뗀 기본 번호) | 'name'(품번 없이 이름으로만
+   *             확인 — 앱이 한 번 더 확인) | 'search'(needs_confirm — 검색 결과일 뿐 확인 안 됨)
+   *             | 'qr'(needs_confirm — 태그 QR이 가리킨 페이지를 못 읽어 확인 안 됨)
+   * matchVia: 'qr'(태그 QR로 찾음) | 'search'(품번·브랜드 검색으로 찾음) | null(링크 없음)
    */
   IdentifiedTag: a.customType({
     status: a.string().required(),
@@ -354,6 +508,15 @@ const schema = a.schema({
     matchSource: a.string(),
     verifiedBy: a.string(),
     note: a.string(),
+    // 찾은 페이지에서 읽은 정보(엔진이 구글의 페이지 사본으로 읽음 — 최신이 아닐 수 있음). 없으면 null.
+    matchName: a.string(),
+    matchPrice: a.integer(),
+    matchRegularPrice: a.integer(),
+    matchImage: a.string(),
+    matchVia: a.string(),
+    skipReason: a.string(), // 'no_brand_no_code' — 태그에 브랜드·품번이 없어 찾지 않음
+    traceId: a.string(), // 엔진 기록과 피드백을 잇는 무작위 id(사용자와 무관)
+    cause: a.string(), // 엔진이 진단한 원인
   }),
 
   /**

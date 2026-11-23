@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import urllib.parse
 from dataclasses import dataclass, field
@@ -137,6 +138,11 @@ class RenderResult:
     # top, context, first_screen. 측정이 실패하면 빈 목록(추출은 그대로 진행).
     price_candidates: list[dict] = field(default_factory=list)
     error: str | None = None
+    # 차단 판정 근거(blocked 일 때만): 걸린 BLOCK_PATTERNS 문구 + 화면 글자 앞부분. 운영 로그로 어떤 차단
+    # (Akamai·Cloudflare·몰 자체 페이지)인지 가리려고 남긴다 — 2026-11-19 무신사가 AWS 에서만 차단됐는데
+    # 서버 HTML 이 안 남아 원인을 몰랐다.
+    block_reason: str | None = None
+    status_code: int | None = None  # 메인 문서 응답 코드(홈 웜업 재시도를 했으면 마지막 것)
 
     @property
     def ok(self) -> bool:
@@ -147,8 +153,23 @@ def _pick_ua(host: str) -> str:
     return MOBILE_UA if any(h in host for h in MOBILE_UA_HOSTS) else DESKTOP_UA
 
 
+def _block_phrase(html: str) -> str | None:
+    """HTML 에서 실제로 걸린 차단 문구(BLOCK_PATTERNS 의 첫 일치). 차단이 아니면 None."""
+    m = BLOCK_PATTERNS.search(html)
+    return m.group(0) if m else None
+
+
 def _looks_blocked(html: str) -> bool:
-    return bool(BLOCK_PATTERNS.search(html))
+    return _block_phrase(html) is not None
+
+
+BLOCK_TEXT_HEAD_CHARS = 200
+
+
+def _block_reason(phrase: str, raw_text: str) -> str:
+    """로그용 차단 근거: `"<문구>" | <화면 글자 앞 200자(공백 정리)>`."""
+    head = " ".join(raw_text.split())[:BLOCK_TEXT_HEAD_CHARS]
+    return f'"{phrase}" | {head}'
 
 
 def _clean_html(html: str) -> tuple[str, str, list[str]]:
@@ -250,16 +271,16 @@ async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> 
     context = await browser.new_context(user_agent=_pick_ua(parsed.netloc), viewport=VIEWPORT)
     try:
         page = await context.new_page()
-        await _goto_and_wait(page, url, nav_timeout_ms)
+        status = await _goto_and_wait(page, url, nav_timeout_ms)
         html = await page.content()
 
         if _looks_blocked(html):
-            # 홈 웜업 후 1회 재시도
+            # 홈 웜업 후 1회 재시도(유니클로 Akamai 용). 이것도 차단이면 _goto_and_wait 가 기다리지 않고 끝낸다.
             try:
                 await page.goto(f"{parsed.scheme}://{parsed.netloc}/",
                                 timeout=nav_timeout_ms, wait_until="domcontentloaded")
                 await asyncio.sleep(1.0)
-                await _goto_and_wait(page, url, nav_timeout_ms)
+                status = await _goto_and_wait(page, url, nav_timeout_ms)
                 html = await page.content()
             except PWTimeoutError:
                 pass
@@ -273,7 +294,9 @@ async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> 
 
         return RenderResult(
             final_url=page.url,
-            blocked=_looks_blocked(html),
+            blocked=phrase is not None,
+            block_reason=_block_reason(phrase, raw_text) if phrase else None,
+            status_code=status,
             cleaned_html=cleaned_html,
             raw_text=raw_text,
             image_candidates=images,
@@ -283,6 +306,58 @@ async def render(browser: Browser, url: str, *, nav_timeout_ms: int = 20000) -> 
         )
     except Exception as exc:  # noqa: BLE001
         return RenderResult(error=f"{type(exc).__name__}: {exc}")
+    finally:
+        await context.close()
+
+
+async def resolve_in_browser(browser: Browser, url: str, *, timeout_s: float = 8.0) -> str | None:
+    """앱 공유용 짧은 링크(onelink.me 등)를 실제 브라우저로 열어, 쇼핑몰 주소로 넘어가는 순간의 주소만 얻는다.
+
+    share_links.py 의 HTTP 요청이 막힐 때 쓴다(2026-11-18 운영 로그: musinsa.onelink.me 가 서버의
+    urllib 요청에 403 Forbidden). 짧은 링크 페이지를 끝까지 렌더링하지 않는다 — 메인 프레임이 짧은 링크가
+    아닌 웹 주소로 이동하려는 첫 요청(3xx 리다이렉트·JS 이동 모두 `request` 이벤트로 잡힌다)이 보이면 바로
+    끝낸다. PC 브라우저 UA 로 연다(휴대폰 UA 면 앱/스토어로 보내려다 끝나지 않는다, 10/24 로그).
+    timeout_s 안에 못 찾으면 None."""
+    from share_links import is_short_link  # 순환 import 방지용 지역 import
+
+    context = await browser.new_context(user_agent=DESKTOP_UA, viewport=VIEWPORT)
+    found: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+    try:
+        page = await context.new_page()
+
+        def on_request(request) -> None:
+            if found.done() or not request.is_navigation_request() or request.frame != page.main_frame:
+                return
+            target = request.url
+            parsed = urllib.parse.urlsplit(target)
+            if parsed.scheme in ("http", "https") and parsed.hostname and not is_short_link(target):
+                found.set_result(target)
+
+        page.on("request", on_request)
+
+        async def _block_heavy(route) -> None:  # 중간 페이지의 이미지·폰트·영상은 받을 필요가 없다
+            if route.request.resource_type in ("image", "font", "media"):
+                await route.abort()
+            else:
+                await route.continue_()
+
+        await page.route("**/*", _block_heavy)
+
+        async def _open() -> None:
+            try:
+                await page.goto(url, timeout=int(timeout_s * 1000), wait_until="commit")
+            except Exception:  # noqa: BLE001, S110 — 이동 중 끊기거나(목적지를 찾아 닫을 때) 시간 초과는 found 로 판단
+                pass
+
+        opener = asyncio.ensure_future(_open())
+        try:
+            return await asyncio.wait_for(asyncio.shield(found), timeout=timeout_s)
+        except TimeoutError:
+            return None
+        finally:
+            opener.cancel()
+    except Exception:  # noqa: BLE001
+        return None
     finally:
         await context.close()
 

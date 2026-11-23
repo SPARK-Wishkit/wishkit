@@ -23,9 +23,27 @@ void main() {
     expect(scaled.bottom, 42.5);
   });
 
-  testWidgets('wrap lays children out at design width on a small phone',
+  test('factorForSize shrinks short phones but leaves tall phones as before',
+      () {
+    // iPhone 14 (design) / 14 Pro Max / mini: same as the width ratio.
+    expect(DiaryScale.factorForSize(const Size(390, 844)), 1);
+    expect(
+      DiaryScale.factorForSize(const Size(430, 932)),
+      closeTo(430 / 390, 0.01),
+    );
+    expect(
+      DiaryScale.factorForSize(const Size(375, 812)),
+      closeTo(375 / 390, 0.01),
+    );
+    // iPhone SE: almost design width but much shorter → noticeably smaller.
+    final se = DiaryScale.factorForSize(const Size(375, 667));
+    expect(se, lessThan(0.9));
+    expect(se, greaterThanOrEqualTo(DiaryScale.minFactor));
+  });
+
+  testWidgets('wrap fills a short phone edge to edge at the scaled size',
       (tester) async {
-    const phone = Size(320, 568);
+    const phone = Size(375, 667); // iPhone SE
     await tester.binding.setSurfaceSize(phone);
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -43,11 +61,11 @@ void main() {
       ),
     );
 
-    expect(innerSize.width, DiaryScale.designWidth);
-    expect(
-      innerSize.height,
-      closeTo(phone.height / (phone.width / DiaryScale.designWidth), 0.5),
-    );
+    final factor = DiaryScale.factorForSize(phone);
+    expect(innerSize.width, closeTo(phone.width / factor, 0.5));
+    expect(innerSize.height, closeTo(phone.height / factor, 0.5));
+    // Laid out wider than the design, so everything renders smaller.
+    expect(innerSize.width, greaterThan(DiaryScale.designWidth));
   });
 
   testWidgets('OneLineText does not wrap in a narrow box', (tester) async {

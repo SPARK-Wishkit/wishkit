@@ -1,6 +1,9 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/services.dart' show rootBundle;
+
+import '../models/moderation.dart';
 import '../models/models.dart';
 import 'aws/basket_store.dart';
 import 'aws/file_store.dart';
@@ -50,10 +53,19 @@ class AccountRepository {
   }) =>
       _productTags.identify(image, mimeType);
 
+  /// 태그 찾기 결과에 대한 반응(맞아요·다른 상품·못 불러옴)을 익명으로 남긴다.
+  Future<void> sendTagFeedback(
+    TagFeedbackAnswer answer,
+    TagIdentifyResult result, {
+    String? userUrl,
+  }) => _productTags.sendFeedback(answer, result, userUrl: userUrl);
+
   /// 회원 탈퇴용: [uid] 의 앱 데이터와 파일을 모두 지운다.
   /// AuthController.deleteAccount → AuthDataHooks.deleteMyData 에서 호출된다.
   /// 아직 로그인된 상태에서 불리므로, 내 파일 폴더에 접근할 수 있다.
   Future<void> deleteUserData(String uid) async {
+    // 먼저 다른 사람 공간에 남은 내 댓글·살까말까·댓글방을 서버가 지운다 (App Store 5.1.1(v)).
+    await _baskets.deleteMyContent();
     await _files.deleteAll();
     await _baskets.deleteAll(uid);
     await _social.deleteAllFollows(uid);
@@ -120,6 +132,13 @@ class AccountRepository {
   /// 상품을 지울 때 그 상품의 태그 사진도 지운다.
   Future<void> deleteTagPhoto(String url) => _files.removeTagPhoto(url);
 
+  /// 직접 기록한 상품의 옷 사진(대표 사진)을 올리고 영구 주소를 돌려준다.
+  Future<String> uploadProductPhoto(List<int> bytes, {required String mimeType}) =>
+      _files.uploadProductPhoto(bytes, mimeType: mimeType);
+
+  /// [url] 이 내가 올린 옷 사진이면 지운다(쇼핑몰 사진 주소면 아무것도 안 함).
+  Future<void> deleteProductPhoto(String url) => _files.removeProductPhoto(url);
+
   /// 살까말까 공유 페이지(HTML)를 올리고, 로그인 없이 열리는 주소를 돌려준다.
   /// 28일 뒤 자동 삭제는 S3 규칙이 한다. 같은 [pageId] 로 다시 올리면 같은 주소에 덮어쓴다.
   /// [basketId] · [expiresAt] 은 호환용으로 받지만 쓰지 않는다.
@@ -131,6 +150,12 @@ class AccountRepository {
     required DateTime expiresAt,
   }) =>
       _files.uploadSharePage(pageId: pageId, html: html);
+
+  /// 공유 링크 미리보기용 로고(앱에 들어 있는 assets/share/og-wishkit.png)를 올리고 공개 주소를 돌려준다.
+  Future<String> uploadShareOgImage() async {
+    final data = await rootBundle.load('assets/share/og-wishkit.png');
+    return _files.uploadShareOgImage(data.buffer.asUint8List());
+  }
 
   Future<List<WishlistTab>> loadTabs(String uid) => _aws.loadTabs(uid);
 
@@ -183,6 +208,26 @@ class AccountRepository {
   }) =>
       _social.removeFollower(myUid: myUid, followerUid: followerUid);
 
+  // ── 신고 · 차단 (App Store 심사 1.2) ──
+
+  /// 내가 차단한 사람들의 uid.
+  Future<Set<String>> loadBlockedIds(String uid) => _social.blockedIds(uid);
+
+  /// 차단 (서로의 팔로우도 끊는다).
+  Future<void> blockUser({required String myUid, required String targetUid}) =>
+      _social.blockUser(myUid: myUid, targetUid: targetUid);
+
+  Future<void> unblockUser({required String myUid, required String targetUid}) =>
+      _social.unblockUser(myUid: myUid, targetUid: targetUid);
+
+  /// 댓글·살까말까·사용자 신고.
+  Future<void> reportContent(
+    ReportTarget target, {
+    required ReportReason reason,
+    String detail = '',
+  }) =>
+      _baskets.report(target, reason: reason, detail: detail);
+
   Future<List<FriendWishlist>> loadFriendWishlists(
     List<Friend> followingFriends,
   ) =>
@@ -219,6 +264,8 @@ class AccountRepository {
     required List<Product> items,
     required String threadId,
     String memo = '',
+    bool allowMultipleVotes = true,
+    bool voteEnabled = true,
   }) async {
     if (recipientUids.isEmpty || items.isEmpty || threadId.isEmpty) return;
     await _baskets.sendBasket(
@@ -226,6 +273,8 @@ class AccountRepository {
       items: items,
       threadId: threadId,
       memo: memo,
+      allowMultipleVotes: allowMultipleVotes,
+      voteEnabled: voteEnabled,
     );
   }
 
@@ -250,6 +299,17 @@ class AccountRepository {
         participantIds: participantUids,
         memo: memo,
       );
+
+  /// 살까말까 투표. 5초마다 새로고침 + 투표 직후 바로 새로고침.
+  Stream<List<BasketVote>> watchBasketVotes(String threadId) =>
+      _baskets.watchVotes(threadId);
+
+  /// 투표하기 · 다시 투표하기 · 취소(빈 목록). 참여자인지는 서버가 확인한다.
+  Future<void> voteBasket({
+    required String threadId,
+    required List<String> productIds,
+  }) =>
+      _baskets.vote(threadId: threadId, productIds: productIds);
 
   /// 내 댓글 고치기. 작성자 확인은 서버가 한다.
   Future<void> updateBasketComment({

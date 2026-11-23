@@ -11,6 +11,7 @@ class FakeAuthService implements AuthService {
   final users = <String, ({String password, bool confirmed, String uid})>{};
   AuthUserInfo? signedIn;
   final calls = <String>[];
+  String? lastTermsVersion;
   final _ended = StreamController<void>.broadcast();
   static const goodCode = '123456';
 
@@ -28,8 +29,10 @@ class FakeAuthService implements AuthService {
     required String password,
     required String name,
     required String handle,
+    required String termsVersion,
   }) async {
     calls.add('signUp:$handle');
+    lastTermsVersion = termsVersion;
     if (users.containsKey(email)) {
       throw const AuthFailure(AuthFailureCode.emailAlreadyUsed, 'exists');
     }
@@ -128,8 +131,11 @@ void main() {
       password: 'wishkit1',
       name: '지은',
       handle: 'Kim.Ji',
+      termsVersion: '2026-11-12',
     );
     expect(auth.status, AuthStatus.awaitingVerification);
+    // 동의한 약관 버전이 가입 요청에 실린다 (계정에 기록됨).
+    expect(service.lastTermsVersion, '2026-11-12');
     expect(auth.pendingEmail, 'kim@x.com');
     expect(service.calls, contains('signUp:@kim.ji'));
 
@@ -149,7 +155,13 @@ void main() {
 
   test('입력 검사에 걸리면 서버를 부르지 않는다', () async {
     await expectLater(
-      auth.register(email: 'a@b.co', password: 'short', name: '', handle: 'ok1'),
+      auth.register(
+        email: 'a@b.co',
+        password: 'short',
+        name: '',
+        handle: 'ok1',
+        termsVersion: '2026-11-12',
+      ),
       throwsA(isA<AuthFailure>()),
     );
     expect(service.calls, isEmpty);
@@ -163,6 +175,7 @@ void main() {
         password: 'wishkit1',
         name: '',
         handle: 'taken',
+        termsVersion: '2026-11-12',
       ),
       throwsA(
         isA<AuthFailure>().having((e) => e.code, 'code', AuthFailureCode.handleTaken),

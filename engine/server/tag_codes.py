@@ -125,6 +125,51 @@ def code_evidence(tag: dict, raw_text: str, final_url: str) -> str | None:
     return None
 
 
+_HINT_TOKEN_RE = re.compile(r"[0-9a-z]+")
+MAX_HINT_RUN = 4  # 품번이 구분자로 나뉘어 적힌 경우(DV1234-100, 93251-TTL-1202)를 잇는 최대 덩어리 수
+
+
+def _hint_runs(hint: str) -> set[str]:
+    """단서 하나를 영문·숫자 덩어리로 나눠, 이웃한 덩어리를 최대 MAX_HINT_RUN개까지 이은 값들.
+    'https://img/DV1234-100_01.jpg' → {'dv1234', '100', 'dv1234100', '01', '10001', ...}.
+    덩어리 단위로만 비교하므로 '3612345' 안의 '12345'처럼 다른 숫자 속에 섞인 값은 맞지 않는다."""
+    tokens = _HINT_TOKEN_RE.findall(urllib.parse.unquote(hint or "").lower())
+    return {"".join(tokens[i:j]) for i in range(len(tokens))
+            for j in range(i + 1, min(i + MAX_HINT_RUN, len(tokens)) + 1)}
+
+
+def _in_runs(code: str, runs: set[str]) -> bool:
+    """code가 덩어리(또는 이은 덩어리)와 같거나, 숫자 품번 앞에 영문 접두어만 붙은 경우(유니클로 E486612)."""
+    if code in runs:
+        return True
+    if code[0].isdigit():
+        return any(r.endswith(code) and r[: -len(code)].isalpha() for r in runs if len(r) > len(code))
+    return False
+
+
+def hint_evidence(tag: dict, hints: list[str] | None) -> str | None:
+    """화면 밖 단서(render._code_hints: 대표 이미지 주소·JSON-LD sku/mpn/gtin 등)에 태그 코드가 있는지.
+    근거 이름과 세기는 code_evidence()와 같다. 단서는 "이 페이지의 대표 상품"을 가리키는 곳만 모은
+    것이라 같은 근거로 인정하되, 덩어리 단위로만 비교해서 다른 숫자 속에 우연히 섞인 경우는 거른다."""
+    if not hints:
+        return None
+    runs: set[str] = set()
+    for h in hints:
+        runs |= _hint_runs(h)
+
+    code = normalize_code(tag.get("product_code"))
+    if len(code) >= MIN_CODE_LEN and _in_runs(code, runs):
+        return "product_code"
+    barcode = normalize_code(tag.get("barcode"))
+    if len(barcode) >= min(GTIN_LENGTHS) and barcode in runs:
+        return "barcode"
+    weaker = [base_code(tag.get("product_code"))]
+    weaker += [normalize_code(c) for c in tag.get("other_codes") or []]
+    if any(len(c or "") >= MIN_CODE_LEN and _in_runs(c, runs) for c in weaker):
+        return "product_code_base"
+    return None
+
+
 def has_code(tag: dict) -> bool:
     """확인에 쓸 만한 코드가 하나라도 있는지(품번·바코드·보조 코드)."""
     candidates = [tag.get("product_code"), tag.get("barcode"), *(tag.get("other_codes") or [])]

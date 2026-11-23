@@ -92,6 +92,11 @@ query ListWishProducts(\$ownerId: ID!, \$limit: Int, \$nextToken: String) {
     nextToken
   }
 }''';
+  /// 태그 찾기 피드백(익명). 만들기만 된다 — 읽기 권한은 없다.
+  static const createTagFeedback = '''
+mutation CreateTagFeedback(\$input: CreateTagFeedbackInput!) {
+  createTagFeedback(input: \$input) { id }
+}''';
   static const createProduct = '''
 mutation CreateWishProduct(\$input: CreateWishProductInput!) {
   createWishProduct(input: \$input) { ownerId productId }
@@ -184,8 +189,8 @@ mutation DeleteReceivedBasket(\$input: DeleteReceivedBasketInput!) {
   deleteReceivedBasket(input: \$input) { recipientId basketId }
 }''';
   static const sendBasket = '''
-mutation SendBasket(\$threadId: String!, \$recipientIds: [ID!]!, \$items: AWSJSON!, \$memo: String) {
-  sendBasket(threadId: \$threadId, recipientIds: \$recipientIds, items: \$items, memo: \$memo)
+mutation SendBasket(\$threadId: String!, \$recipientIds: [ID!]!, \$items: AWSJSON!, \$memo: String, \$allowMultipleVotes: Boolean, \$voteEnabled: Boolean) {
+  sendBasket(threadId: \$threadId, recipientIds: \$recipientIds, items: \$items, memo: \$memo, allowMultipleVotes: \$allowMultipleVotes, voteEnabled: \$voteEnabled)
 }''';
 
   // ── 3-2: 댓글 ──
@@ -209,6 +214,19 @@ mutation RemoveBasketComment(\$threadId: String!, \$commentId: String!) {
   removeBasketComment(threadId: \$threadId, commentId: \$commentId)
 }''';
 
+  // ── 살까말까 투표 ──
+  static const listBasketVotes = '''
+query ListBasketVotes(\$ownerId: String!, \$limit: Int, \$nextToken: String) {
+  listBasketVotes(threadId: \$ownerId, limit: \$limit, nextToken: \$nextToken) {
+    items { threadId voterId data }
+    nextToken
+  }
+}''';
+  static const voteBasket = '''
+mutation VoteBasket(\$threadId: String!, \$productIds: [String!]!) {
+  voteBasket(threadId: \$threadId, productIds: \$productIds)
+}''';
+
   // ── 3-2: 알림 ──
   static const listNotifications = '''
 query ListNotifications(\$ownerId: ID!, \$limit: Int, \$nextToken: String) {
@@ -230,6 +248,31 @@ mutation NotifyFollow(\$targetId: ID!) {
   notifyFollow(targetId: \$targetId)
 }''';
 
+  // ── 신고 · 차단 · 탈퇴 정리 (서버 함수 social-actions) ──
+  static const reportContent = '''
+mutation ReportContent(\$targetType: String!, \$targetUserId: ID, \$threadId: String, \$commentId: String, \$basketId: String, \$reason: String!, \$detail: String) {
+  reportContent(targetType: \$targetType, targetUserId: \$targetUserId, threadId: \$threadId, commentId: \$commentId, basketId: \$basketId, reason: \$reason, detail: \$detail)
+}''';
+  static const blockUser = '''
+mutation BlockUser(\$targetId: ID!) {
+  blockUser(targetId: \$targetId)
+}''';
+  static const listBlocks = '''
+query ListBlocks(\$ownerId: ID!, \$limit: Int, \$nextToken: String) {
+  listBlocks(blockerId: \$ownerId, limit: \$limit, nextToken: \$nextToken) {
+    items { blockerId blockedId }
+    nextToken
+  }
+}''';
+  static const deleteBlock = '''
+mutation DeleteBlock(\$input: DeleteBlockInput!) {
+  deleteBlock(input: \$input) { blockerId blockedId }
+}''';
+  static const deleteMyContent = '''
+mutation DeleteMyContent {
+  deleteMyContent
+}''';
+
   // ── AI 엔진: 상품 URL 읽기 (서버 함수 parsing-proxy → 엔진 /extract) ──
   static const extractProduct = '''
 query ExtractProduct(\$url: String!) {
@@ -245,6 +288,7 @@ query IdentifyProductTag(\$imageBase64: String!, \$mimeType: String!) {
   identifyProductTag(imageBase64: \$imageBase64, mimeType: \$mimeType) {
     status brand productCode productName color tagPrice officialDomain
     matchUrl matchHost matchSource verifiedBy note
+    matchName matchPrice matchRegularPrice matchImage matchVia skipReason traceId cause
   }
 }''';
 
@@ -262,7 +306,9 @@ query IdentifyProductTag(\$imageBase64: String!, \$mimeType: String!) {
     listReceivedBaskets, deleteReceivedBasket, sendBasket,
     listBasketComments, addBasketComment, editBasketComment,
     removeBasketComment,
+    listBasketVotes, voteBasket,
     listNotifications, markNotificationRead, deleteNotification, notifyFollow,
+    reportContent, blockUser, listBlocks, deleteBlock, deleteMyContent,
     extractProduct, identifyProductTag,
   ];
 }

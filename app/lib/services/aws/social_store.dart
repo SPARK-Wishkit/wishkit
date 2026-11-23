@@ -80,6 +80,39 @@ class AwsSocialStore {
     ]);
   }
 
+  // ── 차단 (App Store 심사 1.2) ────────────────────────────────
+
+  /// 내가 차단한 사람들의 uid.
+  Future<Set<String>> blockedIds(String uid) async {
+    final rows = await _listAll(Gql.listBlocks, 'listBlocks', uid);
+    return {for (final r in rows) r['blockedId'] as String};
+  }
+
+  /// 차단. 서버가 차단 기록을 만들고 운영팀에 알린다. 서로의 팔로우도 끊는다.
+  Future<void> blockUser({
+    required String myUid,
+    required String targetUid,
+  }) async {
+    if (myUid == targetUid) return;
+    await _gql.mutate(Gql.blockUser, variables: {'targetId': targetUid});
+    await setFollowing(myUid: myUid, targetUid: targetUid, follow: false);
+    await removeFollower(myUid: myUid, followerUid: targetUid);
+  }
+
+  /// 차단 해제. 이미 해제돼 있으면 조용히 넘어간다.
+  Future<void> unblockUser({
+    required String myUid,
+    required String targetUid,
+  }) async {
+    try {
+      await _gql.mutate(Gql.deleteBlock, variables: {
+        'input': {'blockerId': myUid, 'blockedId': targetUid},
+      });
+    } on AwsDataException catch (e) {
+      if (!e.isConditionalCheckFailed) rethrow;
+    }
+  }
+
   // ── 사람 목록 ───────────────────────────────────────────────
 
   /// uid 목록 → 공개 프로필. 없는(탈퇴한) 사람은 빠진다. 이름순.
